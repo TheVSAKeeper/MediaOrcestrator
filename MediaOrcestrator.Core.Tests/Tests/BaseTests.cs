@@ -1,0 +1,81 @@
+﻿using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using MediaOrcestrator.Core.Services;
+using MediaOrcestrator.Core.Tests.Helpers;
+using TUnit.Core; // Основное пространство имён
+using TUnit.Assertions; // Для Assert.That
+
+namespace MediaOrcestrator.Core.Tests;
+
+public class BaseTests
+{
+    protected TestYoutubeDataClient _client = null!;
+    protected string _baseTempPath = Path.Combine(Path.GetTempPath(), "MediaOrcestrator.Core");
+    protected string _tempPath = null!;
+    private static int _tempPathNumber = 0;
+
+    [OneTimeSetUp]
+    public void OneTimeSetUp()
+    {
+        try
+        {
+            if (Directory.Exists(_baseTempPath))
+            {
+                Directory.Delete(_baseTempPath, true);
+            }
+        }
+        catch (IOException)
+        {
+        }
+    }
+
+    [BeforeEachTest]
+    public void Setup()
+    {
+        _client = new();
+        int currentNumber = Interlocked.Increment(ref _tempPathNumber);
+        _tempPath = Path.Combine(_baseTempPath, "YoutubeTests_" + currentNumber);
+        Directory.CreateDirectory(_tempPath);
+    }
+
+    [AfterEachTest]
+    public void TearDown()
+    {
+        _client.Clear();
+
+        // TODO: Подумать
+        try
+        {
+            if (Directory.Exists(_tempPath))
+            {
+                // Directory.Delete(_tempPath, true);
+            }
+        }
+        catch (IOException)
+        {
+        }
+    }
+
+    public ChannelService GetChannelService()
+    {
+        var testYoutubeService = new TestYoutubeService(_client.Storage);
+
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["DownloadOptions:MaxDownloadsPerRun"] = "10",
+                ["DownloadOptions:VideoFolderPath"] = _tempPath,
+            })
+            .Build();
+
+        var services = new ServiceCollection()
+            .AddYoutubeChannelDownloader(configuration)
+            .AddSingleton<IYoutubeService>(testYoutubeService)
+            .AddSingleton<IVideoConverter, TestVideoConverter>()
+            .AddSingleton<IPictureDownloader, TestPictureDownloader>();
+
+        var provider = services.BuildServiceProvider();
+        var channelService = provider.GetRequiredService<ChannelService>();
+        return channelService;
+    }
+}
