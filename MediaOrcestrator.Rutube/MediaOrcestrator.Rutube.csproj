@@ -1,0 +1,19 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MediaOrcestrator.Modules\MediaOrcestrator.Modules.csproj" />
+  </ItemGroup>
+
+  <Target Name="CopyDllAfterBuild" AfterTargets="Build">
+    <PropertyGroup>
+      <SourceDll>$(OutputPath)\MediaOrcestrator.Rutube.dll</SourceDll>
+      <TargetFolder>..\ModuleBuilds</TargetFolder>
+    </PropertyGroup>
+  </Target>
+</Project>

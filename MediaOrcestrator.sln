@@ -11,6 +11,14 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Other", "Other", "{BD721EFF
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "YoutubeExplode", "Other\YoutubeExplode-master\YoutubeExplode\YoutubeExplode.csproj", "{587551F0-2DD0-491A-BA7E-5AF5F06797A7}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Modules", "Modules", "{D0C87031-8A91-4DB6-B2FE-F53372E6553E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MediaOrcestrator.Modules", "MediaOrcestrator.Modules\MediaOrcestrator.Modules.csproj", "{193C6BAD-5603-4D4D-B160-65F64EA390E3}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MediaOrcestrator.Rutube", "MediaOrcestrator.Rutube\MediaOrcestrator.Rutube.csproj", "{10461A42-52FA-468A-BBAE-77DB40820051}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MediaOrcestrator.Youtube", "MediaOrcestrator.Youtube\MediaOrcestrator.Youtube.csproj", "{7BE000EA-B3B1-4F77-9D48-4904F5BFBAF6}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -29,11 +37,25 @@ Global
 		{587551F0-2DD0-491A-BA7E-5AF5F06797A7}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{587551F0-2DD0-491A-BA7E-5AF5F06797A7}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{587551F0-2DD0-491A-BA7E-5AF5F06797A7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{193C6BAD-5603-4D4D-B160-65F64EA390E3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{193C6BAD-5603-4D4D-B160-65F64EA390E3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{193C6BAD-5603-4D4D-B160-65F64EA390E3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{193C6BAD-5603-4D4D-B160-65F64EA390E3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{10461A42-52FA-468A-BBAE-77DB40820051}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{10461A42-52FA-468A-BBAE-77DB40820051}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{10461A42-52FA-468A-BBAE-77DB40820051}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{10461A42-52FA-468A-BBAE-77DB40820051}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7BE000EA-B3B1-4F77-9D48-4904F5BFBAF6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7BE000EA-B3B1-4F77-9D48-4904F5BFBAF6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7BE000EA-B3B1-4F77-9D48-4904F5BFBAF6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7BE000EA-B3B1-4F77-9D48-4904F5BFBAF6}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{587551F0-2DD0-491A-BA7E-5AF5F06797A7} = {BD721EFF-BD4E-4806-97EF-CEBA69870CB2}
+		{10461A42-52FA-468A-BBAE-77DB40820051} = {D0C87031-8A91-4DB6-B2FE-F53372E6553E}
+		{7BE000EA-B3B1-4F77-9D48-4904F5BFBAF6} = {D0C87031-8A91-4DB6-B2FE-F53372E6553E}
 	EndGlobalSection
 EndGlobal
