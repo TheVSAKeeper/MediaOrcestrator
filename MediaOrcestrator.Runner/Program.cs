@@ -1,28 +1,41 @@
-namespace MediaOrcestrator.Runner
+using MediaOrcestrator.Domain;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace MediaOrcestrator.Runner;
+
+internal static class Program
 {
-    internal static class Program
+    /// <summary>
+    /// The main entry point for the application.
+    /// </summary>
+    [STAThread]
+    private static void Main()
     {
-        /// <summary>
-        ///  The main entry point for the application.
-        /// </summary>
-        [STAThread]
-        static void Main()
-        {
-            // To customize application configuration such as set high DPI settings or default font,
-            // see https://aka.ms/applicationconfiguration.
-            ApplicationConfiguration.Initialize();
-            Globals.Init();
+        // To customize application configuration such as set high DPI settings or default font,
+        // see https://aka.ms/applicationconfiguration.
+        ApplicationConfiguration.Initialize();
 
-            Application.Run(new MainForm());
+        var services = new ServiceCollection();
+        ConfigureServices(services);
 
-        }
+        using var serviceProvider = services.BuildServiceProvider();
+        var mainForm = serviceProvider.GetRequiredService<MainForm>();
+        Application.Run(mainForm);
     }
 
-    public static class Globals
+    private static void ConfigureServices(IServiceCollection services)
     {
+        services.AddSingleton<PluginManager>();
+        services.AddSingleton<Orcestrator>();
+        services.AddTransient<MainForm>();
 
-        public static void Init()
-        {
-        }
+        services.AddTransient<MediaSourceControl>();
+    }
+}
+
+public static class Globals
+{
+    public static void Init()
+    {
     }
 }

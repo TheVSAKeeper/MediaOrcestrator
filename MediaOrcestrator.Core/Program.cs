@@ -1,8 +1,9 @@
-﻿using Microsoft.Extensions.Configuration;
+﻿using MediaOrcestrator.Core;
+using MediaOrcestrator.Core.Services;
+using MediaOrcestrator.Modules;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
-using MediaOrcestrator.Core;
-using MediaOrcestrator.Core.Services;
 
 var configuration = new ConfigurationBuilder()
     .SetBasePath(Directory.GetCurrentDirectory())
@@ -25,7 +26,6 @@ if (string.IsNullOrWhiteSpace(channelUrl))
 
 var path1 = "..\\..\\..\\..\\ModuleBuilds";
 
-
 var scanner = new InterfaceScanner();
 var myInterfaceType = typeof(IMediaSource); // Пример интерфейса
 var implementations = scanner.FindImplementations(path1, myInterfaceType);
@@ -38,10 +38,8 @@ foreach (var x in implementations)
     }
     catch
     {
-
     }
 }
-
 
 await service.DownloadVideosAsync(channelUrl);
 
