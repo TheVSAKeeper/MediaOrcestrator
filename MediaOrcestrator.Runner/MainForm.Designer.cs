@@ -30,22 +30,34 @@
         {
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(MainForm));
             uiMediaSourcePanel = new Panel();
+            btnSync = new Button();
             SuspendLayout();
             // 
             // uiMediaSourcePanel
             // 
             uiMediaSourcePanel.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left;
             uiMediaSourcePanel.BackColor = SystemColors.ControlDark;
-            uiMediaSourcePanel.Location = new Point(12, 12);
+            uiMediaSourcePanel.Location = new Point(12, 50);
             uiMediaSourcePanel.Name = "uiMediaSourcePanel";
-            uiMediaSourcePanel.Size = new Size(349, 432);
+            uiMediaSourcePanel.Size = new Size(349, 394);
             uiMediaSourcePanel.TabIndex = 0;
+            // 
+            // btnSync
+            // 
+            btnSync.Location = new Point(12, 12);
+            btnSync.Name = "btnSync";
+            btnSync.Size = new Size(349, 32);
+            btnSync.TabIndex = 1;
+            btnSync.Text = "Синхронизировать";
+            btnSync.UseVisualStyleBackColor = true;
+            btnSync.Click += btnSync_Click;
             // 
             // MainForm
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(800, 456);
+            Controls.Add(btnSync);
             Controls.Add(uiMediaSourcePanel);
             Icon = (Icon)resources.GetObject("$this.Icon");
             Name = "MainForm";
@@ -57,5 +69,6 @@
         #endregion
 
         private Panel uiMediaSourcePanel;
+        private Button btnSync;
     }
 }
