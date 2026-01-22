@@ -121,11 +121,3 @@ public class Orcestrator(PluginManager pluginManager)
         public MyMedia Media { get; set; }
     }
 }
-
-public static class OrcestratorBuilder
-{
-    public static Orcestrator Construct()
-    {
-        return new(new());
-    }
-}

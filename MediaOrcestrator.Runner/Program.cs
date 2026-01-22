@@ -1,3 +1,6 @@
+using MediaOrcestrator.Domain;
+using Microsoft.Extensions.DependencyInjection;
+
 namespace MediaOrcestrator.Runner;
 
 internal static class Program
@@ -11,9 +14,22 @@ internal static class Program
         // To customize application configuration such as set high DPI settings or default font,
         // see https://aka.ms/applicationconfiguration.
         ApplicationConfiguration.Initialize();
-        Globals.Init();
 
-        Application.Run(new MainForm());
+        var services = new ServiceCollection();
+        ConfigureServices(services);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var mainForm = serviceProvider.GetRequiredService<MainForm>();
+        Application.Run(mainForm);
+    }
+
+    private static void ConfigureServices(IServiceCollection services)
+    {
+        services.AddSingleton<PluginManager>();
+        services.AddSingleton<Orcestrator>();
+        services.AddTransient<MainForm>();
+
+        services.AddTransient<MediaSourceControl>();
     }
 }
 
