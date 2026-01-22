@@ -1,5 +1,5 @@
-﻿using MediaOrcestrator.Core.Services;
-using MediaOrcestrator.Domain;
+﻿using MediaOrcestrator.Domain;
+using MediaOrcestrator.Modules;
 
 namespace MediaOrcestrator.Runner;
 

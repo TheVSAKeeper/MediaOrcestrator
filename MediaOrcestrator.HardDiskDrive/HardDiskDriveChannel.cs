@@ -1,4 +1,4 @@
-﻿using MediaOrcestrator.Core.Services;
+﻿using MediaOrcestrator.Modules;
 
 namespace MediaOrcestrator.HardDiskDrive;
 

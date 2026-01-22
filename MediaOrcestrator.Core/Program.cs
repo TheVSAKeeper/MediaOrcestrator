@@ -1,5 +1,6 @@
 ﻿using MediaOrcestrator.Core;
 using MediaOrcestrator.Core.Services;
+using MediaOrcestrator.Modules;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;

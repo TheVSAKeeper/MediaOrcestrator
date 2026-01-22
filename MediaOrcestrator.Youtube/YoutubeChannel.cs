@@ -1,4 +1,4 @@
-﻿using MediaOrcestrator.Core.Services;
+﻿using MediaOrcestrator.Modules;
 using YoutubeExplode;
 
 namespace MediaOrcestrator.Youtube;

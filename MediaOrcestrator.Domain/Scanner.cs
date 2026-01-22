@@ -15,20 +15,17 @@ public class InterfaceScanner
             try
             {
                 var types = assembly.GetTypes()
-                    .Where(t => t.IsClass && !t.IsAbstract)
+                    .Where(t => t is { IsClass: true, IsAbstract: false })
                     .ToList();
 
-                foreach (var type in types)
+                foreach (var type in types.Where(interfaceType.IsAssignableFrom))
                 {
-                    if (interfaceType.IsAssignableFrom(type))
+                    implementations.Add(new()
                     {
-                        implementations.Add(new()
-                        {
-                            Type = type,
-                            Assembly = assembly,
-                            AssemblyPath = assembly.Location,
-                        });
-                    }
+                        Type = type,
+                        Assembly = assembly,
+                        AssemblyPath = assembly.Location,
+                    });
                 }
             }
             catch (ReflectionTypeLoadException ex)

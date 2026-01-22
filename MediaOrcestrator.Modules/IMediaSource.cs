@@ -1,4 +1,4 @@
-﻿namespace MediaOrcestrator.Core.Services;
+﻿namespace MediaOrcestrator.Modules;
 
 public interface IMediaSource
 {

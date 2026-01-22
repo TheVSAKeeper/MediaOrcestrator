@@ -1,4 +1,4 @@
-﻿using MediaOrcestrator.Core.Services;
+﻿using MediaOrcestrator.Modules;
 
 namespace MediaOrcestrator.Domain;
 
@@ -14,24 +14,26 @@ public class Orcestrator(PluginManager pluginManager)
     public void Init()
     {
         pluginManager.Init();
-        _relations = new();
-        _relations.Add(new()
-        {
-            IdFrom = "MediaOrcestrator.Youtube",
-            IdTo = "MediaOrcestrator.HardDiskDrive",
-        });
+        _relations =
+        [
+            new()
+            {
+                IdFrom = "MediaOrcestrator.Youtube",
+                IdTo = "MediaOrcestrator.HardDiskDrive",
+            },
+        ];
 
         var sources = GetSources();
         foreach (var relation in _relations)
         {
-            if (sources.ContainsKey(relation.IdFrom))
+            if (sources.TryGetValue(relation.IdFrom, out var from))
             {
-                relation.From = sources[relation.IdFrom];
+                relation.From = from;
             }
 
-            if (sources.ContainsKey(relation.IdTo))
+            if (sources.TryGetValue(relation.IdTo, out var to))
             {
-                relation.To = sources[relation.IdTo];
+                relation.To = to;
             }
         }
     }
@@ -47,7 +49,7 @@ public class Orcestrator(PluginManager pluginManager)
             {
                 if (mediaBySourceId.ContainsKey(source.Id))
                 {
-                    mediaBySourceId[source.Id] = new();
+                    mediaBySourceId[source.Id] = [];
                 }
 
                 mediaBySourceId[source.Id].Add(source);
@@ -78,12 +80,22 @@ public class Orcestrator(PluginManager pluginManager)
                 }
                 else
                 {
-                    var myMedia = new MyMedia();
-                    myMedia.Title = s.Title;
-                    myMedia.Id = s.Id;
-                    myMedia.Description = s.Description;
-                    myMedia.Sources = new();
-                    var newMediaSource = new MyMediaSource { Id = s.Id, Media = myMedia, Status = "OK", SourceId = sourceId };
+                    var myMedia = new MyMedia
+                    {
+                        Title = s.Title,
+                        Id = s.Id,
+                        Description = s.Description,
+                        Sources = [],
+                    };
+
+                    var newMediaSource = new MyMediaSource
+                    {
+                        Id = s.Id,
+                        Media = myMedia,
+                        Status = "OK",
+                        SourceId = sourceId,
+                    };
+
                     myMedia.Sources.Add(newMediaSource);
                     mediaAll.Add(myMedia);
                     mediaBySourceId[sourceId].Add(newMediaSource);
