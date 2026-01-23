@@ -10,10 +10,28 @@ public class YoutubeChannel : IMediaSource
 
     public string Name => "Youtube";
 
-    public async IAsyncEnumerable<IMedia> GetMedia()
+    public IEnumerable<SourceSettings> SettingsKeys
     {
+        get
+        {
+            var a = new List<SourceSettings>
+            {
+                new SourceSettings
+                {
+                    Key = "channel_id",
+                    IsRequired = true,
+                    Title = "идентификатор канала",
+                }
+            };
+            return a;
+        }
+    }
+
+    public async IAsyncEnumerable<IMedia> GetMedia(Dictionary<string, string> settings)
+    {
+        var channelUrl = settings["channel_id"];
         var youtubeClient = new YoutubeClient();
-        var channelUrl = "https://www.youtube.com/@bobito217";
+        //var channelUrl = "https://www.youtube.com/@bobito217";
         var channel = await GetChannel(youtubeClient, channelUrl);
         var uploads = youtubeClient.Channels.GetUploadsAsync(channel.Id);
         await foreach (var video in uploads)

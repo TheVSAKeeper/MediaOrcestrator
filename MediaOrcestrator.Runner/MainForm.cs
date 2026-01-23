@@ -1,4 +1,6 @@
-﻿using MediaOrcestrator.Domain;
+﻿using LiteDB;
+using MediaOrcestrator.Domain;
+using MediaOrcestrator.Modules;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -51,14 +53,22 @@ public partial class MainForm : Form
 
     private void DrawSources()
     {
-        uiMediaSourcePanel.Controls.Clear();
+        uiSourcesComboBox.Items.Clear();
 
-        var shift = 10;
+        uiSourcesComboBox.DisplayMember = "Name";
+
         foreach (var source in _orcestrator.GetSources())
+        {
+            uiSourcesComboBox.Items.Add(source.Value);
+        }
+
+        uiMediaSourcePanel.Controls.Clear();
+        var shift = 10;
+        foreach (var source in _orcestrator.GetMediaSourceData())
         {
             // TODO: Сомнительно
             var control = _serviceProvider.GetRequiredService<MediaSourceControl>();
-            control.SetMediaSource(source.Value);
+            control.SetMediaSource(source);
             control.Width = uiMediaSourcePanel.Width - 20;
             control.Height = 80;
             control.Left = 10;
@@ -66,5 +76,17 @@ public partial class MainForm : Form
             shift += 100;
             uiMediaSourcePanel.Controls.Add(control);
         }
+    }
+
+    private void uiAddSourceButton_Click(object sender, EventArgs e)
+    {
+        // todo обобщить через одно место хранение
+        using var db = new LiteDatabase(@"MyData.db");
+        db.GetCollection<MySource>("sources").Insert(new MySource
+        {
+            Id = Guid.NewGuid().ToString(),
+            TypeId = ((IMediaSource)uiSourcesComboBox.SelectedItem).Name,
+            Settings = new Dictionary<string, string> { { "channel_id", "https://www.youtube.com/@bobito217" } }
+        });
     }
 }

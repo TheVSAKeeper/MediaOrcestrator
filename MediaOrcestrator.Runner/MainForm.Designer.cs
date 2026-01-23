@@ -32,6 +32,8 @@
             uiMediaSourcePanel = new Panel();
             btnSync = new Button();
             mediaMatrixGridControl1 = new MediaMatrixGridControl();
+            uiAddSourceButton = new Button();
+            uiSourcesComboBox = new ComboBox();
             SuspendLayout();
             // 
             // uiMediaSourcePanel
@@ -40,7 +42,7 @@
             uiMediaSourcePanel.BackColor = SystemColors.ControlDark;
             uiMediaSourcePanel.Location = new Point(12, 50);
             uiMediaSourcePanel.Name = "uiMediaSourcePanel";
-            uiMediaSourcePanel.Size = new Size(231, 394);
+            uiMediaSourcePanel.Size = new Size(231, 336);
             uiMediaSourcePanel.TabIndex = 0;
             // 
             // btnSync
@@ -61,11 +63,33 @@
             mediaMatrixGridControl1.Size = new Size(539, 432);
             mediaMatrixGridControl1.TabIndex = 2;
             // 
+            // uiAddSourceButton
+            // 
+            uiAddSourceButton.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
+            uiAddSourceButton.Location = new Point(12, 421);
+            uiAddSourceButton.Name = "uiAddSourceButton";
+            uiAddSourceButton.Size = new Size(231, 23);
+            uiAddSourceButton.TabIndex = 3;
+            uiAddSourceButton.Text = "Добавить источник";
+            uiAddSourceButton.UseVisualStyleBackColor = true;
+            uiAddSourceButton.Click += uiAddSourceButton_Click;
+            // 
+            // uiSourcesComboBox
+            // 
+            uiSourcesComboBox.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
+            uiSourcesComboBox.FormattingEnabled = true;
+            uiSourcesComboBox.Location = new Point(12, 392);
+            uiSourcesComboBox.Name = "uiSourcesComboBox";
+            uiSourcesComboBox.Size = new Size(231, 23);
+            uiSourcesComboBox.TabIndex = 4;
+            // 
             // MainForm
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(800, 456);
+            Controls.Add(uiSourcesComboBox);
+            Controls.Add(uiAddSourceButton);
             Controls.Add(mediaMatrixGridControl1);
             Controls.Add(btnSync);
             Controls.Add(uiMediaSourcePanel);
@@ -81,5 +105,7 @@
         private Panel uiMediaSourcePanel;
         private Button btnSync;
         private MediaMatrixGridControl mediaMatrixGridControl1;
+        private Button uiAddSourceButton;
+        private ComboBox uiSourcesComboBox;
     }
 }

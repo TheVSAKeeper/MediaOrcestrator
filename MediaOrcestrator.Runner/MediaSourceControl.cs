@@ -6,7 +6,7 @@ namespace MediaOrcestrator.Runner;
 public partial class MediaSourceControl : UserControl
 {
     private Orcestrator _orcestrator;
-    private IMediaSource _source;
+    private MySource _source;
 
     public MediaSourceControl(Orcestrator orcestrator)
     {
@@ -14,10 +14,13 @@ public partial class MediaSourceControl : UserControl
         _orcestrator = orcestrator;
     }
 
-    public void SetMediaSource(IMediaSource source)
+    public void SetMediaSource(MySource source)
     {
+        var sources = _orcestrator.GetSources();
+
         _source = source;
-        label1.Text = source.Name;
+        // todo ключа пока нет
+        label1.Text = sources.First(x => x.Value.Name == source.TypeId).Value.Name;
     }
 
     private async void button1_Click(object sender, EventArgs e)
