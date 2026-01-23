@@ -1,4 +1,4 @@
-using MediaOrcestrator.Domain;
+﻿using MediaOrcestrator.Domain;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -22,6 +22,31 @@ public partial class MainForm : Form
     {
         _orcestrator.Init();
         DrawSources();
+        // TODO: SetZalupaV2
+        mediaMatrixGridControl1.Initialize(_orcestrator);
+        mediaMatrixGridControl1.RefreshData();
+    }
+
+    private async void btnSync_Click(object sender, EventArgs e)
+    {
+        _logger.LogInformation("Пользователь нажал кнопку синхронизации.");
+        btnSync.Enabled = false;
+        try
+        {
+            await _orcestrator.Sync();
+            _logger.LogInformation("Синхронизация через UI завершена.");
+            DrawSources();
+            mediaMatrixGridControl1.RefreshData();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Ошибка при синхронизации через UI.");
+            MessageBox.Show($"Ошибка при синхронизации: {ex.Message}");
+        }
+        finally
+        {
+            btnSync.Enabled = true;
+        }
     }
 
     private void DrawSources()
@@ -40,27 +65,6 @@ public partial class MainForm : Form
             control.Top = shift;
             shift += 100;
             uiMediaSourcePanel.Controls.Add(control);
-        }
-    }
-
-    private async void btnSync_Click(object sender, EventArgs e)
-    {
-        _logger.LogInformation("Пользователь нажал кнопку синхронизации.");
-        btnSync.Enabled = false;
-        try
-        {
-            await _orcestrator.Sync();
-            _logger.LogInformation("Синхронизация через UI завершена.");
-            DrawSources();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Ошибка при синхронизации через UI.");
-            MessageBox.Show($"Ошибка при синхронизации: {ex.Message}");
-        }
-        finally
-        {
-            btnSync.Enabled = true;
         }
     }
 }

@@ -40,20 +40,6 @@ public class Orcestrator(PluginManager pluginManager, ILogger<Orcestrator> logge
         }
     }
 
-    public class MediaSourceCache
-    {
-        Dictionary<string, List<MyMediaSource>> _holder = new Dictionary<string, List<MyMediaSource>>();
-
-        public List<MyMediaSource> GetMedia(string sourceId)
-        {
-            if (!_holder.ContainsKey(sourceId))
-            {
-                _holder[sourceId] = [];
-            }
-            return _holder[sourceId];
-        }
-    }
-
     public async Task Sync()
     {
         logger.LogInformation("Запуск процесса синхронизации...");
@@ -62,7 +48,6 @@ public class Orcestrator(PluginManager pluginManager, ILogger<Orcestrator> logge
         //var myMedia = new MyMedia();
         //myMedia.Id = "test2";
         //col.Insert(myMedia);
-
 
         //using (var db = new LiteDatabase(@"MyData.db"))
         //{
@@ -106,6 +91,7 @@ public class Orcestrator(PluginManager pluginManager, ILogger<Orcestrator> logge
                     logger.LogWarning("Достигнут лимит в 10 элементов для источника {SourceId}, прерываем.", sourceId);
                     break;
                 }
+
                 var foundMediaSource = cache.GetMedia(sourceId).FirstOrDefault(x => x.Id == s.Title);
                 if (foundMediaSource != null)
                 {
@@ -145,7 +131,27 @@ public class Orcestrator(PluginManager pluginManager, ILogger<Orcestrator> logge
         logger.LogInformation("Синхронизация успешно завершена.");
 
         var zalupa = 1;
+    }
 
+    public List<MyMedia> GetMediaData()
+    {
+        using var db = new LiteDatabase(@"MyData.db");
+        return db.GetCollection<MyMedia>("medias").FindAll().ToList();
+    }
+
+    public class MediaSourceCache
+    {
+        private readonly Dictionary<string, List<MyMediaSource>> _holder = new();
+
+        public List<MyMediaSource> GetMedia(string sourceId)
+        {
+            if (!_holder.ContainsKey(sourceId))
+            {
+                _holder[sourceId] = [];
+            }
+
+            return _holder[sourceId];
+        }
     }
 
     public class MyMedia
