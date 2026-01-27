@@ -41,10 +41,10 @@ partial class SourceSettingsForm
         panel1.Size = new Size(649, 274);
         panel1.TabIndex = 0;
         // 
-        // textBox1
+        // uiNameTextBox
         // 
         uiNameTextBox.Location = new Point(151, 65);
-        uiNameTextBox.Name = "textBox1";
+        uiNameTextBox.Name = "uiNameTextBox";
         uiNameTextBox.Size = new Size(100, 23);
         uiNameTextBox.TabIndex = 1;
         // 
@@ -71,13 +71,15 @@ partial class SourceSettingsForm
         // 
         AutoScaleDimensions = new SizeF(7F, 15F);
         AutoScaleMode = AutoScaleMode.Font;
-        ClientSize = new Size(800, 450);
+        ClientSize = new Size(762, 482);
         Controls.Add(button1);
         Controls.Add(label1);
         Controls.Add(uiNameTextBox);
         Controls.Add(panel1);
+        FormBorderStyle = FormBorderStyle.FixedDialog;
         Name = "SourceSettingsForm";
-        Text = "SourceSettingsForm";
+        StartPosition = FormStartPosition.CenterParent;
+        Text = "Настройки источника";
         Load += SourceSettingsForm_Load;
         ResumeLayout(false);
         PerformLayout();

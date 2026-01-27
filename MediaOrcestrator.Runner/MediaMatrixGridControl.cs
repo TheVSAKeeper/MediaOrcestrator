@@ -24,7 +24,6 @@ public partial class MediaMatrixGridControl : UserControl
         }
 
         var sources = _orcestrator.GetMediaSourceData();
-        // var platformIds = sources.Keys.ToList();
 
         var toolTip = new ToolTip();
         uiMediaHeaderPanel.Controls.Clear();

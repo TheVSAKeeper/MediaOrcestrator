@@ -9,7 +9,6 @@ public partial class MediaItemControl : UserControl
         InitializeComponent();
     }
 
-    // TODO: Черновик
     public void SetData(MediaGridRowDto data, List<MySource> platformIds)
     {
         tableLayoutPanel1.Controls.Clear();
