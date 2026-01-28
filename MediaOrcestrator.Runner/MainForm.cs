@@ -50,52 +50,6 @@ public partial class MainForm : Form
         }
     }
 
-    private void DrawSources()
-    {
-        uiRelationFromComboBox.Items.Clear();
-        uiRelationToComboBox.Items.Clear();
-        uiRelationFromComboBox.DisplayMember = "Title";
-        uiRelationToComboBox.DisplayMember = "Title";
-
-        uiSourcesComboBox.Items.Clear();
-
-        uiSourcesComboBox.DisplayMember = "Name";
-
-        uiSourcesComboBox.Items.Add("Выберите тип хранилища");
-        foreach (var source in _orcestrator.GetSources())
-        {
-            uiSourcesComboBox.Items.Add(source.Value);
-        }
-        uiSourcesComboBox.SelectedIndex = 0;
-
-        uiMediaSourcePanel.Controls.Clear();
-        var shift = 10;
-        foreach (var source in _orcestrator.GetMediaSourceData())
-        {
-            // TODO: Сомнительно
-            var control = _serviceProvider.GetRequiredService<MediaSourceControl>();
-            control.SetMediaSource(source);
-            control.SourceDeleted += (_, _) => DrawSources();
-            control.Width = uiMediaSourcePanel.Width - 20;
-            control.Height = 80;
-            control.Left = 10;
-            control.Top = shift;
-            shift += 100;
-            uiMediaSourcePanel.Controls.Add(control);
-
-            uiRelationFromComboBox.Items.Add(source);
-            uiRelationToComboBox.Items.Add(source);
-        }
-
-        var relations = _orcestrator.GetRelations();
-        var i = -1;
-        foreach (var rel in relations)
-        {
-            i++;
-            panel1.Controls.Add(new Label() { Text = rel.From.Title + " " + rel.To.Title, Width = panel1.Width, Top = i * 20 });
-        }
-    }
-
     private void uiAddSourceButton_Click(object sender, EventArgs e)
     {
         if (uiSourcesComboBox.SelectedItem is not IMediaSource selectedPlugin)
@@ -125,6 +79,60 @@ public partial class MainForm : Form
         var to = (MySource)uiRelationToComboBox.SelectedItem;
 
         _orcestrator.AddLink(from, to);
-        panel1.Controls.Add(new Label() { Text = from.Title + " " + to.Title });
+        DrawRelations();
+    }
+
+    private void DrawSources()
+    {
+        uiRelationFromComboBox.Items.Clear();
+        uiRelationToComboBox.Items.Clear();
+        uiRelationFromComboBox.DisplayMember = "Title";
+        uiRelationToComboBox.DisplayMember = "Title";
+
+        uiSourcesComboBox.Items.Clear();
+        uiSourcesComboBox.DisplayMember = "Name";
+        uiSourcesComboBox.Items.Add("Выберите тип хранилища");
+
+        foreach (var source in _orcestrator.GetSources())
+        {
+            uiSourcesComboBox.Items.Add(source.Value);
+        }
+
+        if (uiSourcesComboBox.Items.Count > 0)
+        {
+            uiSourcesComboBox.SelectedIndex = 0;
+        }
+
+        uiMediaSourcePanel.Controls.Clear();
+        foreach (var source in _orcestrator.GetMediaSourceData())
+        {
+            var control = _serviceProvider.GetRequiredService<MediaSourceControl>();
+            control.SetMediaSource(source);
+            control.SourceDeleted += (_, _) => DrawSources();
+
+            uiMediaSourcePanel.Controls.Add(control);
+            control.SendToBack();
+
+            uiRelationFromComboBox.Items.Add(source);
+            uiRelationToComboBox.Items.Add(source);
+        }
+
+        DrawRelations();
+    }
+
+    private void DrawRelations()
+    {
+        panel1.Controls.Clear();
+        var relations = _orcestrator.GetRelations();
+
+        foreach (var rel in relations)
+        {
+            var control = _serviceProvider.GetRequiredService<RelationControl>();
+            control.SetRelation(rel);
+            control.RelationDeleted += (_, _) => DrawRelations();
+
+            panel1.Controls.Add(control);
+            control.SendToBack();
+        }
     }
 }

@@ -1,6 +1,4 @@
-﻿using MediaOrcestrator.Modules;
-
-namespace MediaOrcestrator.Domain;
+﻿namespace MediaOrcestrator.Domain;
 
 public class SourceRelation
 {

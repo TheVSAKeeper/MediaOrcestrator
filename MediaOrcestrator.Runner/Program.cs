@@ -6,16 +6,11 @@ using Serilog;
 
 namespace MediaOrcestrator.Runner;
 
-internal static class Program
+file static class Program
 {
-    /// <summary>
-    /// The main entry point for the application.
-    /// </summary>
     [STAThread]
     private static void Main()
     {
-        // To customize application configuration such as set high DPI settings or default font,
-        // see https://aka.ms/applicationconfiguration.
         ApplicationConfiguration.Initialize();
 
         Log.Logger = new LoggerConfiguration()
@@ -52,12 +47,12 @@ internal static class Program
             builder.AddSerilog();
         });
 
-        // TODO: Вроде нормальная практика в десктопных приложениях
         services.AddSingleton<LiteDatabase>(_ => new(@"MyData.db"));
         services.AddSingleton<PluginManager>();
         services.AddSingleton<Orcestrator>();
         services.AddTransient<MainForm>();
 
         services.AddTransient<MediaSourceControl>();
+        services.AddTransient<RelationControl>();
     }
 }

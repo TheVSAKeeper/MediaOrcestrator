@@ -23,6 +23,7 @@ public class PluginManager
                 // todo логи
                 continue;
             }
+
             MediaSources.Add(id, instance);
         }
     }
