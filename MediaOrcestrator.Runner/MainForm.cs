@@ -98,6 +98,7 @@ public partial class MainForm : Form
         {
             return;
         }
+
         foreach (var source in sources)
         {
             uiSourcesComboBox.Items.Add(source.Value);
@@ -118,6 +119,7 @@ public partial class MainForm : Form
             control.Width = uMediaSourcePanel.Width;
             control.Top = offset * control.Height;
             control.SourceDeleted += (_, _) => DrawSources();
+            control.SourceUpdated += (_, _) => DrawSources();
 
             uMediaSourcePanel.Controls.Add(control);
             control.SendToBack();
