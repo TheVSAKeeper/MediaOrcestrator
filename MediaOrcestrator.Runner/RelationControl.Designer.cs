@@ -29,6 +29,7 @@
         private void InitializeComponent()
         {
             uiMainLayout = new TableLayoutPanel();
+            uiSelectCheckBox = new CheckBox();
             uiFromContainer = new Panel();
             uiFromTitleLabel = new Label();
             uiFromTypeLabel = new Label();
@@ -37,7 +38,6 @@
             uiToTitleLabel = new Label();
             uiToTypeLabel = new Label();
             uiDeleteButton = new Button();
-            uiSelectCheckBox = new CheckBox();
             uiMainLayout.SuspendLayout();
             uiFromContainer.SuspendLayout();
             uiToContainer.SuspendLayout();
@@ -61,17 +61,28 @@
             uiMainLayout.Name = "uiMainLayout";
             uiMainLayout.RowCount = 1;
             uiMainLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-            uiMainLayout.Size = new Size(2029, 59);
+            uiMainLayout.Size = new Size(1193, 59);
             uiMainLayout.TabIndex = 0;
+            // 
+            // uiSelectCheckBox
+            // 
+            uiSelectCheckBox.Anchor = AnchorStyles.None;
+            uiSelectCheckBox.AutoSize = true;
+            uiSelectCheckBox.Location = new Point(7, 22);
+            uiSelectCheckBox.Name = "uiSelectCheckBox";
+            uiSelectCheckBox.Size = new Size(15, 14);
+            uiSelectCheckBox.TabIndex = 6;
+            uiSelectCheckBox.UseVisualStyleBackColor = true;
+            uiSelectCheckBox.CheckedChanged += uiSelectCheckBox_CheckedChanged;
             // 
             // uiFromContainer
             // 
             uiFromContainer.Controls.Add(uiFromTitleLabel);
             uiFromContainer.Controls.Add(uiFromTypeLabel);
             uiFromContainer.Dock = DockStyle.Fill;
-            uiFromContainer.Location = new Point(3, 3);
+            uiFromContainer.Location = new Point(33, 3);
             uiFromContainer.Name = "uiFromContainer";
-            uiFromContainer.Size = new Size(958, 53);
+            uiFromContainer.Size = new Size(535, 53);
             uiFromContainer.TabIndex = 0;
             // 
             // uiFromTitleLabel
@@ -81,7 +92,7 @@
             uiFromTitleLabel.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
             uiFromTitleLabel.Location = new Point(0, 0);
             uiFromTitleLabel.Name = "uiFromTitleLabel";
-            uiFromTitleLabel.Size = new Size(958, 23);
+            uiFromTitleLabel.Size = new Size(535, 23);
             uiFromTitleLabel.TabIndex = 0;
             uiFromTitleLabel.Text = "From";
             // 
@@ -92,7 +103,7 @@
             uiFromTypeLabel.ForeColor = Color.Gray;
             uiFromTypeLabel.Location = new Point(0, 38);
             uiFromTypeLabel.Name = "uiFromTypeLabel";
-            uiFromTypeLabel.Size = new Size(958, 15);
+            uiFromTypeLabel.Size = new Size(535, 15);
             uiFromTypeLabel.TabIndex = 4;
             uiFromTypeLabel.Text = "Type";
             // 
@@ -100,9 +111,9 @@
             // 
             uiArrowLabel.Dock = DockStyle.Fill;
             uiArrowLabel.Font = new Font("Segoe UI", 15.75F, FontStyle.Regular, GraphicsUnit.Point, 204);
-            uiArrowLabel.Location = new Point(967, 0);
+            uiArrowLabel.Location = new Point(574, 0);
             uiArrowLabel.Name = "uiArrowLabel";
-            uiArrowLabel.Size = new Size(54, 59);
+            uiArrowLabel.Size = new Size(34, 59);
             uiArrowLabel.TabIndex = 2;
             uiArrowLabel.Text = "→";
             uiArrowLabel.TextAlign = ContentAlignment.MiddleCenter;
@@ -112,9 +123,9 @@
             uiToContainer.Controls.Add(uiToTitleLabel);
             uiToContainer.Controls.Add(uiToTypeLabel);
             uiToContainer.Dock = DockStyle.Fill;
-            uiToContainer.Location = new Point(1027, 3);
+            uiToContainer.Location = new Point(614, 3);
             uiToContainer.Name = "uiToContainer";
-            uiToContainer.Size = new Size(958, 53);
+            uiToContainer.Size = new Size(535, 53);
             uiToContainer.TabIndex = 1;
             // 
             // uiToTitleLabel
@@ -124,7 +135,7 @@
             uiToTitleLabel.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
             uiToTitleLabel.Location = new Point(0, 0);
             uiToTitleLabel.Name = "uiToTitleLabel";
-            uiToTitleLabel.Size = new Size(958, 23);
+            uiToTitleLabel.Size = new Size(535, 23);
             uiToTitleLabel.TabIndex = 1;
             uiToTitleLabel.Text = "To";
             // 
@@ -135,7 +146,7 @@
             uiToTypeLabel.ForeColor = Color.Gray;
             uiToTypeLabel.Location = new Point(0, 38);
             uiToTypeLabel.Name = "uiToTypeLabel";
-            uiToTypeLabel.Size = new Size(958, 15);
+            uiToTypeLabel.Size = new Size(535, 15);
             uiToTypeLabel.TabIndex = 5;
             uiToTypeLabel.Text = "Type";
             // 
@@ -144,24 +155,13 @@
             uiDeleteButton.Anchor = AnchorStyles.None;
             uiDeleteButton.BackColor = Color.MistyRose;
             uiDeleteButton.FlatStyle = FlatStyle.Flat;
-            uiDeleteButton.Location = new Point(1993, 14);
+            uiDeleteButton.Location = new Point(1157, 14);
             uiDeleteButton.Name = "uiDeleteButton";
             uiDeleteButton.Size = new Size(30, 30);
             uiDeleteButton.TabIndex = 3;
             uiDeleteButton.Text = "×";
             uiDeleteButton.UseVisualStyleBackColor = false;
             uiDeleteButton.Click += uiDeleteButton_Click;
-            // 
-            // uiSelectCheckBox
-            // 
-            uiSelectCheckBox.Anchor = AnchorStyles.None;
-            uiSelectCheckBox.AutoSize = true;
-            uiSelectCheckBox.Location = new Point(8, 22);
-            uiSelectCheckBox.Name = "uiSelectCheckBox";
-            uiSelectCheckBox.Size = new Size(15, 14);
-            uiSelectCheckBox.TabIndex = 6;
-            uiSelectCheckBox.UseVisualStyleBackColor = true;
-            uiSelectCheckBox.CheckedChanged += uiSelectCheckBox_CheckedChanged;
             // 
             // RelationControl
             // 
@@ -170,11 +170,11 @@
             BackColor = Color.WhiteSmoke;
             BorderStyle = BorderStyle.FixedSingle;
             Controls.Add(uiMainLayout);
-            Dock = DockStyle.Top;
             Margin = new Padding(5);
             Name = "RelationControl";
-            Size = new Size(390, 59);
+            Size = new Size(1193, 59);
             uiMainLayout.ResumeLayout(false);
+            uiMainLayout.PerformLayout();
             uiFromContainer.ResumeLayout(false);
             uiToContainer.ResumeLayout(false);
             ResumeLayout(false);

@@ -6,8 +6,6 @@ namespace MediaOrcestrator.Domain;
 
 public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<Orcestrator> logger)
 {
-    private List<SourceSyncRelation> _relations;
-
     public Dictionary<string, ISourceType> GetSourceTypes()
     {
         return pluginManager.MediaSources;

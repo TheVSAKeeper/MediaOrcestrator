@@ -12,6 +12,11 @@
     <ProjectReference Include="..\Other\YoutubeExplode-master\YoutubeExplode\YoutubeExplode.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="CliWrap" Version="3.6.6" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="8.0.0" />
+  </ItemGroup>
+  
   <Target Name="CopyBuildResults" AfterTargets="Build">
     <PropertyGroup>
       <TargetFolder>..\ModuleBuilds\youtube\</TargetFolder>
