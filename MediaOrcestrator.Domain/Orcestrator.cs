@@ -168,6 +168,30 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
             .DeleteMany(x => x.From.Id == from.Id && x.To.Id == to.Id);
     }
 
+    public void ClearDatabase()
+    {
+        logger.LogInformation("========== Начало очистки базы данных ==========");
+
+        var mediasCollection = db.GetCollection<Media>("medias");
+        var mediaCount = mediasCollection.Count();
+        mediasCollection.DeleteAll();
+        logger.LogInformation("[✓] Коллекция медиа очищена. Удалено записей: {MediaCount}", mediaCount);
+
+        var relationsCollection = db.GetCollection<SourceSyncRelation>("source_relations");
+        var relationCount = relationsCollection.Count();
+        relationsCollection.DeleteAll();
+        logger.LogInformation("[✓] Коллекция связей очищена. Удалено записей: {RelationCount}", relationCount);
+
+        var sourcesCollection = db.GetCollection<Source>("sources");
+        var sourceCount = sourcesCollection.Count();
+        sourcesCollection.DeleteAll();
+        logger.LogInformation("[✓] Коллекция источников очищена. Удалено записей: {SourceCount}", sourceCount);
+
+        logger.LogInformation("========== Очистка БД завершена успешно ==========");
+        logger.LogInformation("Всего удалено записей: {TotalCount} (медиа: {MediaCount}, связи: {RelationCount}, источники: {SourceCount})",
+            mediaCount + relationCount + sourceCount, mediaCount, relationCount, sourceCount);
+    }
+
     public class MediaSourceCache
     {
         private readonly Dictionary<string, List<MediaSourceLink>> _holder = new();

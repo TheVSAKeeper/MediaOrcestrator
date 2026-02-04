@@ -46,7 +46,8 @@
             uiStorageTabPage = new TabPage();
             uiRelationsTabPage = new TabPage();
             uiAuditTabPage = new TabPage();
-            button1 = new Button();
+            uiForceScanButton = new Button();
+            uiClearDatabaseButton = new Button();
             uiMainTabControl.SuspendLayout();
             uiFilesTabPage.SuspendLayout();
             uiStorageTabPage.SuspendLayout();
@@ -227,7 +228,8 @@
             // 
             // uiAuditTabPage
             // 
-            uiAuditTabPage.Controls.Add(button1);
+            uiAuditTabPage.Controls.Add(uiClearDatabaseButton);
+            uiAuditTabPage.Controls.Add(uiForceScanButton);
             uiAuditTabPage.Controls.Add(uiSyncButton);
             uiAuditTabPage.Location = new Point(4, 24);
             uiAuditTabPage.Name = "uiAuditTabPage";
@@ -236,16 +238,27 @@
             uiAuditTabPage.Text = "Аудит";
             uiAuditTabPage.UseVisualStyleBackColor = true;
             // 
-            // button1
+            // uiForceScanButton
             // 
-            button1.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            button1.Location = new Point(265, 473);
-            button1.Name = "button1";
-            button1.Size = new Size(348, 32);
-            button1.TabIndex = 2;
-            button1.Text = "Гости";
-            button1.UseVisualStyleBackColor = true;
-            button1.Click += button1_Click;
+            uiForceScanButton.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            uiForceScanButton.Location = new Point(265, 473);
+            uiForceScanButton.Name = "uiForceScanButton";
+            uiForceScanButton.Size = new Size(348, 32);
+            uiForceScanButton.TabIndex = 2;
+            uiForceScanButton.Text = "Принудительное сканирование";
+            uiForceScanButton.UseVisualStyleBackColor = true;
+            uiForceScanButton.Click += uiForceScanButton_Click;
+            // 
+            // uiClearDatabaseButton
+            // 
+            uiClearDatabaseButton.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            uiClearDatabaseButton.Location = new Point(281, 305);
+            uiClearDatabaseButton.Name = "uiClearDatabaseButton";
+            uiClearDatabaseButton.Size = new Size(348, 32);
+            uiClearDatabaseButton.TabIndex = 3;
+            uiClearDatabaseButton.Text = "Очистить базу данных";
+            uiClearDatabaseButton.UseVisualStyleBackColor = true;
+            uiClearDatabaseButton.Click += uiClearDatabaseButton_Click;
             // 
             // MainForm
             // 
@@ -286,6 +299,7 @@
         private TabPage uiRelationsTabPage;
         private TabPage uiAuditTabPage;
         private CheckBox uiRelationViewModeCheckBox;
-        private Button button1;
+        private Button uiForceScanButton;
+        private Button uiClearDatabaseButton;
     }
 }
