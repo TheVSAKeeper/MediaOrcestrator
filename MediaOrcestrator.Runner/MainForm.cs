@@ -108,11 +108,18 @@ public partial class MainForm : Form
     {
         Task.Run(async () =>
         {
-            var media = _orcestrator.GetMedias().Skip(1).First();
-            var source = media.Sources.First();
+            try
+            {
+                var media = _orcestrator.GetMedias().Skip(0).First();
+                var source = media.Sources.First();
 
-            var sadasd = _orcestrator.GetRelations().First();
-            await sadasd.From.Type.Download(source.ExternalId, sadasd.From.Settings);
+                var sadasd = _orcestrator.GetRelations().First();
+                await sadasd.From.Type.Download(source.ExternalId, sadasd.From.Settings);
+            }
+            catch (Exception exception)
+            {
+                _logger.LogError(exception, "Ошибка при загрузке: {Message}", exception.Message);
+            }
         });
     }
 

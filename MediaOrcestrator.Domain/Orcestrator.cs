@@ -53,7 +53,7 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
             await foreach (var s in syncMedia)
             {
                 i++;
-                if (i > 10)
+                if (i > 12)
                 {
                     logger.LogWarning("Достигнут лимит в 10 элементов для источника {SourceId}, прерываем.", mediaSource.Id);
                     break;

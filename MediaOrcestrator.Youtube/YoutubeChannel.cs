@@ -89,75 +89,131 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger) : ISourceType
         var youtubeClient = new YoutubeClient();
 
         var video = await youtubeClient.Videos.GetAsync(videoId);
-        var streamManifest = await youtubeClient.Videos.Streams.GetManifestAsync(videoId);
-
-        var highestAudioStream = (IAudioStreamInfo)streamManifest.GetAudioOnlyStreams().GetWithHighestBitrate();
-        var highestVideoStream = (IVideoStreamInfo)streamManifest.GetVideoOnlyStreams().GetWithHighestBitrate();
-
-        //    var stream = DownloadItemStream.Create(0,
-        //        Path.Combine(path, ".temp"),
-        //        path,
-        //        video,
-        //        highestAudioStream,
-        //        highestVideoStream);
-
-        //    var item = DownloadItem.Create(url, [stream], video).GetValueOrDefault();
-
-        //    Console.WriteLine("ютубный я загрузил брат ");
-        //    throw new NotImplementedException();
-        //}
-
-        //private async Task DownloadCombinedStream(DownloadItemStream downloadStream, DownloadItem downloadItem, CancellationToken cancellationToken = default)
-        //{
-
         var tempPath = "E:\\bobgroup\\projects\\mediaOrcestrator\\tempDir";
+        // var tempPath = "S:\\bobgroup\\projects\\mediaOrcestrator\\tempDir";
         var guid = Guid.NewGuid().ToString();
-        var audioPath = Path.Combine(tempPath, guid, "audio.temp");
-        var videoPath = Path.Combine(tempPath, guid, "video.temp");
-        var finalPath = Path.Combine(tempPath, guid, ".mp4");
+        var finalPath = Path.Combine(tempPath, guid, "media.mp4");
 
-        //if (downloadStream.AudioStreamInfo == null || downloadStream.VideoStreamInfo == null)
-        //{
-        ////    logger.LogError("Не удалось объединить ({MethodName}). Нет видео или аудио", nameof(DownloadCombinedStream));
-        //    return;
-        //}
+        Directory.CreateDirectory(Path.GetDirectoryName(finalPath)!);
 
-        var token = new CancellationTokenSource();
-
-        logger.LogDebug("Скачивание потоков для видео {VideoId}. Аудио: {AudioPath}, Видео: {VideoPath}", videoId, audioPath, videoPath);
-
-        var audioTask = DownloadWithProgressAsync(youtubeClient,
-            highestAudioStream,
-            audioPath,
-            token.Token);
-
-        var videoTask = DownloadWithProgressAsync(youtubeClient,
-            highestVideoStream,
-            videoPath,
-            token.Token);
-
-        await Task.WhenAll(audioTask.AsTask(), videoTask.AsTask());
-
-        logger.LogDebug("Потоки скачаны. Попытка объединить видео и аудио: {VideoId}", videoId);
-
-        double oldPercent = -1;
-
-        Progress<double> progress = new(percent =>
+        if (1 == 1)
         {
-            if (percent - oldPercent < 10)
+            logger.LogInformation("Используется yt-dlp для загрузки: {VideoId}", videoId);
+
+            var ytDlp = new YtDlp("c:\\Services\\utils\\yt-dlp.exe");
+
+            object progressLock = new();
+            double oldPercent = -1;
+            var currentPart = 0;
+
+            // TODO: Подумать
+            Progress<YtDlpProgress> progress = new(p =>
             {
-                return;
-            }
+                lock (progressLock)
+                {
+                    if (p.PartNumber != currentPart)
+                    {
+                        currentPart = p.PartNumber;
+                        oldPercent = -1;
+                        logger.LogInformation("Начало загрузки части #{PartNumber}", currentPart);
+                    }
 
-            logger.LogDebug("Объединение: {Percent:P2}", percent);
-            oldPercent = percent;
-        });
+                    if (Math.Abs(p.Progress - oldPercent) < double.Epsilon)
+                    {
+                        return;
+                    }
 
-        // todo :) (\/)._.(\/)
-        var converter = new FFmpegConverter(new("c:\\Services\\utils\\ffmpeg\\ffmpeg.exe"));
-        await converter.MergeMediaAsync(finalPath, [audioPath, videoPath], progress, token.Token);
+                    var isSignificantChange = Math.Abs(p.Progress - oldPercent) >= 0.1;
+                    var isCompletion = p.Progress >= 1.0;
+                    var isStart = oldPercent < 0;
 
-        logger.LogInformation("Успешно объединено видео и аудио: {VideoId}", videoId);
+                    if (!isSignificantChange && !isCompletion && !isStart)
+                    {
+                        return;
+                    }
+
+                    logger.LogInformation("Скачивание (yt-dlp) [Часть {PartNumber}]: {Percent:P0}", p.PartNumber, p.Progress);
+                    oldPercent = p.Progress;
+                }
+            });
+
+            logger.LogInformation("Запуск (yt-dlp) для видео: {VideoId}", videoId);
+
+            await ytDlp.DownloadAsync($"https://www.youtube.com/watch?v={videoId}", finalPath, progress);
+
+            logger.LogInformation("Загрузка завершена успешно (yt-dlp): {VideoId}", videoId);
+        }
+        else
+        {
+            var streamManifest = await youtubeClient.Videos.Streams.GetManifestAsync(videoId);
+
+            var highestAudioStream = (IAudioStreamInfo)streamManifest.GetAudioOnlyStreams().GetWithHighestBitrate();
+            var highestVideoStream = (IVideoStreamInfo)streamManifest.GetVideoOnlyStreams().GetWithHighestBitrate();
+
+            //    var stream = DownloadItemStream.Create(0,
+            //        Path.Combine(path, ".temp"),
+            //        path,
+            //        video,
+            //        highestAudioStream,
+            //        highestVideoStream);
+
+            //    var item = DownloadItem.Create(url, [stream], video).GetValueOrDefault();
+
+            //    Console.WriteLine("ютубный я загрузил брат ");
+            //    throw new NotImplementedException();
+            //}
+
+            //private async Task DownloadCombinedStream(DownloadItemStream downloadStream, DownloadItem downloadItem, CancellationToken cancellationToken = default)
+            //{
+
+            //var tempPath = "E:\\bobgroup\\projects\\mediaOrcestrator\\tempDir";
+            //var guid = Guid.NewGuid().ToString();
+            var audioPath = Path.Combine(tempPath, guid, "audio.temp");
+            var videoPath = Path.Combine(tempPath, guid, "video.temp");
+
+            //if (downloadStream.AudioStreamInfo == null || downloadStream.VideoStreamInfo == null)
+            //{
+            ////    logger.LogError("Не удалось объединить ({MethodName}). Нет видео или аудио", nameof(DownloadCombinedStream));
+            //    return;
+            //}
+
+            var token = new CancellationTokenSource();
+
+            logger.LogDebug("Скачивание потоков для видео {VideoId}. Аудио: {AudioPath}, Видео: {VideoPath}", videoId, audioPath, videoPath);
+
+            var audioTask = DownloadWithProgressAsync(youtubeClient,
+                highestAudioStream,
+                audioPath,
+                token.Token);
+
+            var videoTask = DownloadWithProgressAsync(youtubeClient,
+                highestVideoStream,
+                videoPath,
+                token.Token);
+
+            await Task.WhenAll(audioTask.AsTask(), videoTask.AsTask());
+
+            logger.LogDebug("Потоки скачаны. Попытка объединить видео и аудио: {VideoId}", videoId);
+
+            double oldPercent = -1;
+
+            Progress<double> progress = new(percent =>
+            {
+                if (percent - oldPercent < 0.1)
+                {
+                    return;
+                }
+
+                logger.LogDebug("Объединение: {Percent:P2}", percent);
+                oldPercent = percent;
+            });
+
+            // todo :) (\/)._.(\/)
+            var converter = new FFmpegConverter(new("c:\\Services\\utils\\ffmpeg\\ffmpeg.exe"));
+            await converter.MergeMediaAsync(finalPath, [audioPath, videoPath], progress, token.Token);
+
+            logger.LogInformation("Успешно объединено видео и аудио: {VideoId}", videoId);
+        }
 
         return new()
         {
