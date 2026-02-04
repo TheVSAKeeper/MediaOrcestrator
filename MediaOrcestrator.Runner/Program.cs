@@ -24,9 +24,11 @@ file static class Program
 
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Debug()
-            .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}")
+            .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{SourceContext}] {Message:lj}{NewLine}{Exception}")
             .WriteTo.Debug()
-            .WriteTo.RichTextBox(logControl, ThemePresets.Literate)
+            .WriteTo.RichTextBox(logControl,
+                ThemePresets.Literate,
+                outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{SourceContext}] {Message:lj}{NewLine}{Exception}")
             .CreateLogger();
 
         try
@@ -44,6 +46,7 @@ file static class Program
             {
                 await GoGo(orcestrator);
             });
+
             Application.Run(mainForm);
         }
         catch (Exception ex)
@@ -58,41 +61,62 @@ file static class Program
 
     private static async Task GoGo(Orcestrator orcestrator)
     {
+        var logger = Log.Logger;
+        logger.Information("Цикл GoGo запущен");
         var sources = orcestrator.GetSources();
+        logger.Debug("Найдено источников: {SourceCount}", sources.Count);
 
         while (true)
         {
+            logger.Information("Обновление полной информации о хранилище...");
             await orcestrator.GetStorageFullInfo();
             // todo делаем бич вариант, потом распараллелим
             var relations = orcestrator.GetRelations();
+            logger.Information("Найдено связей: {RelationCount}", relations.Count);
+
             foreach (var rel in relations)
             {
                 var medias = orcestrator.GetMedias();
+                logger.Debug("Проверка связи {Relation} для {MediaCount} медиа", rel, medias.Count);
+
                 foreach (var media in medias)
                 {
                     var fromSource = media.Sources.FirstOrDefault(x => x.SourceId == rel.From.Id);
                     var toSource = media.Sources.FirstOrDefault(x => x.SourceId == rel.To.Id);
-                    if(fromSource != null && toSource == null)
+                    if (fromSource != null && toSource == null)
                     {
-                        var tempMedia = await rel.From.Type.Download(fromSource.ExternalId, rel.From.Settings);
-                        tempMedia.Id = media.Id;
-                        var externalId = await rel.To.Type.Upload(tempMedia, rel.To.Settings);
-
-                        var toMediaSource = new MediaSourceLink
+                        logger.Information("Синхронизация медиа {Media} по связи {Relation}", media, rel);
+                        try
                         {
-                            MediaId = media.Id,
-                            Media = media,
-                            ExternalId = externalId,
-                            Status = "OK",
-                            SourceId = rel.To.Id,
-                        };
+                            var tempMedia = await rel.From.Type.Download(fromSource.ExternalId, rel.From.Settings);
+                            tempMedia.Id = media.Id;
+                            var externalId = await rel.To.Type.Upload(tempMedia, rel.To.Settings);
 
-                        media.Sources.Add(toMediaSource);
-                        orcestrator.UpdateMedia(media);
+                            var toMediaSource = new MediaSourceLink
+                            {
+                                MediaId = media.Id,
+                                Media = media,
+                                ExternalId = externalId,
+                                Status = "OK",
+                                SourceId = rel.To.Id,
+                            };
+
+                            media.Sources.Add(toMediaSource);
+                            orcestrator.UpdateMedia(media);
+                            logger.Information("Успешно синхронизировано медиа {Media} в {ToSource}. ExternalId: {ExternalId}", media, rel.To, externalId);
+                        }
+                        catch (Exception ex)
+                        {
+                            logger.Error(ex, "Не удалось синхронизировать медиа {Media} по связи {Relation}", media, rel);
+                        }
                     }
                 }
             }
-            Thread.Sleep(3600_000);
+
+            var delay = TimeSpan.FromHours(1);
+            var nextRun = DateTime.Now.Add(delay);
+            logger.Information("Цикл завершен. Следующий запуск в {NextRunTime}", nextRun);
+            await Task.Delay(delay);
         }
     }
 

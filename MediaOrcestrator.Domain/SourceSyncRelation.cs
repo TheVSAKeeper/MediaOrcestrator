@@ -7,4 +7,9 @@ public class SourceSyncRelation
 {
     public Source To { get; set; }
     public Source From { get; set; }
+
+    public override string ToString()
+    {
+        return $"{From} -> {To}";
+    }
 }

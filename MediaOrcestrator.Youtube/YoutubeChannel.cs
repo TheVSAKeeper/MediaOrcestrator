@@ -100,7 +100,7 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger) : ISourceType
         {
             logger.LogInformation("Используется yt-dlp для загрузки: {VideoId}", videoId);
 
-            var ytDlp = new YtDlp("c:\\Services\\utils\\yt-dlp.exe");
+            var ytDlp = new YtDlp(@"c:\Services\utils\yt-dlp.exe", @"c:\Services\utils\ffmpeg\ffmpeg.exe");
 
             object progressLock = new();
             double oldPercent = -1;

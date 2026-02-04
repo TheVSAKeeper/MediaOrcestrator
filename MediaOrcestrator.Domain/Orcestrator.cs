@@ -104,6 +104,7 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
 
     public List<Media> GetMedias()
     {
+        // TODO: System.InvalidOperationException: Collection was modified; enumeration operation may not execute.
         var medias = db.GetCollection<Media>("medias").FindAll().ToList();
         //foreach (var media in medias) // времяночка для очистки
         //{

@@ -9,7 +9,7 @@ namespace MediaOrcestrator.Youtube;
 
 public sealed record YtDlpProgress(int PartNumber, double Progress);
 
-public sealed partial class YtDlp(string path)
+public sealed partial class YtDlp(string path, string ffmpegPath)
 {
     public async Task DownloadAsync(string url, string outputPath, IProgress<YtDlpProgress>? progress = null, CancellationToken cancellationToken = default)
     {
@@ -19,6 +19,7 @@ public sealed partial class YtDlp(string path)
             "--merge-output-format", "mp4",
             "--newline",
             "--no-colors",
+            "--ffmpeg-location", ffmpegPath,
             "-o", outputPath,
             url,
         };
