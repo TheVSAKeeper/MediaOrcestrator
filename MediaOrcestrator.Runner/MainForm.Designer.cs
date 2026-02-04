@@ -46,6 +46,8 @@
             uiStorageTabPage = new TabPage();
             uiRelationsTabPage = new TabPage();
             uiAuditTabPage = new TabPage();
+            uiLogsTabPage = new TabPage();
+            uiMainTabControl.SuspendLayout();
             uiForceScanButton = new Button();
             uiClearDatabaseButton = new Button();
             uiMainTabControl.SuspendLayout();
@@ -53,6 +55,7 @@
             uiStorageTabPage.SuspendLayout();
             uiRelationsTabPage.SuspendLayout();
             uiAuditTabPage.SuspendLayout();
+            uiLogsTabPage.SuspendLayout();
             SuspendLayout();
             // 
             // uiMediaSourcePanel
@@ -169,6 +172,7 @@
             uiMainTabControl.Controls.Add(uiStorageTabPage);
             uiMainTabControl.Controls.Add(uiRelationsTabPage);
             uiMainTabControl.Controls.Add(uiAuditTabPage);
+            uiMainTabControl.Controls.Add(uiLogsTabPage);
             uiMainTabControl.Location = new Point(12, 12);
             uiMainTabControl.Name = "uiMainTabControl";
             uiMainTabControl.SelectedIndex = 0;
@@ -238,6 +242,16 @@
             uiAuditTabPage.Text = "Аудит";
             uiAuditTabPage.UseVisualStyleBackColor = true;
             // 
+            // uiLogsTabPage
+            // 
+            uiLogsTabPage.Location = new Point(4, 24);
+            uiLogsTabPage.Name = "uiLogsTabPage";
+            uiLogsTabPage.Padding = new Padding(3);
+            uiLogsTabPage.Size = new Size(1125, 742);
+            uiLogsTabPage.TabIndex = 4;
+            uiLogsTabPage.Text = "Логи";
+            uiLogsTabPage.UseVisualStyleBackColor = true;
+            // 
             // uiForceScanButton
             // 
             uiForceScanButton.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
@@ -277,6 +291,7 @@
             uiRelationsTabPage.ResumeLayout(false);
             uiRelationsTabPage.PerformLayout();
             uiAuditTabPage.ResumeLayout(false);
+            uiLogsTabPage.ResumeLayout(false);
             ResumeLayout(false);
         }
 
@@ -301,5 +316,6 @@
         private CheckBox uiRelationViewModeCheckBox;
         private Button uiForceScanButton;
         private Button uiClearDatabaseButton;
+        private TabPage uiLogsTabPage;
     }
 }

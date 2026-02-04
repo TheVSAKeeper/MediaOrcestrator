@@ -11,13 +11,14 @@ public partial class MainForm : Form
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<MainForm> _logger;
 
-    public MainForm(Orcestrator orcestrator, IServiceProvider serviceProvider, ILogger<MainForm> logger)
+    public MainForm(Orcestrator orcestrator, IServiceProvider serviceProvider, ILogger<MainForm> logger, RichTextBox logControl)
     {
         _orcestrator = orcestrator;
         _serviceProvider = serviceProvider;
         _logger = logger;
 
         InitializeComponent();
+        uiLogsTabPage.Controls.Add(logControl);
     }
 
     private void MainForm_Load(object sender, EventArgs e)
