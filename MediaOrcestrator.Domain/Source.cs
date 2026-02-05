@@ -7,6 +7,8 @@ public class Source
 {
     public string Id { get; set; }
 
+    public bool IsDisable { get; set; }
+
     public string TypeId { get; set; }
     public Dictionary<string, string> Settings { get; set; }
 

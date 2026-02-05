@@ -61,6 +61,9 @@ file static class Program
 
     private static async Task GoGo(Orcestrator orcestrator)
     {
+        await orcestrator.GetStorageFullInfo();
+        return;
+
         var logger = Log.Logger;
         logger.Information("Цикл GoGo запущен");
         var sources = orcestrator.GetSources();

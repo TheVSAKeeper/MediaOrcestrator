@@ -24,7 +24,7 @@ public partial class MediaMatrixGridControl : UserControl
         }
 
         var allSources = _orcestrator.GetSources();
-        var mediaData = _orcestrator.GetMedias();
+        var mediaData = _orcestrator.GetMedias().Take(20).ToList();
 
         List<Source> sources;
 
@@ -97,15 +97,15 @@ public partial class MediaMatrixGridControl : UserControl
 
         foreach (var media in mediaData)
         {
-            var dto = new MediaGridRowDto
-            {
-                Id = media.Id,
-                Title = media.Title,
-                PlatformStatuses = media.Sources.ToDictionary(x => x.SourceId, x => x.Status),
-            };
+            //var dto = new MediaGridRowDto
+            //{
+            //    Id = media.Id,
+            //    Title = media.Title,
+            //    PlatformStatuses = media.Sources.ToDictionary(x => x.SourceId, x => x.Status),
+            //};
 
             var control = new MediaItemControl();
-            control.SetData(dto, sources);
+            control.SetData(media, sources, _orcestrator);
             control.Dock = DockStyle.Top;
             uMediaGridPanel.RowCount++;
             uMediaGridPanel.Controls.Add(control);

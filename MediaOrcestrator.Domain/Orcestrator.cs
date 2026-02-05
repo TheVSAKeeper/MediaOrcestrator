@@ -53,7 +53,7 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
             await foreach (var s in syncMedia)
             {
                 i++;
-                if (i > 12)
+                if (i > 99999)
                 {
                     logger.LogWarning("Достигнут лимит в 10 элементов для источника {SourceId}, прерываем.", mediaSource.Id);
                     break;
@@ -125,6 +125,19 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
     public List<Source> GetSources()
     {
         var sources = db.GetCollection<Source>("sources").FindAll().ToList();
+        var sourceTypes = GetSourceTypes();
+        foreach (var source in sources)
+        {
+            var sourceType = sourceTypes.Values.FirstOrDefault(x => x.Name == source.TypeId);
+            if (sourceType == null)
+            {
+                source.IsDisable = true;
+                continue;
+            }
+
+            source.Type = sourceType;
+        }
+
         return sources;
     }
 
@@ -152,11 +165,20 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
     public List<SourceSyncRelation> GetRelations()
     {
         var relations = db.GetCollection<SourceSyncRelation>("source_relations").FindAll().ToList();
-        var sources = GetSourceTypes();
+        var sourceTypes = GetSourceTypes();
+        var sources = GetSources();
         foreach (var item in relations)
         {
-            item.From.Type = sources.Values.First(x => x.Name == item.From.TypeId);
-            item.To.Type = sources.Values.First(x => x.Name == item.To.TypeId);
+            //item.From.Type = sourceTypes.Values.First(x => x.Name == item.From.TypeId);
+            var fromSource = sources.FirstOrDefault(x => x.Id == item.FromId);
+            var toSource = sources.FirstOrDefault(x => x.Id == item.ToId);
+            if (fromSource == null || toSource == null || fromSource.IsDisable || toSource.IsDisable)
+            {
+                item.IsDisable = true;
+                continue;
+            }
+            item.From = fromSource;
+            item.To = toSource;
         }
 
         return relations;
@@ -164,7 +186,10 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
 
     public void AddRelation(Source from, Source to)
     {
-        db.GetCollection<SourceSyncRelation>("source_relations").Insert(new SourceSyncRelation { From = from, To = to });
+        db.GetCollection<SourceSyncRelation>("source_relations").Insert(new SourceSyncRelation {
+            FromId = from.Id,
+            ToId = to.Id
+        });
     }
 
     public void RemoveRelation(Source from, Source to)
