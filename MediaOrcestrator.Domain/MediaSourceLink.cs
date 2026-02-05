@@ -29,4 +29,9 @@ public class MediaSourceLink
 
     [BsonIgnore]
     public Media Media { get; set; }
+
+    public override string ToString()
+    {
+        return $"{SourceId}: {ExternalId} ({Status})";
+    }
 }

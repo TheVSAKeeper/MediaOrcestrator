@@ -1,6 +1,4 @@
-﻿using LiteDB;
-
-namespace MediaOrcestrator.Domain;
+﻿namespace MediaOrcestrator.Domain;
 
 public class Media
 {
@@ -9,4 +7,9 @@ public class Media
     public string Description { get; set; }
 
     public List<MediaSourceLink> Sources { get; set; }
+
+    public override string ToString()
+    {
+        return $"{Title} (ID: {Id})";
+    }
 }

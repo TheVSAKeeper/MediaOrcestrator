@@ -16,4 +16,9 @@ public class Source
 
     [BsonIgnore]
     public ISourceType Type { get; set; }
+
+    public override string ToString()
+    {
+        return TitleFull;
+    }
 }
