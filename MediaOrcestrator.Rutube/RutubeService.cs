@@ -1,4 +1,4 @@
-﻿using System.Net.Http.Headers;
+﻿using Microsoft.Extensions.Logging;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -9,11 +9,12 @@ public sealed class RutubeService
 {
     private readonly HttpClient _httpClient;
     private readonly string? _userId;
-    private readonly bool _debug;
+    private readonly ILogger _logger;
 
-    public RutubeService(string cookieString, string csrfToken, bool debug = false)
+    public RutubeService(string cookieString, string csrfToken, ILogger<RutubeService> logger)
     {
-        _debug = debug;
+        _logger = logger;
+        
         var handler = new HttpClientHandler { UseCookies = false };
         _httpClient = new(handler);
 
@@ -27,34 +28,34 @@ public sealed class RutubeService
         if (visitorIdMatch.Success)
         {
             _userId = visitorIdMatch.Groups[1].Value;
+            //_logger.LogDebug("Получен ID посетителя: {UserId}", _userId);
         }
     }
 
     public async Task<string> UploadVideoAsync(string filePath, string title, string description, string categoryId)
     {
-        // todo логгер сюда по братски
-        Console.WriteLine("Initiating upload session...");
+        _logger.LogInformation("Инициализация сессии загрузки на RuTube");
         var session = await InitUploadSessionAsync();
-        Console.WriteLine($"Session ID: {session.Sid}, Video ID: {session.VideoId}");
+        _logger.LogInformation("Сессия создана. Session ID: {SessionId}, Video ID: {VideoId}", session.Sid, session.VideoId);
 
-        Console.WriteLine("Creating TUS upload resource...");
+        _logger.LogDebug("Создание TUS ресурса для загрузки");
         var uploadUrl = await CreateTusResourceAsync(session.Sid, session.VideoId, filePath);
-        Console.WriteLine($"Upload URL: {uploadUrl}");
+        _logger.LogDebug("URL загрузки получен: {UploadUrl}", uploadUrl);
 
-        Console.WriteLine("Uploading video data...");
+        _logger.LogInformation("Начало загрузки видео данных");
         await PerformTusUploadAsync(uploadUrl, filePath);
-        Console.WriteLine("Data upload complete.");
+        _logger.LogInformation("Загрузка данных завершена");
 
-        Console.WriteLine("Waiting 5 seconds for server-side processing...");
+        _logger.LogDebug("Ожидание обработки на сервере (5 секунд)");
         await Task.Delay(5000);
 
-        Console.WriteLine("Updating metadata...");
+        _logger.LogInformation("Обновление метаданных видео");
         await UpdateMetadataAsync(session.VideoId, title, description, categoryId);
-        Console.WriteLine("Metadata updated.");
+        _logger.LogInformation("Метаданные обновлены");
 
-        Console.WriteLine("Publishing video...");
+        _logger.LogInformation("Публикация видео");
         await PublishVideoAsync(session.VideoId);
-        Console.WriteLine("Video published successfully.");
+        _logger.LogInformation("Видео успешно опубликовано");
 
         return session.Sid;
     }
@@ -62,90 +63,22 @@ public sealed class RutubeService
     public async Task<List<CategoryInfo>> GetCategoriesAsync()
     {
         var url = "https://studio.rutube.ru/api/video/category/";
-        LogRequest("GET", url);
-
+        _logger.LogDebug("Запрос списка категорий RuTube");
+        
         var response = await _httpClient.GetAsync(url);
-        await LogResponse(response);
 
         if (!response.IsSuccessStatusCode)
         {
             var err = await response.Content.ReadAsStringAsync();
-            throw new HttpRequestException($"Get categories failed: {response.StatusCode}. Body: {err}");
+            _logger.LogError("Ошибка получения категорий. Статус: {StatusCode}, Ответ: {Response}", response.StatusCode, err);
+            throw new HttpRequestException($"Не удалось получить категории: {response.StatusCode}. Ответ: {err}");
         }
 
         var body = await response.Content.ReadAsStringAsync();
         var result = JsonSerializer.Deserialize<List<CategoryInfo>>(body);
 
+        _logger.LogInformation("Получено категорий: {Count}", result?.Count ?? 0);
         return result ?? [];
-    }
-
-    private void LogRequest(string method, string url, HttpRequestHeaders? headers = null, string? body = null)
-    {
-        if (!_debug)
-        {
-            return;
-        }
-
-        Console.ForegroundColor = ConsoleColor.Cyan;
-        Console.WriteLine($"\n>>> [{method}] {url}");
-        Console.ResetColor();
-
-        if (headers != null)
-        {
-            foreach (var header in headers)
-            {
-                Console.ForegroundColor = ConsoleColor.DarkGray;
-                Console.WriteLine($"    {header.Key}: {string.Join(", ", header.Value)}");
-            }
-        }
-
-        if (!string.IsNullOrEmpty(body))
-        {
-            Console.ForegroundColor = ConsoleColor.Gray;
-            Console.WriteLine($"    Body: {body}");
-        }
-
-        Console.ResetColor();
-    }
-
-    private async Task LogResponse(HttpResponseMessage response)
-    {
-        if (!_debug)
-        {
-            return;
-        }
-
-        var statusColor = response.IsSuccessStatusCode ? ConsoleColor.Green : ConsoleColor.Red;
-        Console.ForegroundColor = statusColor;
-        Console.WriteLine($"<<< [{(int)response.StatusCode} {response.StatusCode}]");
-        Console.ResetColor();
-
-        foreach (var header in response.Headers)
-        {
-            Console.ForegroundColor = ConsoleColor.DarkGray;
-            Console.WriteLine($"    {header.Key}: {string.Join(", ", header.Value)}");
-        }
-
-        var body = await response.Content.ReadAsStringAsync();
-        if (!string.IsNullOrEmpty(body))
-        {
-            try
-            {
-                using var jsonDoc = JsonDocument.Parse(body);
-                var prettyJson = JsonSerializer.Serialize(jsonDoc, new JsonSerializerOptions { WriteIndented = true });
-                Console.ForegroundColor = ConsoleColor.Yellow;
-                Console.WriteLine("    Body (JSON):");
-                Console.WriteLine(prettyJson);
-            }
-            catch
-            {
-                Console.ForegroundColor = ConsoleColor.Gray;
-                Console.WriteLine($"    Body: {body}");
-            }
-        }
-
-        Console.ResetColor();
-        Console.WriteLine();
     }
 
     private async Task<UploadSessionResponse> InitUploadSessionAsync()
@@ -153,16 +86,15 @@ public sealed class RutubeService
         var url = "https://studio.rutube.ru/api/uploader/upload_session/";
         var requestBody = new UploadSessionRequest();
         var jsonPayload = JsonSerializer.Serialize(requestBody);
-        LogRequest("POST", url, body: jsonPayload);
 
         var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
         var response = await _httpClient.PostAsync(url, content);
-        await LogResponse(response);
 
         if (!response.IsSuccessStatusCode)
         {
             var err = await response.Content.ReadAsStringAsync();
-            throw new HttpRequestException($"Init session failed: {response.StatusCode}. Body: {err}");
+            _logger.LogError("Ошибка инициализации сессии. Статус: {StatusCode}, Ответ: {Response}", response.StatusCode, err);
+            throw new HttpRequestException($"Не удалось инициализировать сессию: {response.StatusCode}. Ответ: {err}");
         }
 
         var body = await response.Content.ReadAsStringAsync();
@@ -170,7 +102,8 @@ public sealed class RutubeService
 
         if (result == null || string.IsNullOrEmpty(result.Sid) || string.IsNullOrEmpty(result.VideoId))
         {
-            throw new("Failed to deserialize upload session response.");
+            _logger.LogError("Не удалось десериализовать ответ сессии загрузки");
+            throw new InvalidOperationException("Не удалось десериализовать ответ сессии загрузки");
         }
 
         return result;
@@ -203,14 +136,13 @@ public sealed class RutubeService
         request.Content = new ByteArrayContent(Array.Empty<byte>());
         request.Content.Headers.ContentType = new("application/offset+octet-stream");
 
-        LogRequest("POST", url, request.Headers, $"Metadata: {metadata}");
         var response = await _httpClient.SendAsync(request);
-        await LogResponse(response);
 
         if (!response.IsSuccessStatusCode)
         {
             var err = await response.Content.ReadAsStringAsync();
-            throw new HttpRequestException($"TUS Create failed: {response.StatusCode}. Body: {err}");
+            _logger.LogError("Ошибка создания TUS ресурса. Статус: {StatusCode}, Ответ: {Response}", response.StatusCode, err);
+            throw new HttpRequestException($"Не удалось создать TUS ресурс: {response.StatusCode}. Ответ: {err}");
         }
 
         if (response.Headers.Location != null)
@@ -229,6 +161,8 @@ public sealed class RutubeService
         int bytesRead;
         long offset = 0;
 
+        _logger.LogDebug("Начало загрузки файла. Размер: {FileSize} байт", fileSize);
+
         while ((bytesRead = await fileStream.ReadAsync(buffer)) > 0)
         {
             var chunk = new byte[bytesRead];
@@ -240,19 +174,26 @@ public sealed class RutubeService
             request.Content = new ByteArrayContent(chunk);
             request.Content.Headers.ContentType = new("application/offset+octet-stream");
 
-            LogRequest("PATCH", uploadUrl, request.Headers, $"Chunk: {bytesRead} bytes");
             var response = await _httpClient.SendAsync(request);
-            await LogResponse(response);
 
             if (!response.IsSuccessStatusCode)
             {
                 var err = await response.Content.ReadAsStringAsync();
-                throw new HttpRequestException($"TUS Patch failed at offset {offset}: {response.StatusCode}. Body: {err}");
+                _logger.LogError("Ошибка TUS загрузки на смещении {Offset}. Статус: {StatusCode}, Ответ: {Response}", 
+                    offset, response.StatusCode, err);
+                throw new HttpRequestException($"Ошибка TUS загрузки на смещении {offset}: {response.StatusCode}. Ответ: {err}");
             }
 
             offset += bytesRead;
-            Console.WriteLine($"Progress: {offset}/{fileSize} bytes ({(double)offset / fileSize:P1})");
+            var progress = (double)offset / fileSize;
+            
+            if (offset % (10 * 1024 * 1024) < bytesRead || offset == fileSize)
+            {
+                _logger.LogInformation("Прогресс загрузки: {Offset}/{FileSize} байт ({Progress:P1})", offset, fileSize, progress);
+            }
         }
+
+        _logger.LogInformation("Загрузка файла завершена. Всего загружено: {TotalBytes} байт", offset);
     }
 
     private async Task UpdateMetadataAsync(string videoId, string title, string description, string categoryId)
@@ -272,25 +213,23 @@ public sealed class RutubeService
         };
 
         var jsonPayload = JsonSerializer.Serialize(payload);
-        LogRequest("PATCH", url, body: jsonPayload);
-
         var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
         var request = new HttpRequestMessage(HttpMethod.Patch, url) { Content = content };
-
         var response = await _httpClient.SendAsync(request);
-        await LogResponse(response);
 
         if (!response.IsSuccessStatusCode)
         {
             var err = await response.Content.ReadAsStringAsync();
-            throw new HttpRequestException($"Update metadata failed: {response.StatusCode}. Body: {err}");
+            _logger.LogError("Ошибка обновления метаданных. Статус: {StatusCode}, Ответ: {Response}", response.StatusCode, err);
+            throw new HttpRequestException($"Не удалось обновить метаданные: {response.StatusCode}. Ответ: {err}");
         }
 
         var body = await response.Content.ReadAsStringAsync();
         var videoDetails = JsonSerializer.Deserialize<VideoDetailsResponse>(body);
         if (videoDetails != null)
         {
-            Console.WriteLine($"Confirmed video title: {videoDetails.Title}, Category: {videoDetails.Category.Name}");
+            _logger.LogDebug("Метаданные подтверждены. Название: '{Title}', Категория: '{Category}'", 
+                videoDetails.Title, videoDetails.Category.Name);
         }
     }
 
@@ -305,23 +244,22 @@ public sealed class RutubeService
         };
 
         var jsonPayload = JsonSerializer.Serialize(payload);
-        LogRequest("POST", url, body: jsonPayload);
-
         var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
         var response = await _httpClient.PostAsync(url, content);
-        await LogResponse(response);
 
         if (!response.IsSuccessStatusCode)
         {
             var err = await response.Content.ReadAsStringAsync();
-            throw new HttpRequestException($"Publish failed: {response.StatusCode}. Body: {err}");
+            _logger.LogError("Ошибка публикации видео. Статус: {StatusCode}, Ответ: {Response}", response.StatusCode, err);
+            throw new HttpRequestException($"Не удалось опубликовать видео: {response.StatusCode}. Ответ: {err}");
         }
 
         var body = await response.Content.ReadAsStringAsync();
         var result = JsonSerializer.Deserialize<PublicationResponse>(body);
         if (result != null)
         {
-            Console.WriteLine($"Publication confirmed. Video: {result.VideoId}, Scheduled: {result.Timestamp}");
+            _logger.LogDebug("Публикация подтверждена. Video ID: {VideoId}, Запланировано: {Timestamp}", 
+                result.VideoId, result.Timestamp);
         }
     }
 }

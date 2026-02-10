@@ -1,8 +1,6 @@
 ﻿using CliWrap;
 using CliWrap.Exceptions;
-using MediaOrcestrator.Core.Configurations;
 using MediaOrcestrator.Core.Extensions;
-using Microsoft.Extensions.Options;
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -29,9 +27,9 @@ public partial class FFmpeg(string path)
         catch (CommandExecutionException exception)
         {
             var message = $"""
-                           FFmpeg command-line tool failed with an error.
+                           Ошибка выполнения FFmpeg.
 
-                           Standard error:
+                           Вывод ошибок:
                            {stdErrBuffer}
                            """;
 
