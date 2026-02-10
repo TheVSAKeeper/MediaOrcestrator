@@ -12,7 +12,7 @@ public partial class MediaItemControl : UserControl
         InitializeComponent();
     }
 
-    public void SetData(Media media, List<Source> platformIds, Orcestrator? orcestrator)
+    public void SetData(Media media, List<Source> platformIds, Orcestrator orcestrator)
     {
         _media = media;
         var data = new MediaGridRowDto
@@ -51,22 +51,7 @@ public partial class MediaItemControl : UserControl
                 {
                     Task.Run(async () =>
                     {
-                        var tempMedia = await rel.From.Type.Download(fromSource.ExternalId, rel.From.Settings);
-                        tempMedia.Id = media.Id;
-                        var externalId = await rel.To.Type.Upload(tempMedia, rel.To.Settings);
-
-                        var toMediaSource = new MediaSourceLink
-                        {
-                            MediaId = media.Id,
-                            Media = media,
-                            ExternalId = externalId,
-                            Status = "OK",
-                            SourceId = rel.To.Id,
-                        };
-
-                        media.Sources.Add(toMediaSource);
-                        orcestrator.UpdateMedia(media);
-                        //logger.Information("Успешно синхронизировано медиа {Media} в {ToSource}. ExternalId: {ExternalId}", media, rel.To, externalId);
+                        await _orcestrator.TransferByRelation(media, rel, fromSource.ExternalId);
                     });
                 });
             }
@@ -101,6 +86,7 @@ public partial class MediaItemControl : UserControl
             uiMainLayout.Controls.Add(lblStatus, i + 1, 0);
         }
     }
+
     private string GetStatusSymbol(string? status)
     {
         return status switch

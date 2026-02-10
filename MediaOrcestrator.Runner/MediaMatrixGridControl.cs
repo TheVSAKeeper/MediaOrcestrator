@@ -110,7 +110,7 @@ public partial class MediaMatrixGridControl : UserControl
             //};
 
             var control = new MediaItemControl();
-            control.SetData(media, sources, _orcestrator);
+            control.SetData(media, sources, _orcestrator!);
             control.Dock = DockStyle.Top;
             uMediaGridPanel.RowCount++;
             uMediaGridPanel.Controls.Add(control);

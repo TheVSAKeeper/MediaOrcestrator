@@ -53,6 +53,7 @@ public class RutubeChannel(ILogger<RutubeChannel> logger, ILogger<RutubeService>
                     Value = x.Id.ToString(),
                     Label = x.Name,
                 })
+                .OrderBy(x=>x.Label)
                 .ToList();
         }
         catch (Exception ex)

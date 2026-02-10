@@ -191,7 +191,8 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
 
     public void AddRelation(Source from, Source to)
     {
-        db.GetCollection<SourceSyncRelation>("source_relations").Insert(new SourceSyncRelation {
+        db.GetCollection<SourceSyncRelation>("source_relations").Insert(new SourceSyncRelation
+        {
             FromId = from.Id,
             ToId = to.Id
         });
@@ -226,6 +227,26 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
         logger.LogInformation("========== Очистка БД завершена успешно ==========");
         logger.LogInformation("Всего удалено записей: {TotalCount} (медиа: {MediaCount}, связи: {RelationCount}, источники: {SourceCount})",
             mediaCount + relationCount + sourceCount, mediaCount, relationCount, sourceCount);
+    }
+
+    public async Task TransferByRelation(Media media, SourceSyncRelation rel, string fromExternalId)
+    {
+        var tempMedia = await rel.From.Type.Download(fromExternalId, rel.From.Settings);
+        tempMedia.Id = media.Id;
+        var externalId = await rel.To.Type.Upload(tempMedia, rel.To.Settings);
+
+        var toMediaSource = new MediaSourceLink
+        {
+            MediaId = media.Id,
+            Media = media,
+            ExternalId = externalId,
+            Status = "OK",
+            SourceId = rel.To.Id,
+        };
+
+        media.Sources.Add(toMediaSource);
+        UpdateMedia(media);
+        logger.LogInformation("Успешно синхронизировано медиа {Media} в {ToSource}. ExternalId: {ExternalId}", media, rel.To, externalId);
     }
 
     public class MediaSourceCache
