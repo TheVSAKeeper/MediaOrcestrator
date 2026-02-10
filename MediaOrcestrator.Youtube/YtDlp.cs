@@ -67,9 +67,9 @@ public sealed partial class YtDlp(string path, string ffmpegPath)
         catch (CommandExecutionException exception)
         {
             var message = $"""
-                           yt-dlp command-line tool failed with an error.
+                           Ошибка выполнения yt-dlp.
 
-                           Standard error:
+                           Вывод ошибок:
                            {stdErrBuffer}
                            """;
 

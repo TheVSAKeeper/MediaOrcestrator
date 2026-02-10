@@ -1,10 +1,11 @@
 ﻿using LiteDB;
 using MediaOrcestrator.Modules;
+using Microsoft.Extensions.Logging;
 
 namespace MediaOrcestrator.HardDiskDrive;
 
 // todo разделить ответственность между ISourceDefinition and ISourceManager (а у SourceManager внутри будет Definition св-во)
-public class HardDiskDriveChannel : ISourceType
+public class HardDiskDriveChannel(ILogger<HardDiskDriveChannel> logger) : ISourceType
 {
     public SyncDirection ChannelType => SyncDirection.OnlyUpload;
 
@@ -17,85 +18,216 @@ public class HardDiskDriveChannel : ISourceType
             Key = "path",
             IsRequired = true,
             Title = "путь к папке хранения",
+            Description = "Папка для хранения видеофайлов и базы данных",
+        },
+        new()
+        {
+            Key = "dbFileName",
+            IsRequired = false,
+            Title = "имя файла базы данных",
+            DefaultValue = "data.db",
+            Description = "Имя файла LiteDB для хранения метаданных",
+        },
+        new()
+        {
+            Key = "mainFileName",
+            IsRequired = false,
+            Title = "имя основного видеофайла",
+            DefaultValue = "main.mp4",
+            Description = "Имя файла для сохранения видео в папке каждого медиа",
         },
     ];
 
     public async IAsyncEnumerable<MediaDto> GetMedia(Dictionary<string, string> settings)
     {
         var basePath = settings["path"];
-        var dbPath = Path.Combine(basePath, "data.db");
-        using var db = new LiteDatabase(dbPath);
+        var dbFileName = settings.GetValueOrDefault("dbFileName", "data.db");
+        logger.LogInformation("Получение списка медиа с жёсткого диска. Путь: {BasePath}", basePath);
 
+        if (!Directory.Exists(basePath))
+        {
+            logger.LogWarning("Директория не существует: {BasePath}", basePath);
+            yield break;
+        }
+
+        var dbPath = Path.Combine(basePath, dbFileName);
+
+        if (!File.Exists(dbPath))
+        {
+            logger.LogWarning("База данных не найдена: {DbPath}", dbPath);
+            yield break;
+        }
+
+        logger.LogDebug("Открытие базы данных: {DbPath}", dbPath);
+
+        using var db = new LiteDatabase(dbPath);
         var files = db.GetCollection<DriveMedia>("files").FindAll().ToList();
+
+        logger.LogInformation("Найдено файлов в базе данных: {Count}", files.Count);
+
+        await Task.CompletedTask;
 
         foreach (var file in files)
         {
-            yield return new MediaDto
+            logger.LogDebug("Обработка файла: ID={FileId}, Название='{Title}'", file.Id, file.Title);
+
+            yield return new()
             {
                 Id = file.Id,
                 Description = file.Description,
                 Title = file.Title,
             };
         }
+
+        logger.LogInformation("Завершено получение медиа с жёсткого диска");
     }
 
     public MediaDto GetMediaById()
     {
-        throw new NotImplementedException();
+        logger.LogWarning("Метод GetMediaById не реализован");
+        throw new NotImplementedException("Метод GetMediaById не реализован");
     }
 
     public Task<MediaDto> Download(string videoId, Dictionary<string, string> settings)
     {
-        // todo дублирование
-        var basePath = settings["path"];
-        var dbPath = Path.Combine(basePath, "data.db");
-        using var db = new LiteDatabase(dbPath);
+        logger.LogInformation("Получение информации о файле с жёсткого диска. ID: {VideoId}", videoId);
 
+        var basePath = settings["path"];
+        var dbFileName = settings.GetValueOrDefault("dbFileName", "data.db");
+        var dbPath = Path.Combine(basePath, dbFileName);
+
+        if (!File.Exists(dbPath))
+        {
+            logger.LogError("База данных не найдена: {DbPath}", dbPath);
+            throw new FileNotFoundException("База данных не найдена", dbPath);
+        }
+
+        logger.LogDebug("Открытие базы данных: {DbPath}", dbPath);
+
+        using var db = new LiteDatabase(dbPath);
         var file = db.GetCollection<DriveMedia>("files").FindById(videoId);
+
+        if (file == null)
+        {
+            logger.LogError("Файл не найден в базе данных. ID: {VideoId}", videoId);
+            throw new InvalidOperationException($"Файл с ID '{videoId}' не найден в базе данных");
+        }
+
+        var fullPath = Path.Combine(basePath, file.Id, file.Path);
+
+        if (!File.Exists(fullPath))
+        {
+            logger.LogError("Физический файл не найден: {FilePath}", fullPath);
+            throw new FileNotFoundException("Физический файл не найден", fullPath);
+        }
+
+        logger.LogInformation("Файл найден. ID: {VideoId}, Путь: {FilePath}", videoId, fullPath);
+
         return Task.FromResult(new MediaDto
         {
             Id = file.Id,
             Description = file.Description,
             Title = file.Title,
-            TempDataPath = Path.Combine(basePath, file.Id, file.Path),
+            TempDataPath = fullPath,
         });
     }
 
     public Task<string> Upload(MediaDto media, Dictionary<string, string> settings)
     {
-        var hddId = media.Id;
+        logger.LogInformation("Начало сохранения файла на жёсткий диск. Название: '{Title}'", media.Title);
 
+        var hddId = media.Id;
         var basePath = settings["path"];
-        var path = Path.Combine(basePath, hddId);
-        if (!Directory.Exists(hddId))
+        var dbFileName = settings.GetValueOrDefault("dbFileName", "data.db");
+        var mainFileName = settings.GetValueOrDefault("mainFileName", "main.mp4");
+
+        if (!Directory.Exists(basePath))
         {
+            logger.LogInformation("Создание базовой директории: {BasePath}", basePath);
+            Directory.CreateDirectory(basePath);
+        }
+
+        var path = Path.Combine(basePath, hddId);
+
+        if (!Directory.Exists(path))
+        {
+            logger.LogDebug("Создание директории для файла: {Path}", path);
             Directory.CreateDirectory(path);
         }
 
-        var mainName = "main.mp4";
-        var mainFilePath = Path.Combine(path, mainName);
+        var mainFilePath = Path.Combine(path, mainFileName);
 
-        // todo идеалогически move не верный, но пока безразлично
-        File.Move(media.TempDataPath, mainFilePath);
+        if (!File.Exists(media.TempDataPath))
+        {
+            logger.LogError("Временный файл не найден: {TempPath}", media.TempDataPath);
+            throw new FileNotFoundException("Временный файл не найден", media.TempDataPath);
+        }
+
+        logger.LogDebug("Перемещение файла. Из: {Source}, В: {Destination}", media.TempDataPath, mainFilePath);
+
+        try
+        {
+            // todo идеалогически move не верный, но пока безразлично
+            File.Move(media.TempDataPath, mainFilePath, true);
+            logger.LogDebug("Файл успешно перемещён: {FilePath}", mainFilePath);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Ошибка при перемещении файла. Из: {Source}, В: {Destination}",
+                media.TempDataPath, mainFilePath);
+
+            throw;
+        }
 
         // todo дублирование
-        var dbPath = Path.Combine(basePath, "data.db");
-        using var db = new LiteDatabase(dbPath);
-        db.GetCollection<DriveMedia>("files").Insert(new DriveMedia
+        var dbPath = Path.Combine(basePath, dbFileName);
+        logger.LogDebug("Сохранение информации в базу данных: {DbPath}", dbPath);
+
+        try
         {
-            Id = hddId,
-            Description = media.Description,
-            Title = media.Title,
-            Path = mainName,
-        });
+            using var db = new LiteDatabase(dbPath);
+            var collection = db.GetCollection<DriveMedia>("files");
+
+            var existingFile = collection.FindById(hddId);
+            if (existingFile != null)
+            {
+                logger.LogWarning("Файл с ID '{HddId}' уже существует в базе данных. Обновление записи", hddId);
+                collection.Update(new DriveMedia
+                {
+                    Id = hddId,
+                    Description = media.Description,
+                    Title = media.Title,
+                    Path = mainFileName,
+                });
+            }
+            else
+            {
+                collection.Insert(new DriveMedia
+                {
+                    Id = hddId,
+                    Description = media.Description,
+                    Title = media.Title,
+                    Path = mainFileName,
+                });
+            }
+
+            logger.LogInformation("Файл успешно сохранён на жёсткий диск. ID: {HddId}, Название: '{Title}'",
+                hddId, media.Title);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Ошибка при сохранении в базу данных. ID: {HddId}", hddId);
+            throw;
+        }
+
         return Task.FromResult(hddId);
     }
 }
 
 public class DriveMedia
 {
-    public string Id { get; set; }
-    public string Title { get; set; }
-    public string Description { get; set; }
-    public string Path { get; set; }
+    public string Id { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string Path { get; set; } = string.Empty;
 }
