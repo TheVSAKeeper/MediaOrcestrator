@@ -153,49 +153,78 @@ public sealed class RutubeService
         return url;
     }
 
+    // TODO: Костыль
     private async Task PerformTusUploadAsync(string uploadUrl, string filePath)
     {
         await using var fileStream = File.OpenRead(filePath);
         var fileSize = fileStream.Length;
-        var buffer = new byte[4 * 1024 * 1024];
-        int bytesRead;
-        long offset = 0;
 
         _logger.LogDebug("Начало загрузки файла. Размер: {FileSize} байт", fileSize);
 
-        while ((bytesRead = await fileStream.ReadAsync(buffer)) > 0)
+        var request = new HttpRequestMessage(HttpMethod.Patch, uploadUrl);
+        request.Headers.Add("Tus-Resumable", "1.0.0");
+        request.Headers.Add("Upload-Offset", "0");
+        request.Content = new StreamContent(fileStream);
+        request.Content.Headers.ContentType = new("application/offset+octet-stream");
+        request.Content.Headers.ContentLength = fileSize;
+
+        var response = await _httpClient.SendAsync(request);
+
+        if (!response.IsSuccessStatusCode)
         {
-            var chunk = new byte[bytesRead];
-            Array.Copy(buffer, chunk, bytesRead);
+            var err = await response.Content.ReadAsStringAsync();
+            _logger.LogError("Ошибка TUS загрузки. Статус: {StatusCode}, Ответ: {Response}",
+                response.StatusCode, err);
 
-            var request = new HttpRequestMessage(HttpMethod.Patch, uploadUrl);
-            request.Headers.Add("Tus-Resumable", "1.0.0");
-            request.Headers.Add("Upload-Offset", offset.ToString());
-            request.Content = new ByteArrayContent(chunk);
-            request.Content.Headers.ContentType = new("application/offset+octet-stream");
-
-            var response = await _httpClient.SendAsync(request);
-
-            if (!response.IsSuccessStatusCode)
-            {
-                var err = await response.Content.ReadAsStringAsync();
-                _logger.LogError("Ошибка TUS загрузки на смещении {Offset}. Статус: {StatusCode}, Ответ: {Response}",
-                    offset, response.StatusCode, err);
-
-                throw new HttpRequestException($"Ошибка TUS загрузки на смещении {offset}: {response.StatusCode}. Ответ: {err}");
-            }
-
-            offset += bytesRead;
-            var progress = (double)offset / fileSize;
-
-            if (offset % (10 * 1024 * 1024) < bytesRead || offset == fileSize)
-            {
-                _logger.LogInformation("Прогресс загрузки: {Offset}/{FileSize} байт ({Progress:P1})", offset, fileSize, progress);
-            }
+            throw new HttpRequestException($"Ошибка TUS загрузки: {response.StatusCode}. Ответ: {err}");
         }
 
-        _logger.LogInformation("Загрузка файла завершена. Всего загружено: {TotalBytes} байт", offset);
+        _logger.LogInformation("Загрузка файла завершена. Всего загружено: {TotalBytes} байт", fileSize);
     }
+
+    // private async Task PerformTusUploadAsync(string uploadUrl, string filePath)
+    // {
+    //     await using var fileStream = File.OpenRead(filePath);
+    //     var fileSize = fileStream.Length;
+    //     var buffer = new byte[4 * 1024 * 1024];
+    //     int bytesRead;
+    //     long offset = 0;
+    //
+    //     _logger.LogDebug("Начало загрузки файла. Размер: {FileSize} байт", fileSize);
+    //
+    //     while ((bytesRead = await fileStream.ReadAsync(buffer)) > 0)
+    //     {
+    //         var chunk = new byte[bytesRead];
+    //         Array.Copy(buffer, chunk, bytesRead);
+    //
+    //         var request = new HttpRequestMessage(HttpMethod.Patch, uploadUrl);
+    //         request.Headers.Add("Tus-Resumable", "1.0.0");
+    //         request.Headers.Add("Upload-Offset", offset.ToString());
+    //         request.Content = new ByteArrayContent(chunk);
+    //         request.Content.Headers.ContentType = new("application/offset+octet-stream");
+    //
+    //         var response = await _httpClient.SendAsync(request);
+    //
+    //         if (!response.IsSuccessStatusCode)
+    //         {
+    //             var err = await response.Content.ReadAsStringAsync();
+    //             _logger.LogError("Ошибка TUS загрузки на смещении {Offset}. Статус: {StatusCode}, Ответ: {Response}",
+    //                 offset, response.StatusCode, err);
+    //
+    //             throw new HttpRequestException($"Ошибка TUS загрузки на смещении {offset}: {response.StatusCode}. Ответ: {err}");
+    //         }
+    //
+    //         offset += bytesRead;
+    //         var progress = (double)offset / fileSize;
+    //
+    //         if (offset % (10 * 1024 * 1024) < bytesRead || offset == fileSize)
+    //         {
+    //             _logger.LogInformation("Прогресс загрузки: {Offset}/{FileSize} байт ({Progress:P1})", offset, fileSize, progress);
+    //         }
+    //     }
+    //
+    //     _logger.LogInformation("Загрузка файла завершена. Всего загружено: {TotalBytes} байт", offset);
+    // }
 
     private async Task UpdateMetadataAsync(string videoId, string title, string description, string categoryId)
     {
@@ -203,7 +232,7 @@ public sealed class RutubeService
         var payload = new MetadataUpdateRequest
         {
             Title = title,
-            Description = description,
+            Description = string.IsNullOrWhiteSpace(description) ? " " : description,
             IsHidden = false,
             IsAdult = false,
             Category = categoryId,
