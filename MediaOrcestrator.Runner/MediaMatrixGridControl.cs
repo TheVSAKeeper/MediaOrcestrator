@@ -6,12 +6,12 @@ namespace MediaOrcestrator.Runner;
 public partial class MediaMatrixGridControl : UserControl
 {
     private Orcestrator? _orcestrator;
-    private Font? _statusFont;
+    private bool _isLoading;
 
     public MediaMatrixGridControl()
     {
         InitializeComponent();
-        SetDoubleBuffered(uMediaGrid);
+        SetDoubleBuffered(uiMediaGrid);
     }
 
     public void Initialize(Orcestrator orcestrator)
@@ -26,69 +26,92 @@ public partial class MediaMatrixGridControl : UserControl
             return;
         }
 
-        var mediaData = _orcestrator.GetMedias().ToList();
-        if (!string.IsNullOrEmpty(textBox1.Text))
+        UpdateLoadingIndicator(true);
+
+        try
         {
-            mediaData = mediaData.Where(x => x.Title.ToLower().Contains(textBox1.Text.ToLower())).ToList();
+            var mediaData = _orcestrator.GetMedias().ToList();
+            if (!string.IsNullOrEmpty(uiSearchTextBox.Text))
+            {
+                mediaData = mediaData.Where(x => x.Title.ToLower().Contains(uiSearchTextBox.Text.ToLower())).ToList();
+            }
+
+            var allSources = _orcestrator.GetSources();
+            //mediaData = mediaData.Take(20).ToList();
+
+            List<Source> sources;
+
+            if (selectedRelations is { Count: > 0 })
+            {
+                var selectedSourceIds = selectedRelations
+                    .SelectMany(x => new[] { x.From.Id, x.To.Id })
+                    .Distinct()
+                    .ToHashSet();
+
+                sources = allSources
+                    .Where(x => selectedSourceIds.Contains(x.Id))
+                    .ToList();
+
+                // TODO: При таком варианте не учитывается направление связи, а только наличие источника в связи. Альтернатива использовать только From для media
+                mediaData = mediaData
+                    .Where(m => m.Sources.Any(l => selectedSourceIds.Contains(l.SourceId)))
+                    .ToList();
+            }
+            else
+            {
+                sources = allSources;
+            }
+
+            SetupColumns(sources);
+            PopulateGrid(sources, mediaData);
         }
-
-        var allSources = _orcestrator.GetSources();
-        //mediaData = mediaData.Take(20).ToList();
-
-        List<Source> sources;
-
-        if (selectedRelations is { Count: > 0 })
+        finally
         {
-            var selectedSourceIds = selectedRelations
-                .SelectMany(x => new[] { x.From.Id, x.To.Id })
-                .Distinct()
-                .ToHashSet();
+            UpdateLoadingIndicator(false);
+        }
+    }
 
-            sources = allSources
-                .Where(x => selectedSourceIds.Contains(x.Id))
-                .ToList();
+    private void UpdateLoadingIndicator(bool isLoading)
+    {
+        _isLoading = isLoading;
 
-            // TODO: При таком варианте не учитывается направление связи, а только наличие источника в связи. Альтернатива использовать только From для media
-            mediaData = mediaData
-                .Where(m => m.Sources.Any(l => selectedSourceIds.Contains(l.SourceId)))
-                .ToList();
+        if (uiLoadingLabel.InvokeRequired)
+        {
+            uiLoadingLabel.Invoke(() => uiLoadingLabel.Visible = isLoading);
         }
         else
         {
-            sources = allSources;
+            uiLoadingLabel.Visible = isLoading;
         }
-
-        SetupColumns(sources);
-        PopulateGrid(sources, mediaData);
     }
 
-    private void uMediaGrid_MouseClick(object sender, MouseEventArgs e)
+    private void uiMediaGrid_MouseClick(object sender, MouseEventArgs e)
     {
         if (e.Button != MouseButtons.Right)
         {
             return;
         }
 
-        var ht = uMediaGrid.HitTest(e.X, e.Y);
+        var ht = uiMediaGrid.HitTest(e.X, e.Y);
         if (ht.Type != DataGridViewHitTestType.Cell || ht.RowIndex < 0)
         {
             return;
         }
 
-        var row = uMediaGrid.Rows[ht.RowIndex];
+        var row = uiMediaGrid.Rows[ht.RowIndex];
         if (!row.Selected)
         {
-            uMediaGrid.ClearSelection();
+            uiMediaGrid.ClearSelection();
             row.Selected = true;
         }
 
         if (row.Tag is Media media)
         {
-            ShowContextMenu(media, uMediaGrid.PointToScreen(e.Location));
+            ShowContextMenu(media, uiMediaGrid.PointToScreen(e.Location));
         }
     }
 
-    private void button1_Click_1(object sender, EventArgs e)
+    private void uiRefreshButton_Click(object sender, EventArgs e)
     {
         RefreshData();
     }
@@ -96,7 +119,7 @@ public partial class MediaMatrixGridControl : UserControl
     private void uiMergerSelectedMediaButton_Click(object sender, EventArgs e)
     {
         var selectedMediaList = new List<Media>();
-        foreach (DataGridViewRow row in uMediaGrid.Rows)
+        foreach (DataGridViewRow row in uiMediaGrid.Rows)
         {
             if (row.Cells[0].Value is not true)
             {
@@ -152,7 +175,7 @@ public partial class MediaMatrixGridControl : UserControl
 
     private void SetupColumns(List<Source> sources)
     {
-        uMediaGrid.Columns.Clear();
+        uiMediaGrid.Columns.Clear();
 
         var checkColumn = new DataGridViewCheckBoxColumn
         {
@@ -161,38 +184,38 @@ public partial class MediaMatrixGridControl : UserControl
             ReadOnly = false,
         };
 
-        uMediaGrid.Columns.Add(checkColumn);
+        uiMediaGrid.Columns.Add(checkColumn);
 
-        uMediaGrid.Columns.Add("Title", "Название");
-        uMediaGrid.Columns[1].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
-        uMediaGrid.Columns[1].ReadOnly = true;
-        uMediaGrid.Columns[1].HeaderCell.Style.Font = new(Font, FontStyle.Bold);
+        uiMediaGrid.Columns.Add("Title", "Название");
+        uiMediaGrid.Columns[1].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
+        uiMediaGrid.Columns[1].ReadOnly = true;
+        uiMediaGrid.Columns[1].HeaderCell.Style.Font = new(Font, FontStyle.Bold);
 
         foreach (var source in sources)
         {
-            var colIndex = uMediaGrid.Columns.Add(source.Id, source.Title.Length > 5 ? source.Title[..5] : source.Title);
-            uMediaGrid.Columns[colIndex].Width = 80;
-            uMediaGrid.Columns[colIndex].ReadOnly = true;
-            uMediaGrid.Columns[colIndex].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
-            uMediaGrid.Columns[colIndex].HeaderCell.Style.Font = new(Font, FontStyle.Bold);
-            uMediaGrid.Columns[colIndex].HeaderCell.ToolTipText = source.Title;
+            var colIndex = uiMediaGrid.Columns.Add(source.Id, source.Title.Length > 5 ? source.Title[..5] : source.Title);
+            uiMediaGrid.Columns[colIndex].Width = 80;
+            uiMediaGrid.Columns[colIndex].ReadOnly = true;
+            uiMediaGrid.Columns[colIndex].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
+            uiMediaGrid.Columns[colIndex].HeaderCell.Style.Font = new(Font, FontStyle.Bold);
+            uiMediaGrid.Columns[colIndex].HeaderCell.ToolTipText = source.Title;
         }
     }
 
     private void PopulateGrid(List<Source> sources, List<Media> mediaData)
     {
-        uMediaGrid.SuspendLayout();
-        uMediaGrid.Rows.Clear();
+        uiMediaGrid.SuspendLayout();
+        uiMediaGrid.Rows.Clear();
 
         if (mediaData.Count > 0)
         {
-            uMediaGrid.Rows.Add(mediaData.Count);
+            uiMediaGrid.Rows.Add(mediaData.Count);
             _statusFont ??= new(Font.FontFamily, 12, FontStyle.Bold);
 
             for (var r = 0; r < mediaData.Count; r++)
             {
                 var media = mediaData[r];
-                var row = uMediaGrid.Rows[r];
+                var row = uiMediaGrid.Rows[r];
                 row.Tag = media;
 
                 row.Cells[0].Value = false;
@@ -214,7 +237,7 @@ public partial class MediaMatrixGridControl : UserControl
             }
         }
 
-        uMediaGrid.ResumeLayout();
+        uiMediaGrid.ResumeLayout();
     }
 
     private string GetStatusSymbol(string? status)
@@ -243,7 +266,8 @@ public partial class MediaMatrixGridControl : UserControl
 
     private void ShowContextMenu(Media media, Point location)
     {
-        var contextMenu = new ContextMenuStrip();
+        _contextMenu?.Dispose();
+        _contextMenu = new();
 
         foreach (var rel in _orcestrator.GetRelations())
         {
@@ -251,7 +275,7 @@ public partial class MediaMatrixGridControl : UserControl
             var toSource = media.Sources.FirstOrDefault(x => x.SourceId == rel.To.Id);
             if (fromSource != null && toSource == null)
             {
-                contextMenu.Items.Add("Синк " + rel.From.TitleFull + " -> " + rel.To.TitleFull, null, (s, e) =>
+                _contextMenu.Items.Add("Синк " + rel.From.TitleFull + " -> " + rel.To.TitleFull, null, (s, e) =>
                 {
                     Task.Run(async () =>
                     {
@@ -261,7 +285,7 @@ public partial class MediaMatrixGridControl : UserControl
             }
             else
             {
-                var element = contextMenu.Items.Add("Синк " + rel.From.TitleFull + " -> " + rel.To.TitleFull, null, (s, e) =>
+                var element = _contextMenu.Items.Add("Синк " + rel.From.TitleFull + " -> " + rel.To.TitleFull, null, (s, e) =>
                 {
                 });
 
@@ -269,9 +293,9 @@ public partial class MediaMatrixGridControl : UserControl
             }
         }
 
-        if (contextMenu.Items.Count > 0)
+        if (_contextMenu.Items.Count > 0)
         {
-            contextMenu.Show(location);
+            _contextMenu.Show(location);
         }
     }
 }

@@ -6,56 +6,81 @@ namespace MediaOrcestrator.Runner
     partial class MediaMatrixGridControl : UserControl
     {
         private System.ComponentModel.IContainer components = null;
+        private Font _statusFont;
+        private System.Threading.Timer _searchDebounceTimer;
+        private ContextMenuStrip _contextMenu;
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing && (components != null))
+            if (disposing)
             {
-                components.Dispose();
+                if (components != null)
+                {
+                    components.Dispose();
+                }
+                
+                if (_statusFont != null)
+                {
+                    _statusFont.Dispose();
+                    _statusFont = null;
+                }
+                
+                if (_searchDebounceTimer != null)
+                {
+                    _searchDebounceTimer.Dispose();
+                    _searchDebounceTimer = null;
+                }
+                
+                if (_contextMenu != null)
+                {
+                    _contextMenu.Dispose();
+                    _contextMenu = null;
+                }
             }
             base.Dispose(disposing);
         }
 
         private void InitializeComponent()
         {
-            uMediaGrid = new DataGridView();
-            button1 = new Button();
-            textBox1 = new TextBox();
+            uiMediaGrid = new DataGridView();
+            uiRefreshButton = new Button();
+            uiSearchTextBox = new TextBox();
             uiMergerSelectedMediaButton = new Button();
-            ((System.ComponentModel.ISupportInitialize)uMediaGrid).BeginInit();
+            uiLoadingLabel = new Label();
+            ((System.ComponentModel.ISupportInitialize)uiMediaGrid).BeginInit();
             SuspendLayout();
             // 
             // uMediaGrid
             // 
-            uMediaGrid.AllowUserToAddRows = false;
-            uMediaGrid.AllowUserToDeleteRows = false;
-            uMediaGrid.AllowUserToResizeRows = false;
-            uMediaGrid.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-            uMediaGrid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
-            uMediaGrid.Location = new Point(0, 40);
-            uMediaGrid.Name = "uMediaGrid";
-            uMediaGrid.RowHeadersVisible = false;
-            uMediaGrid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-            uMediaGrid.Size = new Size(595, 360);
-            uMediaGrid.TabIndex = 0;
-            uMediaGrid.MouseClick += uMediaGrid_MouseClick;
+            uiMediaGrid.AllowUserToAddRows = false;
+            uiMediaGrid.AllowUserToDeleteRows = false;
+            uiMediaGrid.AllowUserToResizeRows = false;
+            uiMediaGrid.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+            uiMediaGrid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
+            uiMediaGrid.Location = new Point(0, 40);
+            uiMediaGrid.Name = "uMediaGrid";
+            uiMediaGrid.RowHeadersVisible = false;
+            uiMediaGrid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+            uiMediaGrid.Size = new Size(595, 360);
+            uiMediaGrid.TabIndex = 0;
+            uiMediaGrid.MouseClick += uiMediaGrid_MouseClick;
             // 
             // button1
             // 
-            button1.Location = new Point(109, 3);
-            button1.Name = "button1";
-            button1.Size = new Size(75, 23);
-            button1.TabIndex = 2;
-            button1.Text = "button1";
-            button1.UseVisualStyleBackColor = true;
-            button1.Click += button1_Click_1;
+            uiRefreshButton.Location = new Point(109, 3);
+            uiRefreshButton.Name = "button1";
+            uiRefreshButton.Size = new Size(75, 23);
+            uiRefreshButton.TabIndex = 2;
+            uiRefreshButton.Text = "button1";
+            uiRefreshButton.UseVisualStyleBackColor = true;
+            uiRefreshButton.Click += uiRefreshButton_Click;
             // 
             // textBox1
             // 
-            textBox1.Location = new Point(3, 3);
-            textBox1.Name = "textBox1";
-            textBox1.Size = new Size(100, 23);
-            textBox1.TabIndex = 3;
+            uiSearchTextBox.Location = new Point(3, 3);
+            uiSearchTextBox.Name = "textBox1";
+            uiSearchTextBox.Size = new Size(100, 23);
+            uiSearchTextBox.TabIndex = 3;
             // 
             // uiMergerSelectedMediaButton
             // 
@@ -67,24 +92,39 @@ namespace MediaOrcestrator.Runner
             uiMergerSelectedMediaButton.UseVisualStyleBackColor = true;
             uiMergerSelectedMediaButton.Click += uiMergerSelectedMediaButton_Click;
             // 
+            // uiLoadingLabel
+            // 
+            uiLoadingLabel.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            uiLoadingLabel.AutoSize = true;
+            uiLoadingLabel.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
+            uiLoadingLabel.ForeColor = Color.Blue;
+            uiLoadingLabel.Location = new Point(190, 7);
+            uiLoadingLabel.Name = "uiLoadingLabel";
+            uiLoadingLabel.Size = new Size(85, 15);
+            uiLoadingLabel.TabIndex = 5;
+            uiLoadingLabel.Text = "Загрузка...";
+            uiLoadingLabel.Visible = false;
+            // 
             // MediaMatrixGridControl
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
+            Controls.Add(uiLoadingLabel);
             Controls.Add(uiMergerSelectedMediaButton);
-            Controls.Add(textBox1);
-            Controls.Add(button1);
-            Controls.Add(uMediaGrid);
+            Controls.Add(uiSearchTextBox);
+            Controls.Add(uiRefreshButton);
+            Controls.Add(uiMediaGrid);
             Name = "MediaMatrixGridControl";
             Size = new Size(595, 400);
-            ((System.ComponentModel.ISupportInitialize)uMediaGrid).EndInit();
+            ((System.ComponentModel.ISupportInitialize)uiMediaGrid).EndInit();
             ResumeLayout(false);
             PerformLayout();
         }
 
-        private DataGridView uMediaGrid;
-        private Button button1;
-        private TextBox textBox1;
+        private DataGridView uiMediaGrid;
+        private Button uiRefreshButton;
+        private TextBox uiSearchTextBox;
         private Button uiMergerSelectedMediaButton;
+        private Label uiLoadingLabel;
     }
 }
