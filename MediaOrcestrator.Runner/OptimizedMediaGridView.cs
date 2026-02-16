@@ -85,7 +85,7 @@ public class OptimizedMediaGridView : DataGridView
             Columns[colIndex].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
             Columns[colIndex].DefaultCellStyle.Font = _statusFont;
             Columns[colIndex].HeaderCell.Style.Font = _headerFont;
-            Columns[colIndex].HeaderCell.ToolTipText = source.Title;
+            Columns[colIndex].HeaderCell.ToolTipText = source.TitleFull;
         }
     }
 

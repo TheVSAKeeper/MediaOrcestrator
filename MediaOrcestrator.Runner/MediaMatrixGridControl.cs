@@ -1,4 +1,5 @@
 using MediaOrcestrator.Domain;
+using System.Text;
 
 namespace MediaOrcestrator.Runner;
 
@@ -182,6 +183,47 @@ public partial class MediaMatrixGridControl : UserControl
         return (mediaQuery.ToList(), sources);
     }
 
+    private static Bitmap? GetSyncIcon()
+    {
+        try
+        {
+            var bitmap = new Bitmap(16, 16);
+            using var g = Graphics.FromImage(bitmap);
+            using var pen = new Pen(Color.Blue, 2);
+
+            g.Clear(Color.Transparent);
+            g.DrawLine(pen, 2, 8, 12, 8);
+            g.DrawLine(pen, 9, 5, 12, 8);
+            g.DrawLine(pen, 9, 11, 12, 8);
+
+            return bitmap;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static Bitmap? GetCopyIcon()
+    {
+        try
+        {
+            var bitmap = new Bitmap(16, 16);
+            using var g = Graphics.FromImage(bitmap);
+            using var pen = new Pen(Color.DarkGray, 1);
+
+            g.Clear(Color.Transparent);
+            g.DrawRectangle(pen, 2, 2, 8, 8);
+            g.DrawRectangle(pen, 5, 5, 8, 8);
+
+            return bitmap;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     private void UpdateLoadingIndicator(bool isLoading)
     {
         if (uiLoadingLabel.InvokeRequired)
@@ -266,7 +308,8 @@ public partial class MediaMatrixGridControl : UserControl
 
             if (fromSource != null && toSource == null)
             {
-                _contextMenu.Items.Add(menuText, null, async void (s, e) =>
+                var menuItem = new ToolStripMenuItem(menuText, GetSyncIcon());
+                menuItem.Click += async (s, e) =>
                 {
                     UpdateLoadingIndicator(true);
                     try
@@ -283,18 +326,98 @@ public partial class MediaMatrixGridControl : UserControl
                         UpdateLoadingIndicator(false);
                         RefreshData();
                     }
-                });
+                };
+
+                _contextMenu.Items.Add(menuItem);
             }
             else
             {
-                var element = _contextMenu.Items.Add(menuText);
-                element.Enabled = false;
+                var menuItem = new ToolStripMenuItem(menuText, GetSyncIcon())
+                {
+                    Enabled = false,
+                };
+
+                if (fromSource == null && toSource == null)
+                {
+                    menuItem.ToolTipText = "Медиа отсутствует в исходном хранилище";
+                }
+                else if (fromSource == null)
+                {
+                    menuItem.ToolTipText = "Исходное хранилище недоступно";
+                }
+                else if (toSource != null)
+                {
+                    menuItem.ToolTipText = "Медиа уже существует в целевом хранилище";
+                }
+
+                _contextMenu.Items.Add(menuItem);
             }
         }
 
         if (_contextMenu.Items.Count > 0)
         {
+            _contextMenu.Items.Add(new ToolStripSeparator());
+        }
+
+        var copyDetailsItem = new ToolStripMenuItem("Копировать детали в буфер обмена", GetCopyIcon());
+        copyDetailsItem.Click += (s, e) => CopyMediaDetailsToClipboard(media);
+        _contextMenu.Items.Add(copyDetailsItem);
+
+        if (_contextMenu.Items.Count > 0)
+        {
             _contextMenu.Show(location);
+        }
+    }
+
+    private void CopyMediaDetailsToClipboard(Media media)
+    {
+        try
+        {
+            var sources = _orcestrator?.GetSources() ?? [];
+            var details = new StringBuilder();
+
+            details.AppendLine($"Название: {media.Title}");
+
+            if (!string.IsNullOrEmpty(media.Description))
+            {
+                details.AppendLine($"Описание: {media.Description}");
+            }
+
+            details.AppendLine();
+            details.AppendLine("Источники:");
+
+            if (media.Sources.Count == 0)
+            {
+                details.AppendLine(" Нет источников");
+            }
+            else
+            {
+                foreach (var sourceLink in media.Sources)
+                {
+                    var source = sources.FirstOrDefault(s => s.Id == sourceLink.SourceId);
+                    var sourceName = source?.TitleFull ?? "Неизвестный источник";
+                    var status = sourceLink.Status switch
+                    {
+                        MediaSourceLink.StatusOk => "✔ OK",
+                        MediaSourceLink.StatusError => "✘ Ошибка",
+                        MediaSourceLink.StatusNone => "○ Нет",
+                        _ => "● Неизвестно",
+                    };
+
+                    details.AppendLine($"  {sourceName}: {status}");
+                    if (!string.IsNullOrEmpty(sourceLink.ExternalId))
+                    {
+                        details.AppendLine($"    ID: {sourceLink.ExternalId}");
+                    }
+                }
+            }
+
+            Clipboard.SetText(details.ToString());
+            MessageBox.Show("Детали медиа скопированы в буфер обмена", "Успех", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Ошибка при копировании: {ex.Message}", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
 
