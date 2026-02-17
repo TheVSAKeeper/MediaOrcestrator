@@ -44,6 +44,7 @@
             uiFilesTabPage = new TabPage();
             uiStorageTabPage = new TabPage();
             uiRelationsTabPage = new TabPage();
+            uiSyncTreeTabPage = new TabPage();
             uiAuditTabPage = new TabPage();
             uiClearTypeComboBox = new ComboBox();
             uiClearSpecificTypeButton = new Button();
@@ -176,6 +177,7 @@
             uiMainTabControl.Controls.Add(uiFilesTabPage);
             uiMainTabControl.Controls.Add(uiStorageTabPage);
             uiMainTabControl.Controls.Add(uiRelationsTabPage);
+            uiMainTabControl.Controls.Add(uiSyncTreeTabPage);
             uiMainTabControl.Controls.Add(uiAuditTabPage);
             uiMainTabControl.Controls.Add(uiLogsTabPage);
             uiMainTabControl.Controls.Add(uiToolsTabPage);
@@ -223,6 +225,16 @@
             uiRelationsTabPage.TabIndex = 2;
             uiRelationsTabPage.Text = "Связи";
             uiRelationsTabPage.UseVisualStyleBackColor = true;
+            // 
+            // uiSyncTreeTabPage
+            // 
+            uiSyncTreeTabPage.Location = new Point(4, 24);
+            uiSyncTreeTabPage.Name = "uiSyncTreeTabPage";
+            uiSyncTreeTabPage.Padding = new Padding(3);
+            uiSyncTreeTabPage.Size = new Size(1125, 742);
+            uiSyncTreeTabPage.TabIndex = 6;
+            uiSyncTreeTabPage.Text = "Дерево синхронизации";
+            uiSyncTreeTabPage.UseVisualStyleBackColor = true;
             // 
             // uiAuditTabPage
             // 
@@ -368,6 +380,7 @@
         private TabPage uiFilesTabPage;
         private TabPage uiStorageTabPage;
         private TabPage uiRelationsTabPage;
+        private TabPage uiSyncTreeTabPage;
         private TabPage uiAuditTabPage;
         private Button uiForceScanButton;
         private Button uiClearDatabaseButton;

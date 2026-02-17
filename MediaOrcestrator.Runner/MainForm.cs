@@ -11,6 +11,7 @@ public partial class MainForm : Form
     private readonly Orcestrator _orcestrator;
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<MainForm> _logger;
+    private SyncTreeControl? _syncTreeControl;
 
     public MainForm(Orcestrator orcestrator, IServiceProvider serviceProvider, ILogger<MainForm> logger, RichTextBox logControl)
     {
@@ -20,6 +21,25 @@ public partial class MainForm : Form
 
         InitializeComponent();
         uiLogsTabPage.Controls.Add(logControl);
+
+        // Initialize SyncTreeControl
+        InitializeSyncTreeTab();
+    }
+
+    private void InitializeSyncTreeTab()
+    {
+        try
+        {
+            _syncTreeControl = _serviceProvider.GetRequiredService<SyncTreeControl>();
+            _syncTreeControl.Dock = DockStyle.Fill;
+            uiSyncTreeTabPage.Controls.Add(_syncTreeControl);
+            _logger.LogInformation("SyncTreeControl успешно инициализирован");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Не удалось инициализировать SyncTreeControl");
+            MessageBox.Show($"Не удалось инициализировать дерево синхронизации: {ex.Message}", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
     }
 
     private void MainForm_Load(object sender, EventArgs e)

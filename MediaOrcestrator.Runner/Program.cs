@@ -1,5 +1,6 @@
 ﻿using LiteDB;
 using MediaOrcestrator.Domain;
+using MediaOrcestrator.Runner;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Serilog;
@@ -257,6 +258,11 @@ file static class Program
 
         services.AddTransient<SourceControl>();
         services.AddTransient<RelationControl>();
+
+        // Register Sync Tree components
+        services.AddSingleton<SyncPlanGenerator>();
+        services.AddSingleton<SyncExecutor>();
+        services.AddTransient<SyncTreeControl>();
     }
 }
 
