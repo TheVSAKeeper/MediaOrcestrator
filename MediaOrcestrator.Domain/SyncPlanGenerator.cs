@@ -16,25 +16,56 @@ public class SyncPlanGenerator(Orcestrator orchestrator, ILogger<SyncPlanGenerat
         logger.LogInformation("Найдено {RelationCount} активных связей для анализа", activeRelations.Count);
 
         var allIntents = new List<IntentObject>();
-        foreach (var relation in activeRelations)
+        
+        // Iterative approach to handle chains: A -> B -> C
+        bool added;
+        int pass = 0;
+        do
         {
-            var relationIntents = AnalyzeRelation(relation);
-            allIntents.AddRange(relationIntents);
-
-            logger.LogInformation("Связь {Relation}: Создано {IntentCount} намерений", relation.ToString(), relationIntents.Count);
-        }
+            added = false;
+            pass++;
+            logger.LogDebug("Анализ связей, проход {Pass}", pass);
+            
+            foreach (var relation in activeRelations)
+            {
+                var relationIntents = AnalyzeRelation(relation, allIntents);
+                
+                foreach (var intent in relationIntents)
+                {
+                    if (!allIntents.Any(i => IsSameIntent(i, intent)))
+                    {
+                        allIntents.Add(intent);
+                        added = true;
+                    }
+                }
+            }
+        } while (added && pass < 10); // Safety limit for cyclic dependencies
 
         plan.Intents = allIntents;
 
         BuildDependencies(allIntents);
         OrganizeIntents(plan, activeRelations);
 
-        logger.LogInformation("Генерация плана синхронизации завершена. Всего намерений: {IntentCount}", plan.TotalCount);
+        logger.LogInformation("Генерация плана синхронизации завершена. Всего уникальных намерений: {IntentCount}", plan.TotalCount);
 
         return Task.FromResult(plan);
     }
 
-    private List<IntentObject> AnalyzeRelation(SourceSyncRelation relation)
+    private bool IsSameIntent(IntentObject a, IntentObject b)
+    {
+        if (a.Type != b.Type || a.MediaId != b.MediaId) return false;
+
+        return a.Type switch
+        {
+            IntentType.Download => a.SourceId == b.SourceId,
+            IntentType.Upload => a.TargetId == b.TargetId,
+            IntentType.UpdateStatus => a.SourceId == b.SourceId,
+            IntentType.MarkAsDeleted => a.SourceId == b.SourceId,
+            _ => false
+        };
+    }
+
+    private List<IntentObject> AnalyzeRelation(SourceSyncRelation relation, List<IntentObject> allIntents)
     {
         var intents = new List<IntentObject>();
 
@@ -47,35 +78,46 @@ public class SyncPlanGenerator(Orcestrator orchestrator, ILogger<SyncPlanGenerat
             var sourceLink = media.Sources.FirstOrDefault(s => s.SourceId == relation.FromId);
             var targetLink = media.Sources.FirstOrDefault(s => s.SourceId == relation.ToId);
 
-            if (sourceLink != null && targetLink == null)
+            bool sourceHasIt = sourceLink != null && sourceLink.Status == MediaSourceLink.StatusOk;
+            bool sourceWillHaveIt = allIntents.Any(i => i.MediaId == media.Id && i.TargetId == relation.FromId && i.Type == IntentType.Upload);
+            
+            bool targetHasIt = targetLink != null && targetLink.Status == MediaSourceLink.StatusOk;
+            bool targetWillHaveIt = allIntents.Any(i => i.MediaId == media.Id && i.TargetId == relation.ToId && i.Type == IntentType.Upload);
+
+            if ((sourceHasIt || sourceWillHaveIt) && !(targetHasIt || targetWillHaveIt))
             {
-                logger.LogDebug("Медиа {MediaId} требует синхронизации из {From} в {To}",
-                    media.Id, relation.From.Title, relation.To.Title);
+                logger.LogDebug("Медиа {MediaId} требует синхронизации из {From} в {To} (Доступно: {SourceAvailable}, Планируется: {SourcePlanned})",
+                    media.Id, relation.From.Title, relation.To.Title, sourceHasIt, sourceWillHaveIt);
 
-                var downloadIntent = new IntentObject
+                if (sourceHasIt && sourceLink != null)
                 {
-                    Type = IntentType.Download,
-                    MediaId = media.Id,
-                    SourceId = relation.FromId,
-                    ExternalId = sourceLink.ExternalId,
-                    Media = media,
-                    Source = relation.From,
-                };
+                    var downloadIntent = new IntentObject
+                    {
+                        Type = IntentType.Download,
+                        MediaId = media.Id,
+                        SourceId = relation.FromId,
+                        ExternalId = sourceLink.ExternalId,
+                        Media = media,
+                        Source = relation.From,
+                    };
 
-                intents.Add(downloadIntent);
+                    intents.Add(downloadIntent);
+                }
 
                 var uploadIntent = new IntentObject
                 {
                     Type = IntentType.Upload,
                     MediaId = media.Id,
+                    SourceId = relation.FromId,
                     TargetId = relation.ToId,
                     Media = media,
+                    Source = relation.From,
                     Target = relation.To,
                 };
 
                 intents.Add(uploadIntent);
             }
-            else if (sourceLink == null && targetLink != null)
+            else if (!sourceHasIt && !sourceWillHaveIt && (targetHasIt || targetWillHaveIt))
             {
                 var updateStatusIntent = new IntentObject
                 {
@@ -90,16 +132,16 @@ public class SyncPlanGenerator(Orcestrator orchestrator, ILogger<SyncPlanGenerat
 
                 logger.LogDebug("Медиа {MediaId} отсутствует в источнике {From}, создано намерение обновления статуса", media.Id, relation.From.Title);
             }
-            else if (sourceLink != null && targetLink != null)
+            else if (sourceHasIt && targetHasIt)
             {
-                if (sourceLink.Status != MediaSourceLink.StatusOk)
+                if (sourceLink?.Status != MediaSourceLink.StatusOk)
                 {
                     var updateStatusIntent = new IntentObject
                     {
                         Type = IntentType.UpdateStatus,
                         MediaId = media.Id,
                         SourceId = relation.FromId,
-                        ExternalId = sourceLink.ExternalId,
+                        ExternalId = sourceLink?.ExternalId,
                         Media = media,
                         Source = relation.From,
                     };
@@ -109,14 +151,14 @@ public class SyncPlanGenerator(Orcestrator orchestrator, ILogger<SyncPlanGenerat
                     logger.LogDebug("Медиа {MediaId} имеет ошибочный статус в {From}, создано намерение обновления статуса", media.Id, relation.From.Title);
                 }
 
-                if (targetLink.Status != MediaSourceLink.StatusOk)
+                if (targetLink?.Status != MediaSourceLink.StatusOk)
                 {
                     var updateStatusIntent = new IntentObject
                     {
                         Type = IntentType.UpdateStatus,
                         MediaId = media.Id,
                         SourceId = relation.ToId,
-                        ExternalId = targetLink.ExternalId,
+                        ExternalId = targetLink?.ExternalId,
                         Media = media,
                         Source = relation.To,
                     };
@@ -145,17 +187,31 @@ public class SyncPlanGenerator(Orcestrator orchestrator, ILogger<SyncPlanGenerat
 
             foreach (var uploadIntent in uploadIntents)
             {
+                // Dependency: Upload depends on Downloads for this media (must fetch data first)
                 foreach (var downloadIntent in downloadIntents)
                 {
-                    if (uploadIntent.Dependencies.Contains(downloadIntent))
+                    if (!uploadIntent.Dependencies.Contains(downloadIntent))
                     {
-                        continue;
+                        uploadIntent.Dependencies.Add(downloadIntent);
+                        logger.LogDebug("Добавлена зависимость: Загрузка {UploadId} зависит от скачивания {DownloadId} (Медиа {MediaId})",
+                            uploadIntent.Id, downloadIntent.Id, mediaId);
                     }
+                }
 
-                    uploadIntent.Dependencies.Add(downloadIntent);
+                // Dependency: Chain synchronization. Upload(Source -> Target) depends on Upload(Prev -> Source)
+                foreach (var otherUpload in uploadIntents)
+                {
+                    if (otherUpload.Id == uploadIntent.Id) continue;
 
-                    logger.LogDebug("Добавлена зависимость: Намерение загрузки {UploadId} зависит от намерения скачивания {DownloadId} для медиа {MediaId}",
-                        uploadIntent.Id, downloadIntent.Id, mediaId);
+                    if (otherUpload.TargetId == uploadIntent.SourceId)
+                    {
+                        if (!uploadIntent.Dependencies.Contains(otherUpload))
+                        {
+                            uploadIntent.Dependencies.Add(otherUpload);
+                            logger.LogDebug("Добавлена зависимость цепочки: Загрузка {UploadId} зависит от предварительной загрузки {OtherId} (Медиа {MediaId})",
+                                uploadIntent.Id, otherUpload.Id, mediaId);
+                        }
+                    }
                 }
             }
         }

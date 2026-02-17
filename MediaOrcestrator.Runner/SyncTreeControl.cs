@@ -834,71 +834,35 @@ public partial class SyncTreeControl : UserControl
 
         try
         {
-            // Group intents by relation
-            foreach (var relationEntry in plan.IntentsByRelation)
-            {
-                var relationKey = relationEntry.Key;
-                var relationIntents = relationEntry.Value;
+            // Group by Media for "Full Chain" view
+            var sortedMediaIds = plan.IntentsByMedia.Keys
+                .OrderBy(mediaId => plan.IntentsByMedia[mediaId].First().Media?.Title ?? "")
+                .ToList();
 
-                if (relationIntents.Count == 0)
+            foreach (var mediaId in sortedMediaIds)
+            {
+                var mediaIntents = plan.IntentsByMedia[mediaId];
+                var media = mediaIntents.First().Media;
+
+                if (media == null)
                 {
                     continue;
                 }
 
-                // Create relation node (top level)
-                var firstIntent = relationIntents.First();
-                var relationText = GetRelationText(firstIntent);
-                var relationNode = new TreeNode(relationText);
-                relationNode.Tag = relationKey; // Store relation key for reference
+                // Create media node (top level)
+                var mediaNode = new TreeNode(media.Title);
+                mediaNode.Tag = media;
 
-                // Group intents by media within this relation
-                var mediaGroups = relationIntents.GroupBy(i => i.MediaId);
+                // Build dependency tree within this media
+                // Root intents are those that don't depend on any other intent for THIS media
+                var rootIntents = mediaIntents.Where(i => !i.Dependencies.Any(d => mediaIntents.Any(mi => mi.Id == d.Id))).ToList();
 
-                foreach (var mediaGroup in mediaGroups)
+                foreach (var rootIntent in rootIntents)
                 {
-                    var mediaIntents = mediaGroup.ToList();
-                    var media = mediaIntents.First().Media;
-
-                    if (media == null)
-                    {
-                        continue;
-                    }
-
-                    // Create media node (second level)
-                    var mediaNode = new TreeNode(media.Title);
-                    mediaNode.Tag = media;
-
-                    // Create intent nodes (third level)
-                    foreach (var intent in mediaIntents)
-                    {
-                        var intentText = GetIntentText(intent);
-                        var intentNode = new TreeNode(intentText);
-                        intentNode.Tag = intent;
-
-                        // Set initial status icon
-                        var iconKey = GetStatusIconKey(intent.Status);
-                        intentNode.ImageKey = iconKey;
-                        intentNode.SelectedImageKey = iconKey;
-
-                        // Add visual indicator for dependencies
-                        if (intent.Dependencies.Count > 0)
-                        {
-                            intentNode.Text = $"⚡ {intentNode.Text}";
-                        }
-
-                        // Add visual indicator for metadata changes (placeholder for now)
-                        if (WillMetadataChange(intent))
-                        {
-                            intentNode.Text = $"📝 {intentNode.Text}";
-                        }
-
-                        mediaNode.Nodes.Add(intentNode);
-                    }
-
-                    relationNode.Nodes.Add(mediaNode);
+                    AddIntentNodeRecursive(mediaNode.Nodes, rootIntent, mediaIntents);
                 }
 
-                uiTreeView.Nodes.Add(relationNode);
+                uiTreeView.Nodes.Add(mediaNode);
             }
 
             // Expand first level by default
@@ -907,11 +871,45 @@ public partial class SyncTreeControl : UserControl
                 node.Expand();
             }
 
-            _logger.LogInformation("Tree populated with {RelationCount} relations", uiTreeView.Nodes.Count);
+            _logger.LogInformation("Tree populated with {MediaCount} media items", uiTreeView.Nodes.Count);
         }
         finally
         {
             uiTreeView.EndUpdate();
+        }
+    }
+
+    private void AddIntentNodeRecursive(TreeNodeCollection nodes, IntentObject intent, List<IntentObject> allMediaIntents)
+    {
+        var intentText = GetIntentText(intent);
+        var intentNode = new TreeNode(intentText);
+        intentNode.Tag = intent;
+
+        // Set initial status icon
+        var iconKey = GetStatusIconKey(intent.Status);
+        intentNode.ImageKey = iconKey;
+        intentNode.SelectedImageKey = iconKey;
+        intentNode.ForeColor = GetStatusColor(intent.Status);
+
+        // Add visual indicator for dependencies
+        if (intent.Dependencies.Count > 0)
+        {
+            intentNode.Text = $"⚡ {intentNode.Text}";
+        }
+
+        // Add visual indicator for metadata changes
+        if (WillMetadataChange(intent))
+        {
+            intentNode.Text = $"📝 {intentNode.Text}";
+        }
+
+        nodes.Add(intentNode);
+
+        // Find intents that depend on THIS intent
+        var dependents = allMediaIntents.Where(i => i.Dependencies.Any(d => d.Id == intent.Id)).ToList();
+        foreach (var dependent in dependents)
+        {
+            AddIntentNodeRecursive(intentNode.Nodes, dependent, allMediaIntents);
         }
     }
 
