@@ -1,57 +1,73 @@
-using MediaOrcestrator.Domain;
+﻿using MediaOrcestrator.Domain;
 using Microsoft.Extensions.Logging;
 
 namespace MediaOrcestrator.Runner;
 
-// TODO: Облагородить и мб перенести в Tab
-public class SyncTreeForm : Form
+public partial class SyncTreeControl : UserControl
 {
-    private readonly TreeView _treeView;
-    private readonly Button _executeButton;
-    private readonly Orcestrator _orcestrator;
-    private readonly ILogger<SyncTreeForm> _logger;
-    private readonly List<SyncIntent> _rootIntents;
+    private Orcestrator? _orcestrator;
+    private ILogger<SyncTreeControl>? _logger;
+    private List<SyncIntent>? _rootIntents;
 
-    public SyncTreeForm(Orcestrator orcestrator, List<SyncIntent> rootIntents, ILogger<SyncTreeForm> logger)
+    public SyncTreeControl()
+    {
+        InitializeComponent();
+        uiTreeView.CheckBoxes = true;
+    }
+
+    public void Initialize(List<SyncIntent> rootIntents, Orcestrator orcestrator, ILogger<SyncTreeControl> logger)
     {
         _orcestrator = orcestrator;
-        _rootIntents = rootIntents;
         _logger = logger;
-
-        Text = "Дерево синхронизации (Аудит)";
-        Size = new(800, 600);
-        StartPosition = FormStartPosition.CenterParent;
-
-        _treeView = new()
-        {
-            Dock = DockStyle.Fill,
-            CheckBoxes = true,
-        };
-
-        _executeButton = new()
-        {
-            Text = "Выполнить выбранное",
-            Dock = DockStyle.Bottom,
-            Height = 40,
-        };
-
-        _executeButton.Click += ExecuteButton_Click;
-
-        Controls.Add(_treeView);
-        Controls.Add(_executeButton);
-
+        _rootIntents = rootIntents;
         PopulateTree();
     }
 
-    private void PopulateTree()
+    private async void uiExecuteButton_Click(object? sender, EventArgs e)
     {
-        _treeView.Nodes.Clear();
-        foreach (var node in _rootIntents.Select(CreateNode))
+        if (_rootIntents == null || _orcestrator == null || _logger == null)
         {
-            _treeView.Nodes.Add(node);
+            return;
         }
 
-        _treeView.ExpandAll();
+        UpdateIntentsFromTree(uiTreeView.Nodes);
+
+        var selectedRootIntents = _rootIntents.Where(i => i.IsSelected).ToList();
+        if (selectedRootIntents.Count == 0)
+        {
+            MessageBox.Show("Ничего не выбрано.");
+            return;
+        }
+
+        uiExecuteButton.Enabled = false;
+        uiTreeView.Enabled = false;
+
+        try
+        {
+            foreach (var intent in selectedRootIntents)
+            {
+                try
+                {
+                    await ExecuteIntent(intent);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Ошибка при выполнении синхронизации для {Intent}", intent);
+                }
+            }
+
+            MessageBox.Show("Процесс синхронизации завершен. Проверьте логи на наличие ошибок.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Критическая ошибка при выполнении синхронизации.");
+            MessageBox.Show($"Критическая ошибка: {ex.Message}");
+        }
+        finally
+        {
+            uiExecuteButton.Enabled = true;
+            uiTreeView.Enabled = true;
+        }
     }
 
     private static TreeNode CreateNode(SyncIntent intent)
@@ -70,50 +86,6 @@ public class SyncTreeForm : Form
         return node;
     }
 
-    private async void ExecuteButton_Click(object? sender, EventArgs e)
-    {
-        UpdateIntentsFromTree(_treeView.Nodes);
-
-        var selectedRootIntents = _rootIntents.Where(i => i.IsSelected).ToList();
-        if (selectedRootIntents.Count == 0)
-        {
-            MessageBox.Show("Ничего не выбрано.");
-            return;
-        }
-
-        _executeButton.Enabled = false;
-        _treeView.Enabled = false;
-
-        try
-        {
-            foreach (var intent in selectedRootIntents)
-            {
-                try
-                {
-                    await ExecuteIntent(intent);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Ошибка при выполнении синхронизации для {Intent}", intent);
-                }
-            }
-
-            MessageBox.Show("Процесс синхронизации завершен. Проверьте логи на наличие ошибок.");
-            DialogResult = DialogResult.OK;
-            Close();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Критическая ошибка при выполнении синхронизации.");
-            MessageBox.Show($"Критическая ошибка: {ex.Message}");
-        }
-        finally
-        {
-            _executeButton.Enabled = true;
-            _treeView.Enabled = true;
-        }
-    }
-
     private static void UpdateIntentsFromTree(TreeNodeCollection nodes)
     {
         foreach (TreeNode node in nodes)
@@ -128,8 +100,29 @@ public class SyncTreeForm : Form
         }
     }
 
+    private void PopulateTree()
+    {
+        uiTreeView.Nodes.Clear();
+        if (_rootIntents == null)
+        {
+            return;
+        }
+
+        foreach (var node in _rootIntents.Select(CreateNode))
+        {
+            uiTreeView.Nodes.Add(node);
+        }
+
+        uiTreeView.ExpandAll();
+    }
+
     private async Task ExecuteIntent(SyncIntent intent)
     {
+        if (_orcestrator == null || _logger == null)
+        {
+            return;
+        }
+
         if (!intent.IsSelected)
         {
             return;

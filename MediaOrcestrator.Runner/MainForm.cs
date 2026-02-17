@@ -59,7 +59,7 @@ public partial class MainForm : Form
 
     private void uiPlanSyncButton_Click(object sender, EventArgs e)
     {
-       var planner = _serviceProvider.GetRequiredService<SyncPlanner>();
+        var planner = _serviceProvider.GetRequiredService<SyncPlanner>();
         var medias = _orcestrator.GetMedias();
         var relations = _orcestrator.GetRelations();
 
@@ -71,12 +71,9 @@ public partial class MainForm : Form
             return;
         }
 
-        // TODO: Нормально зарегистрировать в DI
-        using var syncTreeForm = new SyncTreeForm(_orcestrator, intents, _serviceProvider.GetRequiredService<ILogger<SyncTreeForm>>());
-        if (syncTreeForm.ShowDialog() == DialogResult.OK)
-        {
-            uiMediaMatrixGridControl.RefreshData();
-        }
+        // TODO: DI
+        uiSyncTreeControl.Initialize(intents, _orcestrator, _serviceProvider.GetRequiredService<ILogger<SyncTreeControl>>());
+        uiMainTabControl.SelectedTab = uiSyncTreeTabPage;
     }
 
     private void uiAddSourceButton_Click(object sender, EventArgs e)

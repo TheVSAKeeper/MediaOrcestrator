@@ -46,15 +46,17 @@
             uiStorageTabPage = new TabPage();
             uiRelationsTabPage = new TabPage();
             uiAuditTabPage = new TabPage();
-            uiClearTypeComboBox = new ComboBox();
             uiClearSpecificTypeButton = new Button();
+            uiClearTypeComboBox = new ComboBox();
             uiClearDatabaseButton = new Button();
             uiForceScanButton = new Button();
+            uiSyncTreeTabPage = new TabPage();
+            uiSyncTreeControl = new SyncTreeControl();
             uiLogsTabPage = new TabPage();
             uiToolsTabPage = new TabPage();
             groupBox1 = new GroupBox();
-            uiRubuteAuthStateOpenBrowserButton = new Button();
             uiRubuteAuthStatePathTextBox = new TextBox();
+            uiRubuteAuthStateOpenBrowserButton = new Button();
             uiMainTabControl.SuspendLayout();
             uiFilesTabPage.SuspendLayout();
             uiStorageTabPage.SuspendLayout();
@@ -103,7 +105,7 @@
             uiMediaMatrixGridControl.Dock = DockStyle.Fill;
             uiMediaMatrixGridControl.Location = new Point(3, 3);
             uiMediaMatrixGridControl.Name = "uiMediaMatrixGridControl";
-            uiMediaMatrixGridControl.Size = new Size(1119, 736);
+            uiMediaMatrixGridControl.Size = new Size(1137, 747);
             uiMediaMatrixGridControl.TabIndex = 2;
             // 
             // uiAddSourceButton
@@ -189,12 +191,13 @@
             uiMainTabControl.Controls.Add(uiStorageTabPage);
             uiMainTabControl.Controls.Add(uiRelationsTabPage);
             uiMainTabControl.Controls.Add(uiAuditTabPage);
+            uiMainTabControl.Controls.Add(uiSyncTreeTabPage);
             uiMainTabControl.Controls.Add(uiLogsTabPage);
             uiMainTabControl.Controls.Add(uiToolsTabPage);
             uiMainTabControl.Location = new Point(12, 12);
             uiMainTabControl.Name = "uiMainTabControl";
             uiMainTabControl.SelectedIndex = 0;
-            uiMainTabControl.Size = new Size(1133, 770);
+            uiMainTabControl.Size = new Size(1151, 781);
             uiMainTabControl.TabIndex = 6;
             // 
             // uiFilesTabPage
@@ -203,12 +206,12 @@
             uiFilesTabPage.Location = new Point(4, 24);
             uiFilesTabPage.Name = "uiFilesTabPage";
             uiFilesTabPage.Padding = new Padding(3);
-            uiFilesTabPage.Size = new Size(1125, 742);
+            uiFilesTabPage.Size = new Size(1143, 753);
             uiFilesTabPage.TabIndex = 0;
             uiFilesTabPage.Text = "Фаилы";
             uiFilesTabPage.UseVisualStyleBackColor = true;
             // 
-            // uiStorageTabPage прив
+            // uiStorageTabPage
             // 
             uiStorageTabPage.Controls.Add(uiSourcesComboBox);
             uiStorageTabPage.Controls.Add(uiAddSourceButton);
@@ -293,6 +296,17 @@
             uiForceScanButton.UseVisualStyleBackColor = true;
             uiForceScanButton.Click += uiForceScanButton_Click;
             // 
+            // uiSyncTreeTabPage
+            // 
+            uiSyncTreeControl.Dock = DockStyle.Fill;
+            uiSyncTreeTabPage.Controls.Add(uiSyncTreeControl);
+            uiSyncTreeTabPage.Location = new Point(4, 24);
+            uiSyncTreeTabPage.Name = "uiSyncTreeTabPage";
+            uiSyncTreeTabPage.Size = new Size(1125, 742);
+            uiSyncTreeTabPage.TabIndex = 6;
+            uiSyncTreeTabPage.Text = "Дерево синхронизации";
+            uiSyncTreeTabPage.UseVisualStyleBackColor = true;
+            // 
             // uiLogsTabPage
             // 
             uiLogsTabPage.Location = new Point(4, 24);
@@ -324,6 +338,14 @@
             groupBox1.TabStop = false;
             groupBox1.Text = "Rutube auth_state";
             // 
+            // uiRubuteAuthStatePathTextBox
+            // 
+            uiRubuteAuthStatePathTextBox.Location = new Point(7, 51);
+            uiRubuteAuthStatePathTextBox.Name = "uiRubuteAuthStatePathTextBox";
+            uiRubuteAuthStatePathTextBox.Size = new Size(454, 23);
+            uiRubuteAuthStatePathTextBox.TabIndex = 1;
+            uiRubuteAuthStatePathTextBox.Text = "E:\\bobgroup\\projects\\mediaOrcestrator\\rutubeAuthState\\auth_state";
+            // 
             // uiRubuteAuthStateOpenBrowserButton
             // 
             uiRubuteAuthStateOpenBrowserButton.Location = new Point(6, 22);
@@ -334,19 +356,11 @@
             uiRubuteAuthStateOpenBrowserButton.UseVisualStyleBackColor = true;
             uiRubuteAuthStateOpenBrowserButton.Click += uiRubuteAuthStateOpenBrowserButton_Click;
             // 
-            // uiRubuteAuthStatePathTextBox
-            // 
-            uiRubuteAuthStatePathTextBox.Location = new Point(7, 51);
-            uiRubuteAuthStatePathTextBox.Name = "uiRubuteAuthStatePathTextBox";
-            uiRubuteAuthStatePathTextBox.Size = new Size(454, 23);
-            uiRubuteAuthStatePathTextBox.TabIndex = 1;
-            uiRubuteAuthStatePathTextBox.Text = "E:\\bobgroup\\projects\\mediaOrcestrator\\rutubeAuthState\\auth_state";
-            // 
             // MainForm
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(1157, 794);
+            ClientSize = new Size(1175, 805);
             Controls.Add(uiMainTabControl);
             Icon = (Icon)resources.GetObject("$this.Icon");
             Name = "MainForm";
@@ -383,6 +397,8 @@
         private TabPage uiStorageTabPage;
         private TabPage uiRelationsTabPage;
         private TabPage uiAuditTabPage;
+        private TabPage uiSyncTreeTabPage;
+        private SyncTreeControl uiSyncTreeControl;
         private Button uiForceScanButton;
         private Button uiClearDatabaseButton;
         private ComboBox uiClearTypeComboBox;
