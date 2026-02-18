@@ -9,17 +9,20 @@ public partial class SyncTreeControl : UserControl
     private const int IconWorking = 1;
     private const int IconOk = 2;
     private const int IconError = 3;
+    private readonly Dictionary<SyncIntent, TreeNode> _intentNodeMap = new();
 
     private Orcestrator? _orcestrator;
     private ILogger<SyncTreeControl>? _logger;
     private List<SyncIntent>? _rootIntents;
     private CancellationTokenSource? _cts;
+    private bool _suppressCheckEvents;
+    private Font? _boldFont;
 
     public SyncTreeControl()
     {
         InitializeComponent();
         InitializeImageList();
-        uiTreeView.CheckBoxes = true;
+        uiTreeView.AfterCheck += UiTreeView_AfterCheck;
     }
 
     public void Initialize(List<SyncIntent> rootIntents, Orcestrator orcestrator, ILogger<SyncTreeControl> logger)
@@ -39,6 +42,31 @@ public partial class SyncTreeControl : UserControl
     private void uiDeselectAllButton_Click(object sender, EventArgs e)
     {
         SetAllNodesChecked(false);
+    }
+
+    private void UiTreeView_AfterCheck(object? sender, TreeViewEventArgs e)
+    {
+        if (_suppressCheckEvents || e.Node == null)
+        {
+            return;
+        }
+
+        _suppressCheckEvents = true;
+        try
+        {
+            if (e.Node.Checked)
+            {
+                SetParentsChecked(e.Node);
+            }
+            else
+            {
+                SetChildrenRecursive(e.Node, false);
+            }
+        }
+        finally
+        {
+            _suppressCheckEvents = false;
+        }
     }
 
     private async void uiExecuteButton_Click(object? sender, EventArgs e)
@@ -73,7 +101,7 @@ public partial class SyncTreeControl : UserControl
 
                 try
                 {
-                    await ExecuteIntent(intent, GetNodeForIntent(uiTreeView.Nodes, intent), _cts.Token);
+                    await ExecuteIntent(intent, _intentNodeMap.GetValueOrDefault(intent), _cts.Token);
                 }
                 catch (OperationCanceledException)
                 {
@@ -120,7 +148,7 @@ public partial class SyncTreeControl : UserControl
         LogToUi("Запрошена остановка...", Color.Orange);
     }
 
-    private static TreeNode CreateIntentNode(SyncIntent intent)
+    private static TreeNode CreateIntentNode(SyncIntent intent, Dictionary<SyncIntent, TreeNode> intentNodeMap)
     {
         var label = $"{intent.From.TitleFull} -> {intent.To.TitleFull}";
         var node = new TreeNode(label)
@@ -132,9 +160,11 @@ public partial class SyncTreeControl : UserControl
             SelectedImageIndex = IconPending,
         };
 
+        intentNodeMap[intent] = node;
+
         foreach (var nextIntent in intent.NextIntents)
         {
-            node.Nodes.Add(CreateIntentNode(nextIntent));
+            node.Nodes.Add(CreateIntentNode(nextIntent, intentNodeMap));
         }
 
         return node;
@@ -190,25 +220,6 @@ public partial class SyncTreeControl : UserControl
         }
     }
 
-    private TreeNode? GetNodeForIntent(TreeNodeCollection nodes, SyncIntent targetIntent)
-    {
-        foreach (TreeNode node in nodes)
-        {
-            if (node.Tag == targetIntent)
-            {
-                return node;
-            }
-
-            var childNode = GetNodeForIntent(node.Nodes, targetIntent);
-            if (childNode != null)
-            {
-                return childNode;
-            }
-        }
-
-        return null;
-    }
-
     private async Task ExecuteIntent(SyncIntent intent, TreeNode? node, CancellationToken ct)
     {
         if (_orcestrator == null || _logger == null || !intent.IsSelected)
@@ -237,7 +248,7 @@ public partial class SyncTreeControl : UserControl
 
             foreach (var nextIntent in intent.NextIntents)
             {
-                await ExecuteIntent(nextIntent, GetNodeForIntent(node?.Nodes ?? uiTreeView.Nodes, nextIntent), ct);
+                await ExecuteIntent(nextIntent, _intentNodeMap.GetValueOrDefault(nextIntent), ct);
             }
         }
         catch (OperationCanceledException)
@@ -273,10 +284,15 @@ public partial class SyncTreeControl : UserControl
     private void PopulateTree()
     {
         uiTreeView.Nodes.Clear();
+        _intentNodeMap.Clear();
+
         if (_rootIntents == null)
         {
             return;
         }
+
+        _boldFont?.Dispose();
+        _boldFont = new(uiTreeView.Font, FontStyle.Bold);
 
         var intentsByMedia = _rootIntents.GroupBy(i => i.Media.Id);
 
@@ -287,12 +303,12 @@ public partial class SyncTreeControl : UserControl
             {
                 Tag = media,
                 Checked = group.All(i => i.IsSelected),
-                NodeFont = new(uiTreeView.Font, FontStyle.Bold),
+                NodeFont = _boldFont,
             };
 
             foreach (var intent in group)
             {
-                mediaNode.Nodes.Add(CreateIntentNode(intent));
+                mediaNode.Nodes.Add(CreateIntentNode(intent, _intentNodeMap));
             }
 
             uiTreeView.Nodes.Add(mediaNode);
@@ -316,6 +332,16 @@ public partial class SyncTreeControl : UserControl
         {
             child.Checked = isChecked;
             SetChildrenRecursive(child, isChecked);
+        }
+    }
+
+    private void SetParentsChecked(TreeNode node)
+    {
+        var parent = node.Parent;
+        while (parent != null)
+        {
+            parent.Checked = true;
+            parent = parent.Parent;
         }
     }
 
