@@ -253,10 +253,12 @@ file static class Program
         services.AddSingleton<LiteDatabase>(_ => new(@"MyData.db"));
         services.AddSingleton<PluginManager>();
         services.AddSingleton<Orcestrator>();
+        services.AddSingleton<SyncPlanner>();
         services.AddTransient<MainForm>();
 
         services.AddTransient<SourceControl>();
         services.AddTransient<RelationControl>();
+        services.AddTransient<SyncTreeControl>();
     }
 }
 

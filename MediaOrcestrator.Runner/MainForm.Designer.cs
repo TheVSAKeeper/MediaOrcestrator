@@ -31,6 +31,7 @@
             var resources = new System.ComponentModel.ComponentResourceManager(typeof(MainForm));
             uiMediaSourcePanel = new Panel();
             uiSyncButton = new Button();
+            uiPlanSyncButton = new Button();
             uiMediaMatrixGridControl = new MediaMatrixGridControl();
             uiAddSourceButton = new Button();
             uiSourcesComboBox = new ComboBox();
@@ -42,19 +43,20 @@
             uiRelationFromComboBox = new ComboBox();
             uiMainTabControl = new TabControl();
             uiFilesTabPage = new TabPage();
-            uiRelationViewModeCheckBox = new CheckBox();
             uiStorageTabPage = new TabPage();
             uiRelationsTabPage = new TabPage();
             uiAuditTabPage = new TabPage();
-            uiClearTypeComboBox = new ComboBox();
             uiClearSpecificTypeButton = new Button();
+            uiClearTypeComboBox = new ComboBox();
             uiClearDatabaseButton = new Button();
             uiForceScanButton = new Button();
+            uiSyncTreeTabPage = new TabPage();
+            uiSyncTreeControl = new SyncTreeControl();
             uiLogsTabPage = new TabPage();
             uiToolsTabPage = new TabPage();
             groupBox1 = new GroupBox();
-            uiRubuteAuthStateOpenBrowserButton = new Button();
             uiRubuteAuthStatePathTextBox = new TextBox();
+            uiRubuteAuthStateOpenBrowserButton = new Button();
             uiMainTabControl.SuspendLayout();
             uiFilesTabPage.SuspendLayout();
             uiStorageTabPage.SuspendLayout();
@@ -87,12 +89,23 @@
             uiSyncButton.UseVisualStyleBackColor = true;
             uiSyncButton.Click += uiSyncButton_Click;
             // 
+            // uiPlanSyncButton
+            // 
+            uiPlanSyncButton.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            uiPlanSyncButton.Location = new Point(281, 190);
+            uiPlanSyncButton.Name = "uiPlanSyncButton";
+            uiPlanSyncButton.Size = new Size(348, 32);
+            uiPlanSyncButton.TabIndex = 6;
+            uiPlanSyncButton.Text = "Построить дерево синхронизации";
+            uiPlanSyncButton.UseVisualStyleBackColor = true;
+            uiPlanSyncButton.Click += uiPlanSyncButton_Click;
+            // 
             // uiMediaMatrixGridControl
             // 
-            uiMediaMatrixGridControl.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-            uiMediaMatrixGridControl.Location = new Point(3, 31);
+            uiMediaMatrixGridControl.Dock = DockStyle.Fill;
+            uiMediaMatrixGridControl.Location = new Point(3, 3);
             uiMediaMatrixGridControl.Name = "uiMediaMatrixGridControl";
-            uiMediaMatrixGridControl.Size = new Size(1116, 667);
+            uiMediaMatrixGridControl.Size = new Size(1137, 747);
             uiMediaMatrixGridControl.TabIndex = 2;
             // 
             // uiAddSourceButton
@@ -178,36 +191,25 @@
             uiMainTabControl.Controls.Add(uiStorageTabPage);
             uiMainTabControl.Controls.Add(uiRelationsTabPage);
             uiMainTabControl.Controls.Add(uiAuditTabPage);
+            uiMainTabControl.Controls.Add(uiSyncTreeTabPage);
             uiMainTabControl.Controls.Add(uiLogsTabPage);
             uiMainTabControl.Controls.Add(uiToolsTabPage);
             uiMainTabControl.Location = new Point(12, 12);
             uiMainTabControl.Name = "uiMainTabControl";
             uiMainTabControl.SelectedIndex = 0;
-            uiMainTabControl.Size = new Size(1133, 770);
+            uiMainTabControl.Size = new Size(1151, 781);
             uiMainTabControl.TabIndex = 6;
             // 
             // uiFilesTabPage
             // 
-            uiFilesTabPage.Controls.Add(uiRelationViewModeCheckBox);
             uiFilesTabPage.Controls.Add(uiMediaMatrixGridControl);
             uiFilesTabPage.Location = new Point(4, 24);
             uiFilesTabPage.Name = "uiFilesTabPage";
             uiFilesTabPage.Padding = new Padding(3);
-            uiFilesTabPage.Size = new Size(1125, 742);
+            uiFilesTabPage.Size = new Size(1143, 753);
             uiFilesTabPage.TabIndex = 0;
             uiFilesTabPage.Text = "Фаилы";
             uiFilesTabPage.UseVisualStyleBackColor = true;
-            // 
-            // uiRelationViewModeCheckBox
-            // 
-            uiRelationViewModeCheckBox.AutoSize = true;
-            uiRelationViewModeCheckBox.Location = new Point(6, 6);
-            uiRelationViewModeCheckBox.Name = "uiRelationViewModeCheckBox";
-            uiRelationViewModeCheckBox.Size = new Size(122, 19);
-            uiRelationViewModeCheckBox.TabIndex = 3;
-            uiRelationViewModeCheckBox.Text = "Режим по связям";
-            uiRelationViewModeCheckBox.UseVisualStyleBackColor = true;
-            uiRelationViewModeCheckBox.CheckedChanged += uiRelationViewModeCheckBox_CheckedChanged;
             // 
             // uiStorageTabPage
             // 
@@ -244,6 +246,7 @@
             uiAuditTabPage.Controls.Add(uiClearDatabaseButton);
             uiAuditTabPage.Controls.Add(uiForceScanButton);
             uiAuditTabPage.Controls.Add(uiSyncButton);
+            uiAuditTabPage.Controls.Add(uiPlanSyncButton);
             uiAuditTabPage.Location = new Point(4, 24);
             uiAuditTabPage.Name = "uiAuditTabPage";
             uiAuditTabPage.Size = new Size(1125, 742);
@@ -293,6 +296,17 @@
             uiForceScanButton.UseVisualStyleBackColor = true;
             uiForceScanButton.Click += uiForceScanButton_Click;
             // 
+            // uiSyncTreeTabPage
+            // 
+            uiSyncTreeControl.Dock = DockStyle.Fill;
+            uiSyncTreeTabPage.Controls.Add(uiSyncTreeControl);
+            uiSyncTreeTabPage.Location = new Point(4, 24);
+            uiSyncTreeTabPage.Name = "uiSyncTreeTabPage";
+            uiSyncTreeTabPage.Size = new Size(1125, 742);
+            uiSyncTreeTabPage.TabIndex = 6;
+            uiSyncTreeTabPage.Text = "Дерево синхронизации";
+            uiSyncTreeTabPage.UseVisualStyleBackColor = true;
+            // 
             // uiLogsTabPage
             // 
             uiLogsTabPage.Location = new Point(4, 24);
@@ -324,6 +338,14 @@
             groupBox1.TabStop = false;
             groupBox1.Text = "Rutube auth_state";
             // 
+            // uiRubuteAuthStatePathTextBox
+            // 
+            uiRubuteAuthStatePathTextBox.Location = new Point(7, 51);
+            uiRubuteAuthStatePathTextBox.Name = "uiRubuteAuthStatePathTextBox";
+            uiRubuteAuthStatePathTextBox.Size = new Size(454, 23);
+            uiRubuteAuthStatePathTextBox.TabIndex = 1;
+            uiRubuteAuthStatePathTextBox.Text = "E:\\bobgroup\\projects\\mediaOrcestrator\\rutubeAuthState\\auth_state";
+            // 
             // uiRubuteAuthStateOpenBrowserButton
             // 
             uiRubuteAuthStateOpenBrowserButton.Location = new Point(6, 22);
@@ -334,19 +356,11 @@
             uiRubuteAuthStateOpenBrowserButton.UseVisualStyleBackColor = true;
             uiRubuteAuthStateOpenBrowserButton.Click += uiRubuteAuthStateOpenBrowserButton_Click;
             // 
-            // uiRubuteAuthStatePathTextBox
-            // 
-            uiRubuteAuthStatePathTextBox.Location = new Point(7, 51);
-            uiRubuteAuthStatePathTextBox.Name = "uiRubuteAuthStatePathTextBox";
-            uiRubuteAuthStatePathTextBox.Size = new Size(454, 23);
-            uiRubuteAuthStatePathTextBox.TabIndex = 1;
-            uiRubuteAuthStatePathTextBox.Text = "E:\\bobgroup\\projects\\mediaOrcestrator\\rutubeAuthState\\auth_state";
-            // 
             // MainForm
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(1157, 794);
+            ClientSize = new Size(1175, 805);
             Controls.Add(uiMainTabControl);
             Icon = (Icon)resources.GetObject("$this.Icon");
             Name = "MainForm";
@@ -354,7 +368,6 @@
             Load += MainForm_Load;
             uiMainTabControl.ResumeLayout(false);
             uiFilesTabPage.ResumeLayout(false);
-            uiFilesTabPage.PerformLayout();
             uiStorageTabPage.ResumeLayout(false);
             uiRelationsTabPage.ResumeLayout(false);
             uiRelationsTabPage.PerformLayout();
@@ -369,6 +382,7 @@
 
         private Panel uiMediaSourcePanel;
         private Button uiSyncButton;
+        private Button uiPlanSyncButton;
         private MediaMatrixGridControl uiMediaMatrixGridControl;
         private Button uiAddSourceButton;
         private ComboBox uiSourcesComboBox;
@@ -383,7 +397,8 @@
         private TabPage uiStorageTabPage;
         private TabPage uiRelationsTabPage;
         private TabPage uiAuditTabPage;
-        private CheckBox uiRelationViewModeCheckBox;
+        private TabPage uiSyncTreeTabPage;
+        private SyncTreeControl uiSyncTreeControl;
         private Button uiForceScanButton;
         private Button uiClearDatabaseButton;
         private ComboBox uiClearTypeComboBox;

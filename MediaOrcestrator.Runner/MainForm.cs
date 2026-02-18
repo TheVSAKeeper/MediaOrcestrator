@@ -44,7 +44,7 @@ public partial class MainForm : Form
             await _orcestrator.GetStorageFullInfo();
             _logger.LogInformation("Синхронизация через UI завершена.");
             DrawSources();
-            uiMediaMatrixGridControl.RefreshData(GetSelectedRelations());
+            uiMediaMatrixGridControl.RefreshData();
         }
         catch (Exception ex)
         {
@@ -55,6 +55,25 @@ public partial class MainForm : Form
         {
             uiSyncButton.Enabled = true;
         }
+    }
+
+    private void uiPlanSyncButton_Click(object sender, EventArgs e)
+    {
+        var planner = _serviceProvider.GetRequiredService<SyncPlanner>();
+        var medias = _orcestrator.GetMedias();
+        var relations = _orcestrator.GetRelations();
+
+        var intents = planner.Plan(medias, relations);
+
+        if (intents.Count == 0)
+        {
+            MessageBox.Show("Нет доступных задач для синхронизации.");
+            return;
+        }
+
+        // TODO: DI
+        uiSyncTreeControl.Initialize(intents, _orcestrator, _serviceProvider.GetRequiredService<ILogger<SyncTreeControl>>());
+        uiMainTabControl.SelectedTab = uiSyncTreeTabPage;
     }
 
     private void uiAddSourceButton_Click(object sender, EventArgs e)
@@ -102,11 +121,6 @@ public partial class MainForm : Form
 
         _orcestrator.AddRelation(from, to);
         DrawRelations();
-    }
-
-    private void uiRelationViewModeCheckBox_CheckedChanged(object sender, EventArgs e)
-    {
-        uiMediaMatrixGridControl.RefreshData(GetSelectedRelations());
     }
 
     private void uiForceScanButton_Click(object sender, EventArgs e)
@@ -200,20 +214,6 @@ public partial class MainForm : Form
         }
     }
 
-    private List<SourceSyncRelation> GetSelectedRelations()
-    {
-        if (!uiRelationViewModeCheckBox.Checked)
-        {
-            return [];
-        }
-
-        // TODO: Шляпа
-        return uiRelationsPanel.Controls.OfType<RelationControl>()
-            .Where(x => x is { Selected: true, Relation: not null })
-            .Select(x => x.Relation!)
-            .ToList();
-    }
-
     private void DrawSources()
     {
         uiRelationFromComboBox.Items.Clear();
@@ -275,7 +275,7 @@ public partial class MainForm : Form
             var control = _serviceProvider.GetRequiredService<RelationControl>();
             control.SetRelation(rel);
             control.RelationDeleted += (_, _) => DrawRelations();
-            control.RelationSelectionChanged += (_, _) => uiMediaMatrixGridControl.RefreshData(GetSelectedRelations());
+            control.RelationSelectionChanged += (_, _) => uiMediaMatrixGridControl.RefreshData();
             control.Top += control.Height * i; // todo pribrat
 
             uiRelationsPanel.Controls.Add(control);

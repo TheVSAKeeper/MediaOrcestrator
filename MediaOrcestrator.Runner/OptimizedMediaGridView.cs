@@ -5,7 +5,7 @@ namespace MediaOrcestrator.Runner;
 
 public class OptimizedMediaGridView : DataGridView
 {
-    private const int FirstSourceColumnIndex = 2;
+    public const int FirstSourceColumnIndex = 2;
     private const int TitleColumnIndex = 1;
     private const int CheckboxColumnIndex = 0;
     private const int SourceTitleMaxLength = 20;
@@ -63,7 +63,7 @@ public class OptimizedMediaGridView : DataGridView
         {
             HeaderText = string.Empty,
             Width = 30,
-            ReadOnly = false,
+            ReadOnly = true,
         };
 
         Columns.Add(checkColumn);
@@ -174,6 +174,19 @@ public class OptimizedMediaGridView : DataGridView
         }
 
         return Rows[rowIndex].Tag as Media;
+    }
+
+    protected override void OnCellClick(DataGridViewCellEventArgs e)
+    {
+        base.OnCellClick(e);
+
+        if (e is not { RowIndex: >= 0, ColumnIndex: CheckboxColumnIndex })
+        {
+            return;
+        }
+
+        var cell = Rows[e.RowIndex].Cells[CheckboxColumnIndex];
+        cell.Value = !(bool)(cell.Value ?? false);
     }
 
     protected override void Dispose(bool disposing)
