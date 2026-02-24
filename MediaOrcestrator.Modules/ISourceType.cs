@@ -12,6 +12,11 @@ public interface ISourceType
         return Task.FromResult(new List<SettingOption>());
     }
 
+    /// <summary>
+    /// Самые свежие в самом начале.
+    /// </summary>
+    /// <param name="settings"></param>
+    /// <returns></returns>
     IAsyncEnumerable<MediaDto> GetMedia(Dictionary<string, string> settings);
 
     MediaDto GetMediaById();

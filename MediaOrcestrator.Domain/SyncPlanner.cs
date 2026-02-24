@@ -1,4 +1,4 @@
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 
 namespace MediaOrcestrator.Domain;
 
@@ -49,12 +49,14 @@ public class SyncPlanner(ILogger<SyncPlanner> logger)
 
     private SyncIntent CreateIntent(Media media, SourceSyncRelation relation, List<SourceSyncRelation> allRelations)
     {
+        var fromSource = media.Sources.FirstOrDefault(x => x.SourceId == relation.FromId);
         var intent = new SyncIntent
         {
             Media = media,
             From = relation.From,
             To = relation.To,
             Relation = relation,
+            Sort = fromSource?.SortNumber ?? -1,
         };
 
         var nextRelations = allRelations

@@ -30,7 +30,7 @@ internal class PlaylistController(HttpClient http)
                 "client": {
                   "clientName": "WEB",
                   "clientVersion": "2.20210408.08.00",
-                  "hl": "en",
+                  "hl": "ru",
                   "gl": "US",
                   "utcOffsetMinutes": 0
                 }
@@ -80,7 +80,7 @@ internal class PlaylistController(HttpClient http)
                     "client": {
                       "clientName": "WEB",
                       "clientVersion": "2.20210408.08.00",
-                      "hl": "en",
+                      "hl": "ru",
                       "gl": "US",
                       "utcOffsetMinutes": 0,
                       "visitorData": {{Json.Serialize(visitorData)}}

@@ -1,4 +1,4 @@
-using MediaOrcestrator.Domain;
+﻿using MediaOrcestrator.Domain;
 using Microsoft.Extensions.Logging;
 
 namespace MediaOrcestrator.Runner;
@@ -294,7 +294,7 @@ public partial class SyncTreeControl : UserControl
         _boldFont?.Dispose();
         _boldFont = new(uiTreeView.Font, FontStyle.Bold);
 
-        var intentsByMedia = _rootIntents.GroupBy(i => i.Media.Id);
+        var intentsByMedia = _rootIntents.OrderBy(x => x.From.TitleFull).ThenBy(x => x.Sort).GroupBy(i => i.Media.Id);
 
         foreach (var group in intentsByMedia)
         {

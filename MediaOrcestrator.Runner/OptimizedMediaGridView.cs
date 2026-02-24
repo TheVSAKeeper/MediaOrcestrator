@@ -78,7 +78,8 @@ public class OptimizedMediaGridView : DataGridView
         Columns.Add(checkColumn);
 
         Columns.Add("Title", "Название");
-        Columns[TitleColumnIndex].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
+        //Columns[TitleColumnIndex].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
+        Columns[TitleColumnIndex].Width = this.Width - 80 * sources.Count;
         Columns[TitleColumnIndex].ReadOnly = true;
         Columns[TitleColumnIndex].HeaderCell.Style.Font = _headerFont;
 
@@ -123,12 +124,14 @@ public class OptimizedMediaGridView : DataGridView
                 row.Cells[TitleColumnIndex].ToolTipText = media.Title;
 
                 var platformStatuses = media.Sources.ToDictionary(x => x.SourceId, x => x.Status);
+                var platformSortNumbers = media.Sources.ToDictionary(x => x.SourceId, x => x.SortNumber);
 
                 for (var i = 0; i < sources.Count; i++)
                 {
                     var status = platformStatuses.GetValueOrDefault(sources[i].Id, MediaSourceLink.StatusNone);
+                    var sort = platformSortNumbers.GetValueOrDefault(sources[i].Id, -1);
                     var cell = row.Cells[i + FirstSourceColumnIndex];
-                    cell.Value = GetStatusSymbol(status);
+                    cell.Value = sort;
                     cell.Tag = status;
                     cell.ToolTipText =
                         $"""
@@ -228,6 +231,7 @@ public class OptimizedMediaGridView : DataGridView
 
         if (e.CellStyle != null)
         {
+            e.Value = GetStatusSymbol(status);
             e.CellStyle.ForeColor = GetStatusColor(status);
         }
     }

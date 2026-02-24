@@ -19,6 +19,8 @@ public class MediaSourceLink
 
     public string Status { get; set; }
 
+    public int SortNumber { get; set; }
+
     /// <summary>
     /// Идентификатор медии в источнике.
     /// </summary>

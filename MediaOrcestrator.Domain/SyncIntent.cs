@@ -1,4 +1,4 @@
-namespace MediaOrcestrator.Domain;
+﻿namespace MediaOrcestrator.Domain;
 
 public sealed class SyncIntent
 {
@@ -10,6 +10,7 @@ public sealed class SyncIntent
     public List<SyncIntent> NextIntents { get; set; } = [];
 
     public bool IsSelected { get; set; } = true;
+    public int Sort { get; set; }
 
     public override string ToString()
     {

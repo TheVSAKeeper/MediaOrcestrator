@@ -51,51 +51,45 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
             }
 
             var syncMedia = plugin.GetMedia(mediaSource.Settings);
-            var i = 0;
+            var mediaList = new List<MediaDto>();
             await foreach (var s in syncMedia)
             {
-                i++;
-                if (i > 99999)
-                {
-                    logger.LogWarning("Достигнут лимит в 10 элементов для источника {SourceId}, прерываем.", mediaSource.Id);
-                    break;
-                }
-
                 var foundMediaSource = cache.GetMedia(mediaSource.Id).FirstOrDefault(x => x.ExternalId == s.Id);
                 if (foundMediaSource != null)
                 {
-                    if (foundMediaSource.Media.Title != s.Title)
-                    {
-                        // todo write to audit
-                        foundMediaSource.Media.Title = s.Title;
-                    }
+                    break;
                 }
-                else
+                mediaList.Insert(0, s);
+            }
+
+            var sortNumber = cache.GetMedia(mediaSource.Id).Select(x => x.SortNumber).DefaultIfEmpty(1).Max();
+            foreach (var s in mediaList)
+            {
+                var mediaId = Guid.NewGuid().ToString();
+                var myMedia = new Media
                 {
-                    var mediaId = Guid.NewGuid().ToString();
-                    var myMedia = new Media
-                    {
-                        Title = s.Title,
-                        Id = mediaId,
-                        Description = s.Description,
-                        Sources = [],
-                    };
+                    Title = s.Title,
+                    Id = mediaId,
+                    Description = s.Description,
+                    Sources = [],
+                };
 
-                    var newMediaSource = new MediaSourceLink
-                    {
-                        MediaId = mediaId,
-                        Media = myMedia,
-                        ExternalId = s.Id,
-                        Status = "OK",
-                        SourceId = mediaSource.Id,
-                    };
+                var newMediaSource = new MediaSourceLink
+                {
+                    MediaId = mediaId,
+                    Media = myMedia,
+                    ExternalId = s.Id,
+                    Status = "OK",
+                    SourceId = mediaSource.Id,
+                    SortNumber = sortNumber,
+                };
+                sortNumber++;
 
-                    myMedia.Sources.Add(newMediaSource);
-                    // поправить циклический зависимость
-                    mediaCol.Insert(myMedia);
-                    mediaAll.Add(myMedia);
-                    cache.GetMedia(mediaSource.Id).Add(newMediaSource);
-                }
+                myMedia.Sources.Add(newMediaSource);
+                // поправить циклический зависимость
+                mediaCol.Insert(myMedia);
+                mediaAll.Add(myMedia);
+                cache.GetMedia(mediaSource.Id).Add(newMediaSource);
             }
         });
 
@@ -182,14 +176,14 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
             //item.From.Type = sourceTypes.Values.First(x => x.Name == item.From.TypeId);
             var fromSource = sources.FirstOrDefault(x => x.Id == item.FromId);
             var toSource = sources.FirstOrDefault(x => x.Id == item.ToId);
+            item.From = fromSource;
+            item.To = toSource;
             if (fromSource == null || toSource == null || fromSource.IsDisable || toSource.IsDisable)
             {
                 item.IsDisable = true;
                 continue;
             }
 
-            item.From = fromSource;
-            item.To = toSource;
         }
 
         return relations;
