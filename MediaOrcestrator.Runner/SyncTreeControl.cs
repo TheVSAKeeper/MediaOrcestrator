@@ -23,6 +23,7 @@ public partial class SyncTreeControl : UserControl
         InitializeComponent();
         InitializeImageList();
         uiTreeView.AfterCheck += UiTreeView_AfterCheck;
+        uiFilterControl.FilterChanged += (_, _) => ApplyTreeFilter();
     }
 
     public void Initialize(List<SyncIntent> rootIntents, Orcestrator orcestrator, ILogger<SyncTreeControl> logger)
@@ -30,6 +31,8 @@ public partial class SyncTreeControl : UserControl
         _orcestrator = orcestrator;
         _logger = logger;
         _rootIntents = rootIntents;
+        uiFilterControl.ShowStatusFilter = false;
+        uiFilterControl.PopulateRelationsFilter(orcestrator);
         PopulateTree();
         LogToUi("Планировщик инициализирован. Готов к работе.");
     }
@@ -76,6 +79,7 @@ public partial class SyncTreeControl : UserControl
             return;
         }
 
+        ClearSelection(_rootIntents);
         UpdateIntentsFromTree(uiTreeView.Nodes);
 
         var selectedRootIntents = _rootIntents.Where(i => i.IsSelected).ToList();
@@ -183,6 +187,15 @@ public partial class SyncTreeControl : UserControl
         }
     }
 
+    private static void ClearSelection(IEnumerable<SyncIntent> intents)
+    {
+        foreach (var intent in intents)
+        {
+            intent.IsSelected = false;
+            ClearSelection(intent.NextIntents);
+        }
+    }
+
     private static Bitmap CreateColorIcon(Color color)
     {
         var bmp = new Bitmap(16, 16);
@@ -283,38 +296,96 @@ public partial class SyncTreeControl : UserControl
 
     private void PopulateTree()
     {
-        uiTreeView.Nodes.Clear();
-        _intentNodeMap.Clear();
+        ApplyTreeFilter();
+    }
 
+    private void ApplyTreeFilter()
+    {
         if (_rootIntents == null)
         {
             return;
         }
 
-        _boldFont?.Dispose();
-        _boldFont = new(uiTreeView.Font, FontStyle.Bold);
+        var filterState = uiFilterControl.BuildFilterState();
+        var hasActiveFilter = !string.IsNullOrEmpty(filterState.SearchText)
+                              || filterState.StatusFilter != null
+                              || filterState.SourceFilter is { Count: > 0 };
 
-        var intentsByMedia = _rootIntents.OrderBy(x => x.From.TitleFull).ThenBy(x => x.Sort).GroupBy(i => i.Media.Id);
+        uiTreeView.BeginUpdate();
+        _suppressCheckEvents = true;
 
-        foreach (var group in intentsByMedia)
+        var totalIntents = _rootIntents.Count;
+        var visibleIntentsCount = 0;
+
+        try
         {
-            var media = group.First().Media;
-            var mediaNode = new TreeNode(media.Title)
-            {
-                Tag = media,
-                Checked = group.All(i => i.IsSelected),
-                NodeFont = _boldFont,
-            };
+            uiTreeView.Nodes.Clear();
+            _intentNodeMap.Clear();
 
-            foreach (var intent in group)
+            _boldFont?.Dispose();
+            _boldFont = new(uiTreeView.Font, FontStyle.Bold);
+
+            var intentsByMedia = _rootIntents
+                .OrderBy(x => x.From.TitleFull)
+                .ThenBy(x => x.Sort)
+                .GroupBy(i => i.Media.Id);
+
+            foreach (var group in intentsByMedia)
             {
-                mediaNode.Nodes.Add(CreateIntentNode(intent, _intentNodeMap));
+                var media = group.First().Media;
+
+                if (!string.IsNullOrEmpty(filterState.SearchText) && !media.Title.Contains(filterState.SearchText, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (filterState.StatusFilter != null && media.Sources.All(s => s.Status != filterState.StatusFilter))
+                {
+                    continue;
+                }
+
+                if (filterState.SourceFilter is { Count: > 0 } && !media.Sources.Any(l => filterState.SourceFilter.Contains(l.SourceId)))
+                {
+                    continue;
+                }
+
+                var mediaNode = new TreeNode(media.Title)
+                {
+                    Tag = media,
+                    Checked = group.All(i => i.IsSelected),
+                    NodeFont = _boldFont,
+                };
+
+                var hasVisibleIntents = false;
+                foreach (var intent in group)
+                {
+                    if (filterState.SourceFilter is { Count: > 0 } && !filterState.SourceFilter.Contains(intent.From.Id) && !filterState.SourceFilter.Contains(intent.To.Id))
+                    {
+                        continue;
+                    }
+
+                    mediaNode.Nodes.Add(CreateIntentNode(intent, _intentNodeMap));
+                    visibleIntentsCount++;
+                    hasVisibleIntents = true;
+                }
+
+                if (hasVisibleIntents || !hasActiveFilter)
+                {
+                    uiTreeView.Nodes.Add(mediaNode);
+                }
             }
 
-            uiTreeView.Nodes.Add(mediaNode);
+            uiTreeView.ExpandAll();
+        }
+        finally
+        {
+            _suppressCheckEvents = false;
+            uiTreeView.EndUpdate();
         }
 
-        uiTreeView.ExpandAll();
+        UpdateStatusLabel(hasActiveFilter
+            ? $"Показано: {visibleIntentsCount} из {totalIntents} действий"
+            : $"Всего действий: {totalIntents}");
     }
 
     private void SetAllNodesChecked(bool isChecked)

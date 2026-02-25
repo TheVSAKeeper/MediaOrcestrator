@@ -27,7 +27,7 @@ public class SyncPlanner(ILogger<SyncPlanner> logger)
                     continue;
                 }
 
-                logger.LogDebug("Найдена корневая точка синхронизации для '{MediaTitle}': {From} -> {To}",
+                logger.LogTrace("Найдена корневая точка синхронизации для '{MediaTitle}': {From} -> {To}",
                     media.Title, relation.From.TypeId, relation.To.TypeId);
 
                 var intent = CreateIntent(media, relation, activeRelations);
