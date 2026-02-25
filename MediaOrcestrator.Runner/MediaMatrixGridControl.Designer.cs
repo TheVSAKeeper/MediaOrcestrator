@@ -6,24 +6,14 @@ namespace MediaOrcestrator.Runner
     partial class MediaMatrixGridControl : UserControl
     {
         private System.ComponentModel.IContainer components = null;
-        private System.Threading.Timer _searchDebounceTimer;
         private ContextMenuStrip _contextMenu;
 
         protected override void Dispose(bool disposing)
         {
             if (disposing)
             {
-                if (components != null)
-                {
-                    components.Dispose();
-                }
-                
-                if (_searchDebounceTimer != null)
-                {
-                    _searchDebounceTimer.Dispose();
-                    _searchDebounceTimer = null;
-                }
-                
+                components?.Dispose();
+
                 if (_contextMenu != null)
                 {
                     _contextMenu.Dispose();
@@ -43,87 +33,20 @@ namespace MediaOrcestrator.Runner
             uiStatusStrip = new StatusStrip();
             uiTotalCountLabel = new ToolStripStatusLabel();
             uiFilteredCountLabel = new ToolStripStatusLabel();
-            uiToolStrip = new ToolStrip();
-            uiSearchLabel = new ToolStripLabel();
-            uiSearchToolStripTextBox = new ToolStripTextBox();
-            uiClearSearchButton = new ToolStripButton();
-            uiStatusLabel = new ToolStripLabel();
-            uiStatusFilterComboBox = new ToolStripComboBox();
-            uiRelationsDropDownButton = new ToolStripDropDownButton();
-            uiSelectAllButton = new ToolStripButton();
-            uiDeselectAllButton = new ToolStripButton();
+            uiFilterControl = new FilterToolStripControl();
+            uiSelectAllButton = new Button();
+            uiDeselectAllButton = new Button();
             ((System.ComponentModel.ISupportInitialize)uiMediaGrid).BeginInit();
             uiStatusStrip.SuspendLayout();
-            uiToolStrip.SuspendLayout();
             SuspendLayout();
             // 
-            // uiToolStrip
+            // uiFilterControl
             // 
-            uiToolStrip.Items.AddRange(new ToolStripItem[] { uiSearchLabel, uiSearchToolStripTextBox, uiClearSearchButton, uiStatusLabel, uiStatusFilterComboBox, uiRelationsDropDownButton, uiSelectAllButton, uiDeselectAllButton });
-            uiToolStrip.Location = new Point(0, 0);
-            uiToolStrip.Name = "uiToolStrip";
-            uiToolStrip.Size = new Size(595, 25);
-            uiToolStrip.TabIndex = 7;
-            // 
-            // uiSearchLabel
-            // 
-            uiSearchLabel.Name = "uiSearchLabel";
-            uiSearchLabel.Size = new Size(45, 22);
-            uiSearchLabel.Text = "Поиск:";
-            // 
-            // uiSearchToolStripTextBox
-            // 
-            uiSearchToolStripTextBox.Name = "uiSearchToolStripTextBox";
-            uiSearchToolStripTextBox.Size = new Size(200, 25);
-            uiSearchToolStripTextBox.TextChanged += uiSearchToolStripTextBox_TextChanged;
-            // 
-            // uiClearSearchButton
-            // 
-            uiClearSearchButton.DisplayStyle = ToolStripItemDisplayStyle.Text;
-            uiClearSearchButton.Name = "uiClearSearchButton";
-            uiClearSearchButton.Size = new Size(65, 22);
-            uiClearSearchButton.Text = "Очистить";
-            uiClearSearchButton.Click += uiClearSearchButton_Click;
-            // 
-            // uiStatusLabel
-            // 
-            uiStatusLabel.Name = "uiStatusLabel";
-            uiStatusLabel.Size = new Size(48, 22);
-            uiStatusLabel.Text = "Статус:";
-            uiStatusLabel.Margin = new Padding(10, 1, 0, 2);
-            // 
-            // uiStatusFilterComboBox
-            // 
-            uiStatusFilterComboBox.Name = "uiStatusFilterComboBox";
-            uiStatusFilterComboBox.Size = new Size(100, 25);
-            uiStatusFilterComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
-            uiStatusFilterComboBox.Items.AddRange(new object[] { "Все", "OK", "Ошибка", "Нет" });
-            uiStatusFilterComboBox.SelectedIndex = 0;
-            uiStatusFilterComboBox.SelectedIndexChanged += uiStatusFilterComboBox_SelectedIndexChanged;
-            // 
-            // uiRelationsDropDownButton
-            // 
-            uiRelationsDropDownButton.Name = "uiRelationsDropDownButton";
-            uiRelationsDropDownButton.Size = new Size(130, 22);
-            uiRelationsDropDownButton.Text = "Фильтр по связям";
-            uiRelationsDropDownButton.Margin = new Padding(10, 1, 0, 2);
-            // 
-            // uiSelectAllButton
-            // 
-            uiSelectAllButton.DisplayStyle = ToolStripItemDisplayStyle.Text;
-            uiSelectAllButton.Name = "uiSelectAllButton";
-            uiSelectAllButton.Size = new Size(90, 22);
-            uiSelectAllButton.Text = "Выбрать все";
-            uiSelectAllButton.Margin = new Padding(10, 1, 0, 2);
-            uiSelectAllButton.Click += uiSelectAllButton_Click;
-            // 
-            // uiDeselectAllButton
-            // 
-            uiDeselectAllButton.DisplayStyle = ToolStripItemDisplayStyle.Text;
-            uiDeselectAllButton.Name = "uiDeselectAllButton";
-            uiDeselectAllButton.Size = new Size(110, 22);
-            uiDeselectAllButton.Text = "Снять выделение";
-            uiDeselectAllButton.Click += uiDeselectAllButton_Click;
+            uiFilterControl.Dock = DockStyle.Top;
+            uiFilterControl.Location = new Point(0, 0);
+            uiFilterControl.Name = "uiFilterControl";
+            uiFilterControl.Size = new Size(595, 25);
+            uiFilterControl.TabIndex = 7;
             // 
             // uMediaGrid
             // 
@@ -152,6 +75,26 @@ namespace MediaOrcestrator.Runner
             uiSearchTextBox.TabIndex = 3;
             uiSearchTextBox.Visible = false;
             // 
+            // uiSelectAllButton
+            // 
+            uiSelectAllButton.Location = new Point(190, 28);
+            uiSelectAllButton.Name = "uiSelectAllButton";
+            uiSelectAllButton.Size = new Size(90, 23);
+            uiSelectAllButton.TabIndex = 8;
+            uiSelectAllButton.Text = "Выбрать все";
+            uiSelectAllButton.UseVisualStyleBackColor = true;
+            uiSelectAllButton.Click += uiSelectAllButton_Click;
+            // 
+            // uiDeselectAllButton
+            // 
+            uiDeselectAllButton.Location = new Point(286, 28);
+            uiDeselectAllButton.Name = "uiDeselectAllButton";
+            uiDeselectAllButton.Size = new Size(110, 23);
+            uiDeselectAllButton.TabIndex = 9;
+            uiDeselectAllButton.Text = "Снять выделение";
+            uiDeselectAllButton.UseVisualStyleBackColor = true;
+            uiDeselectAllButton.Click += uiDeselectAllButton_Click;
+            // 
             // uiMergerSelectedMediaButton
             // 
             uiMergerSelectedMediaButton.Location = new Point(453, 28);
@@ -168,7 +111,7 @@ namespace MediaOrcestrator.Runner
             uiLoadingLabel.AutoSize = true;
             uiLoadingLabel.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
             uiLoadingLabel.ForeColor = Color.Blue;
-            uiLoadingLabel.Location = new Point(190, 32);
+            uiLoadingLabel.Location = new Point(400, 32);
             uiLoadingLabel.Name = "uiLoadingLabel";
             uiLoadingLabel.Size = new Size(85, 15);
             uiLoadingLabel.TabIndex = 5;
@@ -201,18 +144,18 @@ namespace MediaOrcestrator.Runner
             AutoScaleMode = AutoScaleMode.Font;
             Controls.Add(uiLoadingLabel);
             Controls.Add(uiMergerSelectedMediaButton);
+            Controls.Add(uiDeselectAllButton);
+            Controls.Add(uiSelectAllButton);
             Controls.Add(uiSearchTextBox);
             Controls.Add(uiRefreshButton);
             Controls.Add(uiMediaGrid);
-            Controls.Add(uiToolStrip);
+            Controls.Add(uiFilterControl);
             Controls.Add(uiStatusStrip);
             Name = "MediaMatrixGridControl";
             Size = new Size(595, 400);
             ((System.ComponentModel.ISupportInitialize)uiMediaGrid).EndInit();
             uiStatusStrip.ResumeLayout(false);
             uiStatusStrip.PerformLayout();
-            uiToolStrip.ResumeLayout(false);
-            uiToolStrip.PerformLayout();
             ResumeLayout(false);
             PerformLayout();
         }
@@ -225,14 +168,8 @@ namespace MediaOrcestrator.Runner
         private StatusStrip uiStatusStrip;
         private ToolStripStatusLabel uiTotalCountLabel;
         private ToolStripStatusLabel uiFilteredCountLabel;
-        private ToolStrip uiToolStrip;
-        private ToolStripLabel uiSearchLabel;
-        private ToolStripTextBox uiSearchToolStripTextBox;
-        private ToolStripButton uiClearSearchButton;
-        private ToolStripLabel uiStatusLabel;
-        private ToolStripComboBox uiStatusFilterComboBox;
-        private ToolStripDropDownButton uiRelationsDropDownButton;
-        private ToolStripButton uiSelectAllButton;
-        private ToolStripButton uiDeselectAllButton;
+        private FilterToolStripControl uiFilterControl;
+        private Button uiSelectAllButton;
+        private Button uiDeselectAllButton;
     }
 }

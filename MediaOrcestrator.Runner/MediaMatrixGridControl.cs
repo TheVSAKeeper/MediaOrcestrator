@@ -5,27 +5,26 @@ namespace MediaOrcestrator.Runner;
 
 public partial class MediaMatrixGridControl : UserControl
 {
-    private const int SearchDebounceMs = 300;
-    private readonly HashSet<SourceSyncRelation> _selectedRelations = [];
-
     private Orcestrator? _orcestrator;
 
     public MediaMatrixGridControl()
     {
         InitializeComponent();
-
-        uiStatusFilterComboBox.Items.Clear();
-        uiStatusFilterComboBox.Items.Add(new StatusFilterItem { Text = "Все", Tag = null });
-        uiStatusFilterComboBox.Items.Add(new StatusFilterItem { Text = "OK", Tag = MediaSourceLink.StatusOk });
-        uiStatusFilterComboBox.Items.Add(new StatusFilterItem { Text = "Ошибка", Tag = MediaSourceLink.StatusError });
-        uiStatusFilterComboBox.Items.Add(new StatusFilterItem { Text = "Нет", Tag = MediaSourceLink.StatusNone });
-        uiStatusFilterComboBox.SelectedIndex = 0;
+        uiFilterControl.FilterChanged += (_, _) => RefreshData();
     }
 
     public void Initialize(Orcestrator orcestrator)
     {
         _orcestrator = orcestrator;
-        PopulateRelationsFilter();
+        uiFilterControl.PopulateRelationsFilter(orcestrator);
+    }
+
+    public void PopulateRelationsFilter()
+    {
+        if (_orcestrator != null)
+        {
+            uiFilterControl.PopulateRelationsFilter(_orcestrator);
+        }
     }
 
     public async void RefreshData(List<SourceSyncRelation>? selectedRelations = null)
@@ -39,7 +38,7 @@ public partial class MediaMatrixGridControl : UserControl
 
         try
         {
-            var filterState = BuildFilterState(selectedRelations);
+            var filterState = uiFilterControl.BuildFilterState(selectedRelations);
 
             var (mediaData, sources, allMediaCount) = await Task.Run(() =>
             {
@@ -97,22 +96,6 @@ public partial class MediaMatrixGridControl : UserControl
     }
 
     private void uiRefreshButton_Click(object sender, EventArgs e)
-    {
-        RefreshData();
-    }
-
-    private void uiSearchToolStripTextBox_TextChanged(object? sender, EventArgs e)
-    {
-        DebouncedSearch();
-    }
-
-    private void uiClearSearchButton_Click(object? sender, EventArgs e)
-    {
-        uiSearchToolStripTextBox.Text = string.Empty;
-        RefreshData();
-    }
-
-    private void uiStatusFilterComboBox_SelectedIndexChanged(object? sender, EventArgs e)
     {
         RefreshData();
     }
@@ -213,7 +196,7 @@ public partial class MediaMatrixGridControl : UserControl
     private static (List<Media> mediaData, List<Source> sources) ApplyFilters(
         List<Media> allMedia,
         List<Source> allSources,
-        FilterState filterState)
+        FilterToolStripControl.FilterState filterState)
     {
         IEnumerable<Media> mediaQuery = allMedia;
         var sources = allSources;
@@ -300,46 +283,6 @@ public partial class MediaMatrixGridControl : UserControl
         }
     }
 
-    public void PopulateRelationsFilter()
-    {
-        if (_orcestrator == null)
-        {
-            return;
-        }
-
-        uiRelationsDropDownButton.DropDownItems.Clear();
-        _selectedRelations.Clear();
-        var relations = _orcestrator.GetRelations();
-
-        foreach (var syncRelation in relations)
-        {
-            var item = new ToolStripMenuItem($"{syncRelation.From.TitleFull} -> {syncRelation.To.TitleFull}")
-            {
-                CheckOnClick = true,
-                Tag = syncRelation,
-            };
-
-            item.CheckedChanged += (s, _) =>
-            {
-                if (s is ToolStripMenuItem { Tag: SourceSyncRelation relation } menuItem)
-                {
-                    if (menuItem.Checked)
-                    {
-                        _selectedRelations.Add(relation);
-                    }
-                    else
-                    {
-                        _selectedRelations.Remove(relation);
-                    }
-                }
-
-                RefreshData();
-            };
-
-            uiRelationsDropDownButton.DropDownItems.Add(item);
-        }
-    }
-
     private void UpdateLoadingIndicator(bool isLoading)
     {
         if (uiLoadingLabel.InvokeRequired)
@@ -367,50 +310,6 @@ public partial class MediaMatrixGridControl : UserControl
             uiTotalCountLabel.Text = $"Всего: {total}";
             uiFilteredCountLabel.Text = $"Отфильтровано: {filtered}";
         }
-    }
-
-    private void DebouncedSearch()
-    {
-        _searchDebounceTimer?.Dispose();
-        _searchDebounceTimer = new(_ =>
-            {
-                if (InvokeRequired)
-                {
-                    Invoke(() => RefreshData());
-                }
-                else
-                {
-                    RefreshData();
-                }
-            },
-            null,
-            SearchDebounceMs,
-            Timeout.Infinite);
-    }
-
-    private FilterState BuildFilterState(List<SourceSyncRelation>? selectedRelations)
-    {
-        var filterState = new FilterState
-        {
-            SearchText = uiSearchToolStripTextBox.Text,
-        };
-
-        if (uiStatusFilterComboBox.SelectedIndex > 0)
-        {
-            filterState.StatusFilter = (uiStatusFilterComboBox.SelectedItem as StatusFilterItem)?.Tag;
-        }
-
-        var activeRelations = selectedRelations ?? _selectedRelations.ToList();
-
-        if (activeRelations.Count > 0)
-        {
-            filterState.SourceFilter = activeRelations
-                .SelectMany(x => new[] { x.From.Id, x.To.Id })
-                .Distinct()
-                .ToHashSet();
-        }
-
-        return filterState;
     }
 
     // TODO: Прибрать дублирование + портянка
@@ -603,7 +502,6 @@ public partial class MediaMatrixGridControl : UserControl
         }
     }
 
-
     private DialogResult ShowDeleteConfirmation(Media media, Source source, bool isLastSource)
     {
         string message;
@@ -630,7 +528,6 @@ public partial class MediaMatrixGridControl : UserControl
             MessageBoxIcon.Warning,
             MessageBoxDefaultButton.Button2);
     }
-
 
     private async Task HandleDeleteClickAsync(Media media, Source source)
     {
@@ -796,26 +693,6 @@ public partial class MediaMatrixGridControl : UserControl
             ResultingSources = resultingSources,
             Conflicts = conflicts,
         };
-    }
-
-    private sealed class StatusFilterItem
-    {
-        public required string Text { get; init; }
-        public string? Tag { get; init; }
-
-        public override string ToString()
-        {
-            return Text;
-        }
-    }
-
-    private sealed class FilterState
-    {
-        public string SearchText { get; set; } = string.Empty;
-
-        public string? StatusFilter { get; set; }
-
-        public HashSet<string>? SourceFilter { get; set; }
     }
 
     private sealed class MergePreviewData

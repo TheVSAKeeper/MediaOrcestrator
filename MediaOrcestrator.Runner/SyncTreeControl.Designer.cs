@@ -42,6 +42,7 @@
             uiMainSplitContainer = new SplitContainer();
             uiLogRichTextBox = new RichTextBox();
             uiBottomPanel = new Panel();
+            uiFilterControl = new FilterToolStripControl();
             uiTopPanel.SuspendLayout();
             uiStatusStrip.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)uiMainSplitContainer).BeginInit();
@@ -50,6 +51,14 @@
             uiMainSplitContainer.SuspendLayout();
             uiBottomPanel.SuspendLayout();
             SuspendLayout();
+            // 
+            // uiFilterControl
+            // 
+            uiFilterControl.Dock = DockStyle.Top;
+            uiFilterControl.Location = new Point(0, 0);
+            uiFilterControl.Name = "uiFilterControl";
+            uiFilterControl.Size = new Size(796, 25);
+            uiFilterControl.TabIndex = 6;
             // 
             // uiTreeView
             // 
@@ -60,7 +69,7 @@
             uiTreeView.Location = new Point(0, 0);
             uiTreeView.Name = "uiTreeView";
             uiTreeView.SelectedImageIndex = 0;
-            uiTreeView.Size = new Size(796, 411);
+            uiTreeView.Size = new Size(796, 386);
             uiTreeView.TabIndex = 0;
             // 
             // uiIconsImageList
@@ -97,7 +106,7 @@
             uiTopPanel.Controls.Add(uiDeselectAllButton);
             uiTopPanel.Controls.Add(uiSelectAllButton);
             uiTopPanel.Dock = DockStyle.Top;
-            uiTopPanel.Location = new Point(0, 0);
+            uiTopPanel.Location = new Point(0, 25);
             uiTopPanel.Name = "uiTopPanel";
             uiTopPanel.Size = new Size(796, 40);
             uiTopPanel.TabIndex = 2;
@@ -142,7 +151,7 @@
             // uiMainSplitContainer
             // 
             uiMainSplitContainer.Dock = DockStyle.Fill;
-            uiMainSplitContainer.Location = new Point(0, 40);
+            uiMainSplitContainer.Location = new Point(0, 65);
             uiMainSplitContainer.Name = "uiMainSplitContainer";
             uiMainSplitContainer.Orientation = Orientation.Horizontal;
             // 
@@ -153,8 +162,8 @@
             // uiMainSplitContainer.Panel2
             // 
             uiMainSplitContainer.Panel2.Controls.Add(uiLogRichTextBox);
-            uiMainSplitContainer.Size = new Size(796, 544);
-            uiMainSplitContainer.SplitterDistance = 411;
+            uiMainSplitContainer.Size = new Size(796, 519);
+            uiMainSplitContainer.SplitterDistance = 386;
             uiMainSplitContainer.TabIndex = 4;
             // 
             // uiLogRichTextBox
@@ -186,6 +195,7 @@
             AutoScaleMode = AutoScaleMode.Font;
             Controls.Add(uiMainSplitContainer);
             Controls.Add(uiTopPanel);
+            Controls.Add(uiFilterControl);
             Controls.Add(uiBottomPanel);
             Controls.Add(uiStatusStrip);
             Name = "SyncTreeControl";
@@ -216,5 +226,6 @@
         private ImageList uiIconsImageList;
         private Button uiStopButton;
         private Panel uiBottomPanel;
+        private FilterToolStripControl uiFilterControl;
     }
 }
