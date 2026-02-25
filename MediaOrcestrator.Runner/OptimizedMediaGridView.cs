@@ -21,6 +21,7 @@ public class OptimizedMediaGridView : DataGridView
         AllowUserToDeleteRows = false;
         AllowUserToResizeRows = false;
         AllowUserToResizeColumns = true;
+        AllowUserToOrderColumns = true;
         ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
         ColumnHeadersHeight = 35;
         ReadOnly = false;
@@ -35,20 +36,35 @@ public class OptimizedMediaGridView : DataGridView
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public List<Source>? CurrentSources { get; private set; }
 
-    public void SetupColumns(List<Source> sources)
+    public void SetupColumns(List<Source> sources, List<string> selectedMetadataFields)
     {
-        if (Columns.Count == sources.Count + FirstSourceColumnIndex)
+        var expectedColumnCount = FirstSourceColumnIndex + selectedMetadataFields.Count + sources.Count;
+        if (Columns.Count == expectedColumnCount)
         {
             var columnsMatch = true;
-            for (var i = 0; i < sources.Count; i++)
+            for (var i = 0; i < selectedMetadataFields.Count; i++)
             {
-                if (Columns[i + FirstSourceColumnIndex].Name == sources[i].Id)
+                if (Columns[i + FirstSourceColumnIndex].Name == "Meta_" + selectedMetadataFields[i])
                 {
                     continue;
                 }
 
                 columnsMatch = false;
                 break;
+            }
+
+            if (columnsMatch)
+            {
+                for (var i = 0; i < sources.Count; i++)
+                {
+                    if (Columns[i + FirstSourceColumnIndex + selectedMetadataFields.Count].Name == sources[i].Id)
+                    {
+                        continue;
+                    }
+
+                    columnsMatch = false;
+                    break;
+                }
             }
 
             if (columnsMatch)
@@ -79,9 +95,19 @@ public class OptimizedMediaGridView : DataGridView
 
         Columns.Add("Title", "Название");
         //Columns[TitleColumnIndex].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
-        Columns[TitleColumnIndex].Width = this.Width - 80 * sources.Count;
+        Columns[TitleColumnIndex].Width = Width - 80 * sources.Count - 100 * selectedMetadataFields.Count;
+
         Columns[TitleColumnIndex].ReadOnly = true;
         Columns[TitleColumnIndex].HeaderCell.Style.Font = _headerFont;
+
+        foreach (var metaKey in selectedMetadataFields)
+        {
+            var colIndex = Columns.Add("Meta_" + metaKey, metaKey);
+            Columns[colIndex].Width = 100;
+            Columns[colIndex].ReadOnly = true;
+            Columns[colIndex].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
+            Columns[colIndex].HeaderCell.Style.Font = _headerFont;
+        }
 
         foreach (var source in sources)
         {
@@ -101,7 +127,7 @@ public class OptimizedMediaGridView : DataGridView
         ResumeLayout();
     }
 
-    public void PopulateGrid(List<Source> sources, List<Media> mediaData)
+    public void PopulateGrid(List<Source> sources, List<Media> mediaData, List<string> selectedMetadataFields)
     {
         CurrentSources = sources;
 
@@ -123,14 +149,23 @@ public class OptimizedMediaGridView : DataGridView
                 row.Cells[TitleColumnIndex].Value = media.Title;
                 row.Cells[TitleColumnIndex].ToolTipText = media.Title;
 
+                for (var i = 0; i < selectedMetadataFields.Count; i++)
+                {
+                    var key = selectedMetadataFields[i];
+                    var metaItem = media.Metadata.FirstOrDefault(m => m.Key == key);
+                    row.Cells[i + FirstSourceColumnIndex].Value = metaItem?.Value ?? string.Empty;
+                }
+
                 var platformStatuses = media.Sources.ToDictionary(x => x.SourceId, x => x.Status);
                 var platformSortNumbers = media.Sources.ToDictionary(x => x.SourceId, x => x.SortNumber);
+
+                var sourceStartIdx = FirstSourceColumnIndex + selectedMetadataFields.Count;
 
                 for (var i = 0; i < sources.Count; i++)
                 {
                     var status = platformStatuses.GetValueOrDefault(sources[i].Id, MediaSourceLink.StatusNone);
                     var sort = platformSortNumbers.GetValueOrDefault(sources[i].Id, -1);
-                    var cell = row.Cells[i + FirstSourceColumnIndex];
+                    var cell = row.Cells[i + sourceStartIdx];
                     cell.Value = sort;
                     cell.Tag = status;
                     cell.ToolTipText =

@@ -71,11 +71,20 @@ public class HardDiskDriveChannel(ILogger<HardDiskDriveChannel> logger) : ISourc
         {
             logger.LogDebug("Обработка файла: ID={FileId}, Название='{Title}'", file.Id, file.Title);
 
+            var fullPath = Path.Combine(basePath, file.Id, file.Path);
+            var fileInfo = new FileInfo(fullPath);
+            var fileExists = fileInfo.Exists;
+
             yield return new()
             {
                 Id = file.Id,
                 Description = file.Description,
                 Title = file.Title,
+                Metadata =
+                [
+                    new() { Key = "Size", Value = fileExists ? fileInfo.Length.ToString() : "0", DisplayType = "Bytes" },
+                    new() { Key = "CreationDate", Value = fileExists ? fileInfo.CreationTime.ToString("O") : "", DisplayType = "DateTime" },
+                ],
             };
         }
 

@@ -71,6 +71,7 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
                     Title = s.Title,
                     Id = mediaId,
                     Description = s.Description,
+                    Metadata = s.Metadata ?? [],
                     Sources = [],
                 };
 

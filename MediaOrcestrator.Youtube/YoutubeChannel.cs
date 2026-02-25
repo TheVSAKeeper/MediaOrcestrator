@@ -78,13 +78,26 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger) : ISourceType
         await foreach (var video in uploads)
         {
             logger.LogDebug("Обработка видео: '{VideoTitle}' (ID: {VideoId})", video.Title, video.Id);
+            var thumbnails = video.Thumbnails.Count > 0 ? video.Thumbnails.OrderByDescending(t => t.Resolution.Area).ToList() : null;
+            var previewPath = thumbnails?.FirstOrDefault()?.Url ?? string.Empty;
+
+            var fullVideo = await youtubeClient.Videos.GetAsync(video.Id);
+
+            var metadata = new List<MetadataItem>
+            {
+                new() { Key = "Duration", Value = video.Duration?.ToString() ?? "", DisplayType = "TimeSpan" },
+                new() { Key = "Author", Value = video.Author.ChannelTitle, DisplayType = "String" },
+                new() { Key = "CreationDate", Value = fullVideo.UploadDate.ToString("O"), DisplayType = "DateTime" },
+                new() { Key = "Views", Value = fullVideo.Engagement.ViewCount.ToString(), DisplayType = "String" },
+            };
 
             yield return new()
             {
                 Id = video.Id.Value,
                 Title = video.Title,
                 DataPath = video.Url,
-                PreviewPath = video.Thumbnails.Count > 0 ? video.Thumbnails[0].Url : string.Empty,
+                PreviewPath = previewPath,
+                Metadata = metadata,
             };
         }
 
