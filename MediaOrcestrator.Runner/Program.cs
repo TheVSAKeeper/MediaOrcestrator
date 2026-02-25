@@ -34,16 +34,6 @@ file static class Program
 
         try
         {
-            Log.Information("Приложение запускается...");
-            var services = new ServiceCollection();
-            services.AddSingleton(logControl);
-            ConfigureServices(services);
-
-            using var serviceProvider = services.BuildServiceProvider();
-            var mainForm = serviceProvider.GetRequiredService<MainForm>();
-
-            var orcestrator = serviceProvider.GetRequiredService<Orcestrator>();
-
             // todo вынести в settingsManager
 
             var settingsPath = "settings.txt";
@@ -98,6 +88,28 @@ file static class Program
                 pluginPath = result;
                 SetSettingsValue("plugin_path", result);
             }
+            var databasePath = GetSettingsStringValue("database_path");
+            if (databasePath == null)
+            {
+                string result = InputMessageBox.Show("Введите путь до базы данных, или оставьте системный", "Важная настройка", "MyData.db");
+                if (result == null)
+                {
+                    MessageBox.Show($"Так нельзя, закрываюсь");
+                    return;
+                }
+                databasePath = result;
+                SetSettingsValue("database_path", result);
+            }
+
+            Log.Information("Приложение запускается...");
+            var services = new ServiceCollection();
+            services.AddSingleton(logControl);
+            ConfigureServices(services, databasePath);
+
+            using var serviceProvider = services.BuildServiceProvider();
+            var mainForm = serviceProvider.GetRequiredService<MainForm>();
+
+            var orcestrator = serviceProvider.GetRequiredService<Orcestrator>();
             orcestrator.Init(pluginPath);
 
             Task.Run(async () =>
@@ -242,7 +254,7 @@ file static class Program
         }
     }
 
-    private static void ConfigureServices(IServiceCollection services)
+    private static void ConfigureServices(IServiceCollection services, string databasePath)
     {
         services.AddLogging(builder =>
         {
@@ -250,7 +262,7 @@ file static class Program
             builder.AddSerilog();
         });
 
-        services.AddSingleton<LiteDatabase>(_ => new(@"MyData.db"));
+        services.AddSingleton<LiteDatabase>(_ => new(databasePath));
         services.AddSingleton<PluginManager>();
         services.AddSingleton<Orcestrator>();
         services.AddSingleton<SyncPlanner>();
