@@ -1,10 +1,10 @@
-using MediaOrcestrator.Domain;
+﻿using MediaOrcestrator.Domain;
 
 namespace MediaOrcestrator.Runner;
 
 public partial class FilterToolStripControl : UserControl
 {
-    private const int SearchDebounceMs = 300;
+    private const int SearchDebounceMs = 1000;
     private readonly HashSet<SourceSyncRelation> _selectedRelations = [];
 
     public FilterToolStripControl()

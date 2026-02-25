@@ -222,7 +222,7 @@ file static class Program
             var success = false;
             try
             {
-                await orcestrator.TransferByRelation(media, processRelation, fromSource.ExternalId);
+                await orcestrator.TransferByRelation(media, processRelation);
                 success = true;
             }
             catch (Exception ex)

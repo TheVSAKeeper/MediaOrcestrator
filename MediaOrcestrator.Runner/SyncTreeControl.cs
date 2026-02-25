@@ -12,6 +12,7 @@ public partial class SyncTreeControl : UserControl
     private readonly Dictionary<SyncIntent, TreeNode> _intentNodeMap = new();
 
     private Orcestrator? _orcestrator;
+    private SyncPlanner _planner;
     private ILogger<SyncTreeControl>? _logger;
     private List<SyncIntent>? _rootIntents;
     private CancellationTokenSource? _cts;
@@ -26,15 +27,12 @@ public partial class SyncTreeControl : UserControl
         uiFilterControl.FilterChanged += (_, _) => ApplyTreeFilter();
     }
 
-    public void Initialize(List<SyncIntent> rootIntents, Orcestrator orcestrator, ILogger<SyncTreeControl> logger)
+    public void Initialize(SyncPlanner planner, List<SyncIntent> rootIntents, Orcestrator orcestrator, ILogger<SyncTreeControl> logger)
     {
+        // TODO: DI
         _orcestrator = orcestrator;
+        _planner = planner;
         _logger = logger;
-        _rootIntents = rootIntents;
-        uiFilterControl.ShowStatusFilter = false;
-        uiFilterControl.PopulateRelationsFilter(orcestrator);
-        PopulateTree();
-        LogToUi("Планировщик инициализирован. Готов к работе.");
     }
 
     private void uiSelectAllButton_Click(object sender, EventArgs e)
@@ -80,9 +78,9 @@ public partial class SyncTreeControl : UserControl
         }
 
         ClearSelection(_rootIntents);
-        UpdateIntentsFromTree(uiTreeView.Nodes);
+        var selectedRootIntents = new List<SyncIntent>();
+        UpdateIntentsFromTree(uiTreeView.Nodes, selectedRootIntents);
 
-        var selectedRootIntents = _rootIntents.Where(i => i.IsSelected).ToList();
         if (selectedRootIntents.Count == 0)
         {
             MessageBox.Show("Ничего не выбрано.");
@@ -116,6 +114,12 @@ public partial class SyncTreeControl : UserControl
                 {
                     _logger.LogError(ex, "Ошибка при выполнении синхронизации для {Intent}", intent);
                     LogToUi($"Ошибка для {intent.Media.Title}: {ex.Message}", Color.Red);
+
+                    if (uiStopIfErrorCheckBox.Checked)
+                    {
+                        LogToUi("Синхронизация прервана в результате ошибки.", Color.Orange);
+                        break;
+                    }
                 }
             }
 
@@ -174,16 +178,17 @@ public partial class SyncTreeControl : UserControl
         return node;
     }
 
-    private static void UpdateIntentsFromTree(TreeNodeCollection nodes)
+    private static void UpdateIntentsFromTree(TreeNodeCollection nodes, List<SyncIntent> syncIntents)
     {
         foreach (TreeNode node in nodes)
         {
             if (node.Tag is SyncIntent intent)
             {
                 intent.IsSelected = node.Checked;
+                syncIntents.Add(intent);
             }
 
-            UpdateIntentsFromTree(node.Nodes);
+            UpdateIntentsFromTree(node.Nodes, syncIntents);
         }
     }
 
@@ -247,13 +252,7 @@ public partial class SyncTreeControl : UserControl
 
         try
         {
-            var fromMediaSource = intent.Media.Sources.FirstOrDefault(x => x.SourceId == intent.From.Id);
-            if (fromMediaSource == null)
-            {
-                throw new($"MediaSourceLink не найден для {intent.From.Id}");
-            }
-
-            await _orcestrator.TransferByRelation(intent.Media, intent.Relation, fromMediaSource.ExternalId);
+            await _orcestrator.TransferByRelation(intent.Media, intent.Relation);
             ct.ThrowIfCancellationRequested();
 
             UpdateNodeState(node, IconOk, Color.Green, $"[OK] {intent.From.TitleFull} -> {intent.To.TitleFull}");
@@ -422,5 +421,17 @@ public partial class SyncTreeControl : UserControl
         uiIconsImageList.Images.Add(CreateColorIcon(Color.Orange));
         uiIconsImageList.Images.Add(CreateColorIcon(Color.Green));
         uiIconsImageList.Images.Add(CreateColorIcon(Color.Red));
+    }
+
+    private void uiConstructButton_Click(object sender, EventArgs e)
+    {
+        var medias = _orcestrator.GetMedias();
+        var relations = _orcestrator.GetRelations();
+        var intents = _planner.Plan(medias, relations);
+        _rootIntents = intents;
+        uiFilterControl.ShowStatusFilter = false;
+        uiFilterControl.PopulateRelationsFilter(_orcestrator);
+        PopulateTree();
+        LogToUi("Планировщик инициализирован. Готов к работе.");
     }
 }

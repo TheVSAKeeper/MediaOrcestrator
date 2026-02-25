@@ -35,6 +35,7 @@
             uiExecuteButton = new Button();
             uiStopButton = new Button();
             uiTopPanel = new Panel();
+            uiStopIfErrorCheckBox = new CheckBox();
             uiDeselectAllButton = new Button();
             uiSelectAllButton = new Button();
             uiStatusStrip = new StatusStrip();
@@ -43,6 +44,7 @@
             uiLogRichTextBox = new RichTextBox();
             uiBottomPanel = new Panel();
             uiFilterControl = new FilterToolStripControl();
+            uiConstructButton = new Button();
             uiTopPanel.SuspendLayout();
             uiStatusStrip.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)uiMainSplitContainer).BeginInit();
@@ -51,14 +53,6 @@
             uiMainSplitContainer.SuspendLayout();
             uiBottomPanel.SuspendLayout();
             SuspendLayout();
-            // 
-            // uiFilterControl
-            // 
-            uiFilterControl.Dock = DockStyle.Top;
-            uiFilterControl.Location = new Point(0, 0);
-            uiFilterControl.Name = "uiFilterControl";
-            uiFilterControl.Size = new Size(796, 25);
-            uiFilterControl.TabIndex = 6;
             // 
             // uiTreeView
             // 
@@ -103,6 +97,8 @@
             // 
             // uiTopPanel
             // 
+            uiTopPanel.Controls.Add(uiConstructButton);
+            uiTopPanel.Controls.Add(uiStopIfErrorCheckBox);
             uiTopPanel.Controls.Add(uiDeselectAllButton);
             uiTopPanel.Controls.Add(uiSelectAllButton);
             uiTopPanel.Dock = DockStyle.Top;
@@ -110,6 +106,19 @@
             uiTopPanel.Name = "uiTopPanel";
             uiTopPanel.Size = new Size(796, 40);
             uiTopPanel.TabIndex = 2;
+            // 
+            // uiStopIfErrorCheckBox
+            // 
+            uiStopIfErrorCheckBox.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            uiStopIfErrorCheckBox.AutoSize = true;
+            uiStopIfErrorCheckBox.Checked = true;
+            uiStopIfErrorCheckBox.CheckState = CheckState.Checked;
+            uiStopIfErrorCheckBox.Location = new Point(525, 12);
+            uiStopIfErrorCheckBox.Name = "uiStopIfErrorCheckBox";
+            uiStopIfErrorCheckBox.Size = new Size(268, 19);
+            uiStopIfErrorCheckBox.TabIndex = 2;
+            uiStopIfErrorCheckBox.Text = "Прервать синхронизацию в случае ошибки";
+            uiStopIfErrorCheckBox.UseVisualStyleBackColor = true;
             // 
             // uiDeselectAllButton
             // 
@@ -189,6 +198,25 @@
             uiBottomPanel.Size = new Size(796, 40);
             uiBottomPanel.TabIndex = 5;
             // 
+            // uiFilterControl
+            // 
+            uiFilterControl.Dock = DockStyle.Top;
+            uiFilterControl.Location = new Point(0, 0);
+            uiFilterControl.Name = "uiFilterControl";
+            uiFilterControl.ShowStatusFilter = true;
+            uiFilterControl.Size = new Size(796, 25);
+            uiFilterControl.TabIndex = 6;
+            // 
+            // uiConstructButton
+            // 
+            uiConstructButton.Location = new Point(398, 8);
+            uiConstructButton.Name = "uiConstructButton";
+            uiConstructButton.Size = new Size(94, 23);
+            uiConstructButton.TabIndex = 3;
+            uiConstructButton.Text = "rebuild";
+            uiConstructButton.UseVisualStyleBackColor = true;
+            uiConstructButton.Click += uiConstructButton_Click;
+            // 
             // SyncTreeControl
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
@@ -201,6 +229,7 @@
             Name = "SyncTreeControl";
             Size = new Size(796, 646);
             uiTopPanel.ResumeLayout(false);
+            uiTopPanel.PerformLayout();
             uiStatusStrip.ResumeLayout(false);
             uiStatusStrip.PerformLayout();
             uiMainSplitContainer.Panel1.ResumeLayout(false);
@@ -227,5 +256,7 @@
         private Button uiStopButton;
         private Panel uiBottomPanel;
         private FilterToolStripControl uiFilterControl;
+        private CheckBox uiStopIfErrorCheckBox;
+        private Button uiConstructButton;
     }
 }

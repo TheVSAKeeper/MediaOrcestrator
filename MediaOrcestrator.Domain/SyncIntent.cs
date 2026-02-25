@@ -1,5 +1,8 @@
 ﻿namespace MediaOrcestrator.Domain;
 
+/// <summary>
+/// Синхронизационное намеренье.
+/// </summary>
 public sealed class SyncIntent
 {
     public Media Media { get; set; }

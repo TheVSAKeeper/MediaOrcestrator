@@ -104,10 +104,19 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
         var medias = db.GetCollection<Media>("medias").FindAll().ToList();
         //foreach (var media in medias) // времяночка для очистки
         //{
-        //    if(media.Sources.Any(x=>x.ExternalId == null))
+        //    var gr = media.Sources.GroupBy(x => x.SourceId).Where(x => x.Count() > 1).ToArray();
+        //    foreach (var source in gr)
         //    {
-        //        db.GetCollection<Media>("medias").Delete(media.Id);
+        //        for (var i = 1; i < source.Count(); i++)
+        //        {
+        //            media.Sources.Remove(source.Skip(i).First());
+        //            db.GetCollection<Media>("medias").Update(media);
+        //        }
         //    }
+        //    //if (media.Sources.Any(x => x.ExternalId == null))
+        //    //{
+        //    //    db.GetCollection<Media>("medias").Delete(media.Id);
+        //    //}
         //}
         //medias = db.GetCollection<Media>("medias").FindAll().ToList();
         return medias;
@@ -239,13 +248,40 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
             mediaCount + relationCount + sourceCount, mediaCount, relationCount, sourceCount);
     }
 
-    public async Task TransferByRelation(Media media, SourceSyncRelation rel, string fromExternalId)
+    public async Task TransferByRelation(Media media, SourceSyncRelation rel)
     {
-        var tempMedia = await rel.From.Type.Download(fromExternalId, rel.From.Settings);
-        tempMedia.Id = media.Id;
-        var externalId = await rel.To.Type.Upload(tempMedia, rel.To.Settings);
+        var fromMediaSource = media.Sources.FirstOrDefault(x => x.SourceId == rel.From.Id);
+        if (fromMediaSource == null)
+        {
+            throw new($"MediaSourceLink не найден для {rel.From.Id}");
+        }
 
-        var toMediaSource = new MediaSourceLink
+        var toMediaSource = media.Sources.FirstOrDefault(x => x.SourceId == rel.To.Id);
+        if (toMediaSource != null)
+        {
+            // фаил уже загружен, значит ничего не делаем
+            // в будущем возможно обновлять будем
+            logger.LogInformation("Пропущено синхронизирование медиа {Media} в {ToSource} / уже имеется", media, rel.To);
+            return;
+        }
+        string externalId;
+        var debug = false;
+        if (debug)
+        {
+            if (DateTime.Now.Second % 10 < 5)
+            {
+                throw new Exception("ошибка");
+            }
+            externalId = Guid.NewGuid().ToString();
+        }
+        else
+        {
+            var tempMedia = await rel.From.Type.Download(fromMediaSource.ExternalId, rel.From.Settings);
+            tempMedia.Id = media.Id;
+            externalId = await rel.To.Type.Upload(tempMedia, rel.To.Settings);
+        }
+
+        toMediaSource = new MediaSourceLink
         {
             MediaId = media.Id,
             Media = media,
@@ -259,7 +295,7 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
         logger.LogInformation("Успешно синхронизировано медиа {Media} в {ToSource}. ExternalId: {ExternalId}", media, rel.To, externalId);
     }
 
-   public async Task DeleteMediaFromSourceAsync(Media media, Source source)
+    public async Task DeleteMediaFromSourceAsync(Media media, Source source)
     {
         var sourceLink = media.Sources.FirstOrDefault(s => s.SourceId == source.Id);
         if (sourceLink == null)

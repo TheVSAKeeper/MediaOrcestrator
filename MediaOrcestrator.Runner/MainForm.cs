@@ -34,6 +34,9 @@ public partial class MainForm : Form
         {
             uiClearTypeComboBox.SelectedIndex = 0;
         }
+
+        var planner = _serviceProvider.GetRequiredService<SyncPlanner>();
+        uiSyncTreeControl.Initialize(planner, [], _orcestrator, _serviceProvider.GetRequiredService<ILogger<SyncTreeControl>>());
     }
 
     private async void uiSyncButton_Click(object sender, EventArgs e)
@@ -56,25 +59,6 @@ public partial class MainForm : Form
         {
             uiSyncButton.Enabled = true;
         }
-    }
-
-    private void uiPlanSyncButton_Click(object sender, EventArgs e)
-    {
-        var planner = _serviceProvider.GetRequiredService<SyncPlanner>();
-        var medias = _orcestrator.GetMedias();
-        var relations = _orcestrator.GetRelations();
-
-        var intents = planner.Plan(medias, relations);
-
-        if (intents.Count == 0)
-        {
-            MessageBox.Show("Нет доступных задач для синхронизации.");
-            return;
-        }
-
-        // TODO: DI
-        uiSyncTreeControl.Initialize(intents, _orcestrator, _serviceProvider.GetRequiredService<ILogger<SyncTreeControl>>());
-        uiMainTabControl.SelectedTab = uiSyncTreeTabPage;
     }
 
     private void uiAddSourceButton_Click(object sender, EventArgs e)

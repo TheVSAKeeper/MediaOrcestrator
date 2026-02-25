@@ -1,4 +1,4 @@
-using MediaOrcestrator.Domain;
+﻿using MediaOrcestrator.Domain;
 using System.Text;
 
 namespace MediaOrcestrator.Runner;
@@ -341,7 +341,7 @@ public partial class MediaMatrixGridControl : UserControl
                         UpdateLoadingIndicator(true);
                         try
                         {
-                            await _orcestrator.TransferByRelation(media, rel, fromSource.ExternalId);
+                            await _orcestrator.TransferByRelation(media, rel);
                         }
                         catch (Exception ex)
                         {
@@ -426,7 +426,7 @@ public partial class MediaMatrixGridControl : UserControl
                     UpdateLoadingIndicator(true);
                     try
                     {
-                        await _orcestrator.TransferByRelation(media, rel, fromSource.ExternalId);
+                        await _orcestrator.TransferByRelation(media, rel);
                     }
                     catch (Exception ex)
                     {

@@ -30,8 +30,6 @@
         {
             var resources = new System.ComponentModel.ComponentResourceManager(typeof(MainForm));
             uiMediaSourcePanel = new Panel();
-            uiSyncButton = new Button();
-            uiPlanSyncButton = new Button();
             uiMediaMatrixGridControl = new MediaMatrixGridControl();
             uiAddSourceButton = new Button();
             uiSourcesComboBox = new ComboBox();
@@ -57,11 +55,13 @@
             groupBox1 = new GroupBox();
             uiRubuteAuthStatePathTextBox = new TextBox();
             uiRubuteAuthStateOpenBrowserButton = new Button();
+            uiSyncButton = new Button();
             uiMainTabControl.SuspendLayout();
             uiFilesTabPage.SuspendLayout();
             uiStorageTabPage.SuspendLayout();
             uiRelationsTabPage.SuspendLayout();
             uiAuditTabPage.SuspendLayout();
+            uiSyncTreeTabPage.SuspendLayout();
             uiToolsTabPage.SuspendLayout();
             groupBox1.SuspendLayout();
             SuspendLayout();
@@ -77,28 +77,6 @@
             uiMediaSourcePanel.Size = new Size(1113, 663);
             uiMediaSourcePanel.TabIndex = 0;
             uiMediaSourcePanel.SizeChanged += uiMediaSourcePanel_SizeChanged;
-            // 
-            // uiSyncButton
-            // 
-            uiSyncButton.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            uiSyncButton.Location = new Point(281, 238);
-            uiSyncButton.Name = "uiSyncButton";
-            uiSyncButton.Size = new Size(348, 32);
-            uiSyncButton.TabIndex = 1;
-            uiSyncButton.Text = "Синхронизировать";
-            uiSyncButton.UseVisualStyleBackColor = true;
-            uiSyncButton.Click += uiSyncButton_Click;
-            // 
-            // uiPlanSyncButton
-            // 
-            uiPlanSyncButton.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            uiPlanSyncButton.Location = new Point(281, 190);
-            uiPlanSyncButton.Name = "uiPlanSyncButton";
-            uiPlanSyncButton.Size = new Size(348, 32);
-            uiPlanSyncButton.TabIndex = 6;
-            uiPlanSyncButton.Text = "Построить дерево синхронизации";
-            uiPlanSyncButton.UseVisualStyleBackColor = true;
-            uiPlanSyncButton.Click += uiPlanSyncButton_Click;
             // 
             // uiMediaMatrixGridControl
             // 
@@ -219,7 +197,7 @@
             uiStorageTabPage.Location = new Point(4, 24);
             uiStorageTabPage.Name = "uiStorageTabPage";
             uiStorageTabPage.Padding = new Padding(3);
-            uiStorageTabPage.Size = new Size(1125, 742);
+            uiStorageTabPage.Size = new Size(1143, 753);
             uiStorageTabPage.TabIndex = 1;
             uiStorageTabPage.Text = "Хранилища";
             uiStorageTabPage.UseVisualStyleBackColor = true;
@@ -234,7 +212,7 @@
             uiRelationsTabPage.Controls.Add(uiRelationFromLabel);
             uiRelationsTabPage.Location = new Point(4, 24);
             uiRelationsTabPage.Name = "uiRelationsTabPage";
-            uiRelationsTabPage.Size = new Size(1125, 742);
+            uiRelationsTabPage.Size = new Size(1143, 753);
             uiRelationsTabPage.TabIndex = 2;
             uiRelationsTabPage.Text = "Связи";
             uiRelationsTabPage.UseVisualStyleBackColor = true;
@@ -246,10 +224,9 @@
             uiAuditTabPage.Controls.Add(uiClearDatabaseButton);
             uiAuditTabPage.Controls.Add(uiForceScanButton);
             uiAuditTabPage.Controls.Add(uiSyncButton);
-            uiAuditTabPage.Controls.Add(uiPlanSyncButton);
             uiAuditTabPage.Location = new Point(4, 24);
             uiAuditTabPage.Name = "uiAuditTabPage";
-            uiAuditTabPage.Size = new Size(1125, 742);
+            uiAuditTabPage.Size = new Size(1143, 753);
             uiAuditTabPage.TabIndex = 3;
             uiAuditTabPage.Text = "Аудит";
             uiAuditTabPage.UseVisualStyleBackColor = true;
@@ -298,21 +275,28 @@
             // 
             // uiSyncTreeTabPage
             // 
-            uiSyncTreeControl.Dock = DockStyle.Fill;
             uiSyncTreeTabPage.Controls.Add(uiSyncTreeControl);
             uiSyncTreeTabPage.Location = new Point(4, 24);
             uiSyncTreeTabPage.Name = "uiSyncTreeTabPage";
-            uiSyncTreeTabPage.Size = new Size(1125, 742);
+            uiSyncTreeTabPage.Size = new Size(1143, 753);
             uiSyncTreeTabPage.TabIndex = 6;
             uiSyncTreeTabPage.Text = "Дерево синхронизации";
             uiSyncTreeTabPage.UseVisualStyleBackColor = true;
+            // 
+            // uiSyncTreeControl
+            // 
+            uiSyncTreeControl.Dock = DockStyle.Fill;
+            uiSyncTreeControl.Location = new Point(0, 0);
+            uiSyncTreeControl.Name = "uiSyncTreeControl";
+            uiSyncTreeControl.Size = new Size(1143, 753);
+            uiSyncTreeControl.TabIndex = 0;
             // 
             // uiLogsTabPage
             // 
             uiLogsTabPage.Location = new Point(4, 24);
             uiLogsTabPage.Name = "uiLogsTabPage";
             uiLogsTabPage.Padding = new Padding(3);
-            uiLogsTabPage.Size = new Size(1125, 742);
+            uiLogsTabPage.Size = new Size(1143, 753);
             uiLogsTabPage.TabIndex = 4;
             uiLogsTabPage.Text = "Логи";
             uiLogsTabPage.UseVisualStyleBackColor = true;
@@ -322,7 +306,7 @@
             uiToolsTabPage.Controls.Add(groupBox1);
             uiToolsTabPage.Location = new Point(4, 24);
             uiToolsTabPage.Name = "uiToolsTabPage";
-            uiToolsTabPage.Size = new Size(1125, 742);
+            uiToolsTabPage.Size = new Size(1143, 753);
             uiToolsTabPage.TabIndex = 5;
             uiToolsTabPage.Text = "Вспомогательное";
             uiToolsTabPage.UseVisualStyleBackColor = true;
@@ -356,6 +340,17 @@
             uiRubuteAuthStateOpenBrowserButton.UseVisualStyleBackColor = true;
             uiRubuteAuthStateOpenBrowserButton.Click += uiRubuteAuthStateOpenBrowserButton_Click;
             // 
+            // uiSyncButton
+            // 
+            uiSyncButton.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            uiSyncButton.Location = new Point(281, 238);
+            uiSyncButton.Name = "uiSyncButton";
+            uiSyncButton.Size = new Size(348, 32);
+            uiSyncButton.TabIndex = 1;
+            uiSyncButton.Text = "Синхронизировать";
+            uiSyncButton.UseVisualStyleBackColor = true;
+            uiSyncButton.Click += uiSyncButton_Click;
+            // 
             // MainForm
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
@@ -372,6 +367,7 @@
             uiRelationsTabPage.ResumeLayout(false);
             uiRelationsTabPage.PerformLayout();
             uiAuditTabPage.ResumeLayout(false);
+            uiSyncTreeTabPage.ResumeLayout(false);
             uiToolsTabPage.ResumeLayout(false);
             groupBox1.ResumeLayout(false);
             groupBox1.PerformLayout();
@@ -381,8 +377,6 @@
         #endregion
 
         private Panel uiMediaSourcePanel;
-        private Button uiSyncButton;
-        private Button uiPlanSyncButton;
         private MediaMatrixGridControl uiMediaMatrixGridControl;
         private Button uiAddSourceButton;
         private ComboBox uiSourcesComboBox;
@@ -408,5 +402,6 @@
         private GroupBox groupBox1;
         private Button uiRubuteAuthStateOpenBrowserButton;
         private TextBox uiRubuteAuthStatePathTextBox;
+        private Button uiSyncButton;
     }
 }
