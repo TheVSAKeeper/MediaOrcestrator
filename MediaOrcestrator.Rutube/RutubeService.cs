@@ -17,7 +17,7 @@ public sealed class RutubeService
 
         var handler = new HttpClientHandler { UseCookies = false };
         _httpClient = new(handler);
-
+        _httpClient.Timeout = TimeSpan.FromHours(8);
         _httpClient.DefaultRequestHeaders.Add("Cookie", cookieString);
         _httpClient.DefaultRequestHeaders.Add("x-csrftoken", csrfToken);
         _httpClient.DefaultRequestHeaders.Add("Referer", "https://studio.rutube.ru/");

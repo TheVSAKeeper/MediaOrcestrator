@@ -27,6 +27,11 @@ file static class Program
             .MinimumLevel.Debug()
             .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{SourceContext}] {Message:lj}{NewLine}{Exception}")
             .WriteTo.Debug()
+            .WriteTo.File("logs/log-.txt",
+                outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{SourceContext}] {Message:lj}{NewLine}{Exception}",
+                rollingInterval: RollingInterval.Day,
+                retainedFileCountLimit: 30,
+                encoding: Encoding.UTF8)
             .WriteTo.RichTextBox(logControl,
                 ThemePresets.Literate,
                 outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{SourceContext}] {Message:lj}{NewLine}{Exception}")

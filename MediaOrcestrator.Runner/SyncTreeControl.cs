@@ -78,10 +78,10 @@ public partial class SyncTreeControl : UserControl
         }
 
         ClearSelection(_rootIntents);
-        var selectedRootIntents = new List<SyncIntent>();
-        UpdateIntentsFromTree(uiTreeView.Nodes, selectedRootIntents);
+        var filteredRootIntents = new List<SyncIntent>();
+        UpdateIntentsFromTree(uiTreeView.Nodes, filteredRootIntents);
 
-        if (selectedRootIntents.Count == 0)
+        if (filteredRootIntents.Count == 0)
         {
             MessageBox.Show("Ничего не выбрано.");
             return;
@@ -93,11 +93,11 @@ public partial class SyncTreeControl : UserControl
 
         _cts = new();
 
-        LogToUi($"Запуск синхронизации для {selectedRootIntents.Count} цепочек...", Color.Yellow);
+        LogToUi($"Запуск синхронизации для {filteredRootIntents.Where(x=>x.IsSelected).Count()} цепочек...", Color.Yellow);
 
         try
         {
-            foreach (var intent in selectedRootIntents.TakeWhile(_ => !_cts.IsCancellationRequested))
+            foreach (var intent in filteredRootIntents.TakeWhile(_ => !_cts.IsCancellationRequested))
             {
                 UpdateStatusLabel($"Обработка: {intent.Media.Title}");
 
@@ -256,6 +256,10 @@ public partial class SyncTreeControl : UserControl
             ct.ThrowIfCancellationRequested();
 
             UpdateNodeState(node, IconOk, Color.Green, $"[OK] {intent.From.TitleFull} -> {intent.To.TitleFull}");
+            if (node != null)
+            {
+                node.Checked = false;
+            }
             LogToUi($"[Успех] {intent.Media.Title} передан в {intent.To.Title}", Color.LightGreen);
 
             foreach (var nextIntent in intent.NextIntents)
@@ -269,7 +273,10 @@ public partial class SyncTreeControl : UserControl
         }
         catch (Exception)
         {
-            UpdateNodeState(node, IconError, Color.Red, $"[Ошибка] {intent.From.TitleFull} -> {intent.To.TitleFull}");
+            if (node.Text.StartsWith("[В работе]")) // todo ну вот такой вот костыль, что бы родительские не краснели
+            {
+                UpdateNodeState(node, IconError, Color.Red, $"[Ошибка] {intent.From.TitleFull} -> {intent.To.TitleFull}");
+            }
             throw;
         }
     }
@@ -353,6 +360,7 @@ public partial class SyncTreeControl : UserControl
                     Tag = media,
                     Checked = group.All(i => i.IsSelected),
                     NodeFont = _boldFont,
+                    StateImageKey = "blank",
                 };
 
                 var hasVisibleIntents = false;
