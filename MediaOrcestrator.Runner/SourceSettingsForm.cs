@@ -147,7 +147,17 @@ public partial class SourceSettingsForm : Form
 
         if (setting.Type == SettingType.Dropdown)
         {
-            card.Controls.Add(CreateLoadButton(setting, (ComboBox)inputControl));
+            if (setting.Options == null)
+            {
+                card.Controls.Add(CreateLoadButton(setting, (ComboBox)inputControl));
+            }
+            else
+            {
+                foreach (var option in setting.Options)
+                {
+                    ((ComboBox)inputControl).Items.Add(new ComboBoxItem { Value = option.Value, Label = option.Label });
+                }
+            }
         }
 
         card.Controls.Add(inputControl);

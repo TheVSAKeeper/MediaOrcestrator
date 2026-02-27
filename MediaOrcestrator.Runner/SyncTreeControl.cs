@@ -259,7 +259,7 @@ public partial class SyncTreeControl : UserControl
                 ct.ThrowIfCancellationRequested();
 
                 UpdateNodeState(node, IconOk, Color.Green, $"[OK] {intent.From.TitleFull} -> {intent.To.TitleFull}");
-                if (node != null)
+                if (node != null)   
                 {
                     node.Checked = false;
                 }
@@ -269,6 +269,7 @@ public partial class SyncTreeControl : UserControl
                 {
                     await ExecuteIntent(nextIntent, _intentNodeMap.GetValueOrDefault(nextIntent), ct);
                 }
+                break;
             }
             catch (OperationCanceledException)
             {
