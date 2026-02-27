@@ -93,7 +93,7 @@ public partial class SyncTreeControl : UserControl
 
         _cts = new();
 
-        LogToUi($"Запуск синхронизации для {filteredRootIntents.Where(x=>x.IsSelected).Count()} цепочек...", Color.Yellow);
+        LogToUi($"Запуск синхронизации для {filteredRootIntents.Where(x => x.IsSelected).Count()} цепочек...", Color.Yellow);
 
         try
         {
@@ -250,34 +250,70 @@ public partial class SyncTreeControl : UserControl
         UpdateNodeState(node, IconWorking, Color.Orange, $"[В работе] {intent.From.TitleFull} -> {intent.To.TitleFull}");
         LogToUi($"Выполнение: {intent.Media.Title} ({intent.From.TypeId} -> {intent.To.TypeId})");
 
-        try
+        var tryCount = 50;
+        for (var i = 1; i <= tryCount; i++)
         {
-            await _orcestrator.TransferByRelation(intent.Media, intent.Relation);
-            ct.ThrowIfCancellationRequested();
+            try
+            {
+                await _orcestrator.TransferByRelation(intent.Media, intent.Relation);
+                ct.ThrowIfCancellationRequested();
 
-            UpdateNodeState(node, IconOk, Color.Green, $"[OK] {intent.From.TitleFull} -> {intent.To.TitleFull}");
-            if (node != null)
-            {
-                node.Checked = false;
-            }
-            LogToUi($"[Успех] {intent.Media.Title} передан в {intent.To.Title}", Color.LightGreen);
+                UpdateNodeState(node, IconOk, Color.Green, $"[OK] {intent.From.TitleFull} -> {intent.To.TitleFull}");
+                if (node != null)
+                {
+                    node.Checked = false;
+                }
+                LogToUi($"[Успех] {intent.Media.Title} передан в {intent.To.Title}", Color.LightGreen);
 
-            foreach (var nextIntent in intent.NextIntents)
-            {
-                await ExecuteIntent(nextIntent, _intentNodeMap.GetValueOrDefault(nextIntent), ct);
+                foreach (var nextIntent in intent.NextIntents)
+                {
+                    await ExecuteIntent(nextIntent, _intentNodeMap.GetValueOrDefault(nextIntent), ct);
+                }
             }
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception)
-        {
-            if (node.Text.StartsWith("[В работе]")) // todo ну вот такой вот костыль, что бы родительские не краснели
+            catch (OperationCanceledException)
             {
-                UpdateNodeState(node, IconError, Color.Red, $"[Ошибка] {intent.From.TitleFull} -> {intent.To.TitleFull}");
+                throw;
             }
-            throw;
+            catch (Exception ex)
+            {
+                if (i == tryCount)
+                {
+                    if (node.Text.StartsWith("[В работе")) // todo ну вот такой вот костыль, что бы родительские не краснели
+                    {
+                        UpdateNodeState(node, IconError, Color.Red, $"[Ошибка] {intent.From.TitleFull} -> {intent.To.TitleFull}");
+                    }
+                    throw;
+                }
+                else
+                {
+                    _logger.LogError(ex, "Ошибка при выполнении синхронизации для {Intent}", intent);
+                    LogToUi($"Ошибка для {intent.Media.Title}: {ex.Message}", Color.Red);
+                    var sleepSecond = 60;
+                    if (i > 3 && i < 6)
+                    {
+                        sleepSecond = 300;
+                    }
+                    else if (i < 9)
+                    {
+                        sleepSecond = 1800;
+                    }
+                    else
+                    {
+                        sleepSecond = 3600;
+                    }
+                    LogToUi($"Попытка №{i + 1} через {sleepSecond} секунд");
+                    var nextTryDate = DateTime.Now.AddSeconds(sleepSecond);
+                    while (DateTime.Now < nextTryDate)
+                    {
+                        await Task.Delay(5000);
+                        ct.ThrowIfCancellationRequested();
+                    }
+                    if (node.Text.StartsWith("[В работе"))
+                    {
+                        UpdateNodeState(node, IconError, Color.Red, $"[В работе. Попытка {i + 1}/{tryCount}] {intent.From.TitleFull} -> {intent.To.TitleFull}");
+                    }
+                }
+            }
         }
     }
 
