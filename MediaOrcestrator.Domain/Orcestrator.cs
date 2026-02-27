@@ -105,6 +105,7 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
                     SourceId = mediaSource.Id,
                     SortNumber = sortNumber,
                 };
+
                 sortNumber++;
 
                 myMedia.Sources.Add(newMediaSource);
@@ -213,7 +214,6 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
             {
                 item.IsDisable = true;
             }
-
         }
 
         return relations;
@@ -285,14 +285,16 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
             logger.LogInformation("Пропущено синхронизирование медиа {Media} в {ToSource} / уже имеется", media, rel.To);
             return;
         }
+
         string externalId;
         var debug = false;
         if (debug)
         {
             if (DateTime.Now.Second % 10 < 5)
             {
-                throw new Exception("ошибка");
+                throw new("ошибка");
             }
+
             externalId = Guid.NewGuid().ToString();
         }
         else
@@ -302,7 +304,7 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
             externalId = await rel.To.Type.Upload(tempMedia, rel.To.Settings);
         }
 
-        toMediaSource = new MediaSourceLink
+        toMediaSource = new()
         {
             MediaId = media.Id,
             Media = media,
@@ -347,7 +349,6 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
         CleanupMediaLinks(media, source.Id);
     }
 
-
     private void CleanupMediaLinks(Media media, string sourceId)
     {
         logger.LogInformation("Очистка записей в базе данных для медиа {MediaId}, источник {SourceId}", media.Id, sourceId);
@@ -377,12 +378,15 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
 
         public List<MediaSourceLink> GetMedia(string sourceId)
         {
-            if (!_holder.ContainsKey(sourceId))
+            if (_holder.TryGetValue(sourceId, out var value))
             {
-                _holder[sourceId] = [];
+                return value;
             }
 
-            return _holder[sourceId];
+            value = [];
+            _holder[sourceId] = value;
+
+            return value;
         }
     }
 }

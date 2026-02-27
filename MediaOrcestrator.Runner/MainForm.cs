@@ -198,72 +198,6 @@ public partial class MainForm : Form
         }
     }
 
-    private void DrawSources()
-    {
-        uiRelationFromComboBox.Items.Clear();
-        uiRelationToComboBox.Items.Clear();
-        uiRelationFromComboBox.DisplayMember = "TitleFull";
-        uiRelationToComboBox.DisplayMember = "TitleFull";
-
-        uiSourcesComboBox.Items.Clear();
-        uiSourcesComboBox.DisplayMember = "Name";
-        uiSourcesComboBox.Items.Add("Выберите тип хранилища");
-
-        var sources = _orcestrator.GetSourceTypes();
-        if (sources == null)
-        {
-            return;
-        }
-
-        foreach (var source in sources)
-        {
-            uiSourcesComboBox.Items.Add(source.Value);
-        }
-
-        if (uiSourcesComboBox.Items.Count > 0)
-        {
-            uiSourcesComboBox.SelectedIndex = 0;
-        }
-
-        uiMediaSourcePanel.Controls.Clear();
-        foreach (var source in _orcestrator.GetSources())
-        {
-            var control = _serviceProvider.GetRequiredService<SourceControl>();
-            control.SetMediaSource(source);
-            control.Dock = DockStyle.Top;
-            control.SourceDeleted += (_, _) => DrawSources();
-            control.SourceUpdated += (_, _) => DrawSources();
-
-            uiMediaSourcePanel.Controls.Add(control);
-            control.SendToBack();
-
-            uiRelationFromComboBox.Items.Add(source);
-            uiRelationToComboBox.Items.Add(source);
-        }
-
-        DrawRelations();
-    }
-
-    private void DrawRelations()
-    {
-        uiRelationsPanel.Controls.Clear();
-        var relations = _orcestrator.GetRelations();
-
-        foreach (var rel in relations)
-        {
-            var control = _serviceProvider.GetRequiredService<RelationControl>();
-            control.SetRelation(rel);
-            control.RelationDeleted += (_, _) => DrawRelations();
-            control.RelationSelectionChanged += (_, _) => uiMediaMatrixGridControl.RefreshData();
-            control.Dock = DockStyle.Top;
-
-            uiRelationsPanel.Controls.Add(control);
-            control.SendToBack();
-        }
-
-        uiMediaMatrixGridControl.PopulateRelationsFilter();
-    }
-
     private void uiRubuteAuthStateOpenBrowserButton_Click(object sender, EventArgs e)
     {
         Task.Run(async () =>
@@ -357,5 +291,71 @@ public partial class MainForm : Form
                 _logger.LogInformation("Auth state saved to auth_state.json");
             }
         });
+    }
+
+    private void DrawSources()
+    {
+        uiRelationFromComboBox.Items.Clear();
+        uiRelationToComboBox.Items.Clear();
+        uiRelationFromComboBox.DisplayMember = "TitleFull";
+        uiRelationToComboBox.DisplayMember = "TitleFull";
+
+        uiSourcesComboBox.Items.Clear();
+        uiSourcesComboBox.DisplayMember = "Name";
+        uiSourcesComboBox.Items.Add("Выберите тип хранилища");
+
+        var sources = _orcestrator.GetSourceTypes();
+        if (sources == null)
+        {
+            return;
+        }
+
+        foreach (var source in sources)
+        {
+            uiSourcesComboBox.Items.Add(source.Value);
+        }
+
+        if (uiSourcesComboBox.Items.Count > 0)
+        {
+            uiSourcesComboBox.SelectedIndex = 0;
+        }
+
+        uiMediaSourcePanel.Controls.Clear();
+        foreach (var source in _orcestrator.GetSources())
+        {
+            var control = _serviceProvider.GetRequiredService<SourceControl>();
+            control.SetMediaSource(source);
+            control.Dock = DockStyle.Top;
+            control.SourceDeleted += (_, _) => DrawSources();
+            control.SourceUpdated += (_, _) => DrawSources();
+
+            uiMediaSourcePanel.Controls.Add(control);
+            control.SendToBack();
+
+            uiRelationFromComboBox.Items.Add(source);
+            uiRelationToComboBox.Items.Add(source);
+        }
+
+        DrawRelations();
+    }
+
+    private void DrawRelations()
+    {
+        uiRelationsPanel.Controls.Clear();
+        var relations = _orcestrator.GetRelations();
+
+        foreach (var rel in relations)
+        {
+            var control = _serviceProvider.GetRequiredService<RelationControl>();
+            control.SetRelation(rel);
+            control.RelationDeleted += (_, _) => DrawRelations();
+            control.RelationSelectionChanged += (_, _) => uiMediaMatrixGridControl.RefreshData();
+            control.Dock = DockStyle.Top;
+
+            uiRelationsPanel.Controls.Add(control);
+            control.SendToBack();
+        }
+
+        uiMediaMatrixGridControl.PopulateRelationsFilter();
     }
 }

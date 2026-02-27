@@ -1,4 +1,4 @@
-﻿namespace MediaOrcestrator.Core.Extensions;
+﻿namespace MediaOrcestrator.Youtube;
 
 public static class GenericExtensions
 {

@@ -156,6 +156,18 @@ public partial class SyncTreeControl : UserControl
         LogToUi("Запрошена остановка...", Color.Orange);
     }
 
+    private void uiConstructButton_Click(object sender, EventArgs e)
+    {
+        var medias = _orcestrator.GetMedias();
+        var relations = _orcestrator.GetRelations();
+        var intents = _planner.Plan(medias, relations);
+        _rootIntents = intents;
+        uiFilterControl.ShowStatusFilter = false;
+        uiFilterControl.PopulateRelationsFilter(_orcestrator);
+        PopulateTree();
+        LogToUi("Планировщик инициализирован. Готов к работе.");
+    }
+
     private static TreeNode CreateIntentNode(SyncIntent intent, Dictionary<SyncIntent, TreeNode> intentNodeMap)
     {
         var label = $"{intent.From.TitleFull} -> {intent.To.TitleFull}";
@@ -259,16 +271,18 @@ public partial class SyncTreeControl : UserControl
                 ct.ThrowIfCancellationRequested();
 
                 UpdateNodeState(node, IconOk, Color.Green, $"[OK] {intent.From.TitleFull} -> {intent.To.TitleFull}");
-                if (node != null)   
+                if (node != null)
                 {
                     node.Checked = false;
                 }
+
                 LogToUi($"[Успех] {intent.Media.Title} передан в {intent.To.Title}", Color.LightGreen);
 
                 foreach (var nextIntent in intent.NextIntents)
                 {
                     await ExecuteIntent(nextIntent, _intentNodeMap.GetValueOrDefault(nextIntent), ct);
                 }
+
                 break;
             }
             catch (OperationCanceledException)
@@ -283,36 +297,37 @@ public partial class SyncTreeControl : UserControl
                     {
                         UpdateNodeState(node, IconError, Color.Red, $"[Ошибка] {intent.From.TitleFull} -> {intent.To.TitleFull}");
                     }
+
                     throw;
+                }
+
+                _logger.LogError(ex, "Ошибка при выполнении синхронизации для {Intent}", intent);
+                LogToUi($"Ошибка для {intent.Media.Title}: {ex.Message}", Color.Red);
+                var sleepSecond = 60;
+                if (i > 3 && i < 6)
+                {
+                    sleepSecond = 300;
+                }
+                else if (i < 9)
+                {
+                    sleepSecond = 1800;
                 }
                 else
                 {
-                    _logger.LogError(ex, "Ошибка при выполнении синхронизации для {Intent}", intent);
-                    LogToUi($"Ошибка для {intent.Media.Title}: {ex.Message}", Color.Red);
-                    var sleepSecond = 60;
-                    if (i > 3 && i < 6)
-                    {
-                        sleepSecond = 300;
-                    }
-                    else if (i < 9)
-                    {
-                        sleepSecond = 1800;
-                    }
-                    else
-                    {
-                        sleepSecond = 3600;
-                    }
-                    LogToUi($"Попытка №{i + 1} через {sleepSecond} секунд");
-                    var nextTryDate = DateTime.Now.AddSeconds(sleepSecond);
-                    while (DateTime.Now < nextTryDate)
-                    {
-                        await Task.Delay(5000);
-                        ct.ThrowIfCancellationRequested();
-                    }
-                    if (node.Text.StartsWith("[В работе"))
-                    {
-                        UpdateNodeState(node, IconError, Color.Red, $"[В работе. Попытка {i + 1}/{tryCount}] {intent.From.TitleFull} -> {intent.To.TitleFull}");
-                    }
+                    sleepSecond = 3600;
+                }
+
+                LogToUi($"Попытка №{i + 1} через {sleepSecond} секунд");
+                var nextTryDate = DateTime.Now.AddSeconds(sleepSecond);
+                while (DateTime.Now < nextTryDate)
+                {
+                    await Task.Delay(5000);
+                    ct.ThrowIfCancellationRequested();
+                }
+
+                if (node.Text.StartsWith("[В работе"))
+                {
+                    UpdateNodeState(node, IconError, Color.Red, $"[В работе. Попытка {i + 1}/{tryCount}] {intent.From.TitleFull} -> {intent.To.TitleFull}");
                 }
             }
         }
@@ -466,17 +481,5 @@ public partial class SyncTreeControl : UserControl
         uiIconsImageList.Images.Add(CreateColorIcon(Color.Orange));
         uiIconsImageList.Images.Add(CreateColorIcon(Color.Green));
         uiIconsImageList.Images.Add(CreateColorIcon(Color.Red));
-    }
-
-    private void uiConstructButton_Click(object sender, EventArgs e)
-    {
-        var medias = _orcestrator.GetMedias();
-        var relations = _orcestrator.GetRelations();
-        var intents = _planner.Plan(medias, relations);
-        _rootIntents = intents;
-        uiFilterControl.ShowStatusFilter = false;
-        uiFilterControl.PopulateRelationsFilter(_orcestrator);
-        PopulateTree();
-        LogToUi("Планировщик инициализирован. Готов к работе.");
     }
 }

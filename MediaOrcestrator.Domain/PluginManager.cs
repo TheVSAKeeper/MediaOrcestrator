@@ -9,18 +9,16 @@ public class PluginManager(IServiceProvider serviceProvider)
 
     public void Init(string pluginPath)
     {
-      //  var path1 = "..\\..\\..\\..\\ModuleBuilds";
-      //  var path1 = "ModuleBuilds";
-        var scanner = new InterfaceScanner();
-        var myInterfaceType = typeof(ISourceType); // Пример интерфейса
-        var implementations = scanner.FindImplementations(pluginPath, myInterfaceType);
+        //  var path1 = "..\\..\\..\\..\\ModuleBuilds";
+        //  var path1 = "ModuleBuilds";
+        var implementations = InterfaceScanner.FindImplementations(pluginPath, typeof(ISourceType));
         MediaSources = new();
         foreach (var x in implementations)
         {
-            var id = x.Assembly.FullName.Split(",")[0];
+            var id = x.Assembly.FullName?.Split(",")[0];
             var instance = (ISourceType)ActivatorUtilities.CreateInstance(serviceProvider, x.Type);
 
-            if (instance.SettingsKeys != null && instance.SettingsKeys.Any(x => x.Key.StartsWith("_system")))
+            if (instance.SettingsKeys != null && instance.SettingsKeys.Any(x => x.Key.StartsWith("_system", StringComparison.Ordinal)))
             {
                 // todo логи
                 continue;

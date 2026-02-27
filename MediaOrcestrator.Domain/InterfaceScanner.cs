@@ -2,9 +2,9 @@
 
 namespace MediaOrcestrator.Domain;
 
-public class InterfaceScanner
+public static class InterfaceScanner
 {
-    public List<TypeInfo> FindImplementations(string directoryPath, Type interfaceType)
+    public static List<TypeInfo> FindImplementations(string directoryPath, Type interfaceType)
     {
         var implementations = new List<TypeInfo>();
 
@@ -37,7 +37,7 @@ public class InterfaceScanner
         return implementations;
     }
 
-    private List<Assembly> LoadAllAssemblies(string directoryPath)
+    private static List<Assembly> LoadAllAssemblies(string directoryPath)
     {
         var assemblies = new List<Assembly>();
         var dllFiles = Directory.GetFiles(directoryPath, "*.dll", SearchOption.AllDirectories);

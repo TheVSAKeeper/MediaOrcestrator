@@ -1,14 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
-using System.Drawing;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Windows.Forms;
+﻿namespace MediaOrcestrator.Runner;
 
-namespace MediaOrcestrator.Runner;
 public partial class InputDialog : Form
 {
     public InputDialog()
@@ -16,16 +7,16 @@ public partial class InputDialog : Form
         InitializeComponent();
     }
 
-    public string InputText { get; private set; }
-
     public InputDialog(string prompt, string title = "Ввод данных", string defaultValue = "")
     {
         InitializeComponent();
-        this.Text = title;
+        Text = title;
         lblPrompt.Text = prompt;
         txtInput.Text = defaultValue;
         txtInput.Select();
     }
+
+    public string InputText { get; private set; }
 
     private void btnOk_Click(object sender, EventArgs e)
     {

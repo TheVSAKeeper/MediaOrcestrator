@@ -1,11 +1,12 @@
 ﻿using Microsoft.Extensions.Logging;
+using System.Net;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
 namespace MediaOrcestrator.Rutube;
 
-public sealed class RutubeService
+public sealed partial class RutubeService
 {
     private readonly HttpClient _httpClient;
     private readonly string? _userId;
@@ -24,11 +25,10 @@ public sealed class RutubeService
         _httpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36");
         _httpClient.DefaultRequestHeaders.Add("Origin", "https://studio.rutube.ru");
 
-        var visitorIdMatch = Regex.Match(cookieString, @"visitorID=([^;]+)");
+        var visitorIdMatch = VisitorIdRegex().Match(cookieString);
         if (visitorIdMatch.Success)
         {
             _userId = visitorIdMatch.Groups[1].Value;
-            //_logger.LogDebug("Получен ID посетителя: {UserId}", _userId);
         }
     }
 
@@ -88,7 +88,7 @@ public sealed class RutubeService
 
         var response = await _httpClient.DeleteAsync(url);
 
-        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+        if (response.StatusCode == HttpStatusCode.NotFound)
         {
             // TODO: Возможно не верный мув, но позволяет громоздить логику принудительного удаления
             _logger.LogWarning("Видео {VideoId} не найдено на RuTube, считаем уже удаленным", videoId);
@@ -104,6 +104,9 @@ public sealed class RutubeService
 
         _logger.LogInformation("Видео {VideoId} успешно удалено через RuTube API", videoId);
     }
+
+    [GeneratedRegex(@"visitorID=([^;]+)")]
+    private static partial Regex VisitorIdRegex();
 
     private async Task<UploadSessionResponse> InitUploadSessionAsync()
     {

@@ -17,7 +17,7 @@ internal static class HttpExtensions
 
         protected override bool TryComputeLength(out long length)
         {
-            length = default;
+            length = 0;
             return false;
         }
     }

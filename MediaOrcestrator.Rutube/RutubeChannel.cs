@@ -59,11 +59,6 @@ public class RutubeChannel(ILogger<RutubeChannel> logger, ILogger<RutubeService>
         }
     }
 
-    public MediaDto[] GetMedia()
-    {
-        throw new NotImplementedException();
-    }
-
     public async IAsyncEnumerable<MediaDto> GetMedia(Dictionary<string, string> settings)
     {
         logger.LogWarning("Получение списка медиа из RuTube не реализовано");
@@ -178,11 +173,3 @@ public class RutubeChannel(ILogger<RutubeChannel> logger, ILogger<RutubeService>
         return new(cookieStringBuilder.ToString(), csrfToken, serviceLogger);
     }
 }
-
-//public class RutubeMedia : Media
-//{
-//    public string Title { get; set; }
-//    public string Description { get; set; }
-
-//    public string Id => throw new NotImplementedException();
-//}

@@ -2,7 +2,6 @@ using MediaOrcestrator.Modules;
 using Microsoft.Extensions.Logging;
 using YoutubeExplode;
 using YoutubeExplode.Channels;
-using YoutubeExplode.Videos.Streams;
 
 namespace MediaOrcestrator.Youtube;
 
@@ -246,34 +245,8 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger) : ISourceType
             Description = video.Description,
             TempDataPath = finalPath,
         };
+
         // bob217 -> 9I_JIereHga -> bob217
-        //  logger.LogDebug("Успешно объединено видео и аудио: {Id} {StreamId}", downloadItem.Id, downloadStream.Id);
-    }
-
-    public ValueTask DownloadWithProgressAsync(YoutubeClient youtubeClient, IStreamInfo streamInfo, string path, CancellationToken cancellationToken)
-    {
-        double oldPercent = -1;
-
-        var streamType = streamInfo switch
-        {
-            AudioOnlyStreamInfo => "Аудио",
-            VideoOnlyStreamInfo => "Видео",
-            MuxedStreamInfo => "Объединённый",
-            _ => "Неизвестный",
-        };
-
-        Progress<double> progress = new(percent =>
-        {
-            if (percent - oldPercent < 10)
-            {
-                return;
-            }
-
-            logger.LogDebug("Загрузка потока [{StreamType}]: {Percent:P2}", streamType, percent);
-            oldPercent = percent;
-        });
-
-        return youtubeClient.Videos.Streams.DownloadAsync(streamInfo, path, progress, cancellationToken);
     }
 
     public Task<string> Upload(MediaDto media, Dictionary<string, string> settings)
