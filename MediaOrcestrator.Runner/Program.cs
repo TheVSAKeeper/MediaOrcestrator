@@ -40,53 +40,9 @@ file static class Program
 
         try
         {
-            // todo вынести в settingsManager
+            var settingsManager = new SettingsManager("settings.txt");
 
-            var settingsPath = "settings.txt";
-            var settings = new Dictionary<string, string>();
-            if (File.Exists(settingsPath))
-            {
-                var settingsLines = File.ReadAllLines(settingsPath);
-                settings = settingsLines.Select(x =>
-                    {
-                        var spl = x.Split(" ");
-                        return new
-                        {
-                            key = spl[0],
-                            value = x.Substring(spl[0].Length + 1),
-                        };
-                    })
-                    .ToDictionary(x => x.key.ToLower(), x => x.value);
-            }
-
-            string? GetSettingsStringValue(string key)
-            {
-                if (settings.ContainsKey(key.ToLower()))
-                {
-                    return settings[key];
-                }
-
-                return null;
-            }
-
-            void SetSettingsValue(string key, string value)
-            {
-                if (settings.ContainsKey(key.ToLower()))
-                {
-                    settings[key.ToLower()] = value;
-                }
-
-                settings.Add(key.ToLower(), value);
-                var saveFileOutPut = new StringBuilder();
-                foreach (var kv in settings)
-                {
-                    saveFileOutPut.AppendLine(kv.Key + " " + kv.Value);
-                }
-
-                File.WriteAllText(settingsPath, saveFileOutPut.ToString());
-            }
-
-            var pluginPath = GetSettingsStringValue("plugin_path");
+            var pluginPath = settingsManager.GetStringValue("plugin_path");
             if (pluginPath == null)
             {
                 var result = InputMessageBox.Show("Введите путь до папки с плугинами, или оставьте системный", "Важная настройка", "ModuleBuilds");
@@ -97,10 +53,10 @@ file static class Program
                 }
 
                 pluginPath = result;
-                SetSettingsValue("plugin_path", result);
+                settingsManager.SetValue("plugin_path", result);
             }
 
-            var databasePath = GetSettingsStringValue("database_path");
+            var databasePath = settingsManager.GetStringValue("database_path");
             if (databasePath == null)
             {
                 var result = InputMessageBox.Show("Введите путь до базы данных, или оставьте системный", "Важная настройка", "MyData.db");
@@ -111,12 +67,13 @@ file static class Program
                 }
 
                 databasePath = result;
-                SetSettingsValue("database_path", result);
+                settingsManager.SetValue("database_path", result);
             }
 
             Log.Information("Приложение запускается...");
             var services = new ServiceCollection();
             services.AddSingleton(logControl);
+            services.AddSingleton(settingsManager);
             ConfigureServices(services, databasePath);
 
             using var serviceProvider = services.BuildServiceProvider();

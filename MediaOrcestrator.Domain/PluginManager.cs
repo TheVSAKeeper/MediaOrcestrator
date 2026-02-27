@@ -1,11 +1,12 @@
 ﻿using MediaOrcestrator.Modules;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace MediaOrcestrator.Domain;
 
-public class PluginManager(IServiceProvider serviceProvider)
+public class PluginManager(IServiceProvider serviceProvider, ILogger<PluginManager> logger)
 {
-    public Dictionary<string, ISourceType> MediaSources { get; set; }
+    public Dictionary<string, ISourceType> MediaSources { get; private set; } = new();
 
     public void Init(string pluginPath)
     {
@@ -13,18 +14,28 @@ public class PluginManager(IServiceProvider serviceProvider)
         //  var path1 = "ModuleBuilds";
         var implementations = InterfaceScanner.FindImplementations(pluginPath, typeof(ISourceType));
         MediaSources = new();
-        foreach (var x in implementations)
-        {
-            var id = x.Assembly.FullName?.Split(",")[0];
-            var instance = (ISourceType)ActivatorUtilities.CreateInstance(serviceProvider, x.Type);
 
-            if (instance.SettingsKeys != null && instance.SettingsKeys.Any(x => x.Key.StartsWith("_system", StringComparison.Ordinal)))
+        foreach (var type in implementations.Select(x => x.Type))
+        {
+            var id = type.FullName ?? "UnknownType";
+
+            var instance = (ISourceType)ActivatorUtilities.CreateInstance(serviceProvider, type);
+
+            if (instance.SettingsKeys != null
+                && instance.SettingsKeys.Any(x => x.Key.StartsWith("_system", StringComparison.Ordinal)))
             {
-                // todo логи
+                logger.LogWarning("Пропуск плагина '{PluginId}': содержит зарезервированный системный ключ настроек '_system'", id);
                 continue;
             }
 
-            MediaSources.Add(id, instance);
+            if (MediaSources.TryAdd(id, instance))
+            {
+                logger.LogInformation("Плагин '{PluginId}' успешно инициализирован", id);
+            }
+            else
+            {
+                logger.LogError("Не удалось добавить плагин '{PluginId}'. Плагин с таким ID уже зарегистрирован", id);
+            }
         }
     }
 }
