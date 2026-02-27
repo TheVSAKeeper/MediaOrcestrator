@@ -1,4 +1,5 @@
 ﻿using MediaOrcestrator.Domain;
+using MediaOrcestrator.Modules;
 
 namespace MediaOrcestrator.Runner;
 
@@ -6,6 +7,9 @@ public partial class FilterToolStripControl : UserControl
 {
     private const int SearchDebounceMs = 1000;
     private readonly HashSet<SourceSyncRelation> _selectedRelations = [];
+    private readonly HashSet<string> _availableMetadataFields = [];
+    private readonly HashSet<string> _selectedMetadataFields = [];
+    private bool _metadataInitialized;
 
     public FilterToolStripControl()
     {
@@ -64,6 +68,71 @@ public partial class FilterToolStripControl : UserControl
 
             uiRelationsDropDownButton.DropDownItems.Add(item);
         }
+    }
+
+    public void UpdateMetadataFilter(List<MetadataItem> availableMetadata)
+    {
+        var newSet = availableMetadata.Select(m => m.Key).ToHashSet();
+        if (_availableMetadataFields.SetEquals(newSet))
+        {
+            return;
+        }
+
+        _availableMetadataFields.Clear();
+        foreach (var k in newSet)
+        {
+            _availableMetadataFields.Add(k);
+        }
+
+        // TODO: Автоматический выбор всех по умолчанию. Возможно стоит убрать
+        if (!_metadataInitialized)
+        {
+            foreach (var k in newSet)
+            {
+                _selectedMetadataFields.Add(k);
+            }
+
+            _metadataInitialized = true;
+        }
+
+        uiMetadataDropDownButton.DropDownItems.Clear();
+
+        foreach (var meta in availableMetadata)
+        {
+            var key = meta.Key;
+            var isChecked = _selectedMetadataFields.Contains(key);
+
+            var item = new ToolStripMenuItem(meta.DisplayName ?? key)
+            {
+                CheckOnClick = true,
+                Checked = isChecked,
+                Tag = key,
+            };
+
+            item.CheckedChanged += (s, _) =>
+            {
+                if (s is ToolStripMenuItem { Tag: string mk } menuItem)
+                {
+                    if (menuItem.Checked)
+                    {
+                        _selectedMetadataFields.Add(mk);
+                    }
+                    else
+                    {
+                        _selectedMetadataFields.Remove(mk);
+                    }
+                }
+
+                OnFilterChanged();
+            };
+
+            uiMetadataDropDownButton.DropDownItems.Add(item);
+        }
+    }
+
+    public List<string> GetSelectedMetadataFields()
+    {
+        return _selectedMetadataFields.OrderBy(x => x).ToList();
     }
 
     public FilterState BuildFilterState(List<SourceSyncRelation>? selectedRelations = null)

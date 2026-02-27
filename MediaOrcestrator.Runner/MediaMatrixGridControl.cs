@@ -48,8 +48,19 @@ public partial class MediaMatrixGridControl : UserControl
                 return (filteredMedia, filteredSources, allMedia.Count);
             });
 
-            uiMediaGrid.SetupColumns(sources);
-            uiMediaGrid.PopulateGrid(sources, mediaData);
+            var allMetadataInfos = mediaData
+                .SelectMany(m => m.Metadata)
+                .GroupBy(m => m.Key)
+                .Select(g => g.First())
+                .OrderBy(m => m.Key)
+                .ToList();
+
+            uiFilterControl.UpdateMetadataFilter(allMetadataInfos);
+            var selectedMetadataKeys = uiFilterControl.GetSelectedMetadataFields();
+            var selectedMetadata = allMetadataInfos.Where(m => selectedMetadataKeys.Contains(m.Key)).ToList();
+
+            uiMediaGrid.SetupColumns(sources, selectedMetadata);
+            uiMediaGrid.PopulateGrid(sources, mediaData, selectedMetadata);
             UpdateStatusBar(allMediaCount, mediaData.Count);
         }
         finally
@@ -81,13 +92,17 @@ public partial class MediaMatrixGridControl : UserControl
         if (uiMediaGrid.GetMediaAtRow(ht.RowIndex) is { } media)
         {
             Source? specificSource = null;
-            if (ht.ColumnIndex >= OptimizedMediaGridView.FirstSourceColumnIndex)
+            var sources = uiMediaGrid.CurrentSources;
+            if (sources != null)
             {
-                var sourceColumnIndex = ht.ColumnIndex - OptimizedMediaGridView.FirstSourceColumnIndex;
-                var sources = uiMediaGrid.CurrentSources;
-                if (sources != null && sourceColumnIndex < sources.Count)
+                var sourceStartIdx = uiMediaGrid.Columns.Count - sources.Count;
+                if (ht.ColumnIndex >= sourceStartIdx)
                 {
-                    specificSource = sources[sourceColumnIndex];
+                    var sourceColumnIndex = ht.ColumnIndex - sourceStartIdx;
+                    if (sourceColumnIndex < sources.Count)
+                    {
+                        specificSource = sources[sourceColumnIndex];
+                    }
                 }
             }
 
@@ -608,6 +623,16 @@ public partial class MediaMatrixGridControl : UserControl
             if (!string.IsNullOrEmpty(media.Description))
             {
                 details.AppendLine($"Описание: {media.Description}");
+            }
+
+            if (media.Metadata.Count > 0)
+            {
+                details.AppendLine();
+                details.AppendLine("Метаданные:");
+                foreach (var meta in media.Metadata)
+                {
+                    details.AppendLine($"  {meta.Key}: {meta.Value}");
+                }
             }
 
             details.AppendLine();
