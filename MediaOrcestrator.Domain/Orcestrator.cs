@@ -57,8 +57,29 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
                 var foundMediaSource = cache.GetMedia(mediaSource.Id).FirstOrDefault(x => x.ExternalId == s.Id);
                 if (foundMediaSource != null)
                 {
-                    break;
+                    if (s.Metadata is { Count: > 0 } && foundMediaSource.Media != null)
+                    {
+                        foreach (var item in s.Metadata)
+                        {
+                            var existing = foundMediaSource.Media.Metadata.FirstOrDefault(m => m.Key == item.Key);
+                            if (existing != null)
+                            {
+                                existing.Value = item.Value;
+                                existing.DisplayName = item.DisplayName;
+                                existing.DisplayType = item.DisplayType;
+                            }
+                            else
+                            {
+                                foundMediaSource.Media.Metadata.Add(item);
+                            }
+                        }
+
+                        mediaCol.Update(foundMediaSource.Media);
+                    }
+
+                    continue;
                 }
+
                 mediaList.Insert(0, s);
             }
 
@@ -191,7 +212,6 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
             if (fromSource == null || toSource == null || fromSource.IsDisable || toSource.IsDisable)
             {
                 item.IsDisable = true;
-                continue;
             }
 
         }
