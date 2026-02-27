@@ -8,6 +8,8 @@ public class MediaDto
     public string DataPath { get; set; }
     public string PreviewPath { get; set; }
 
+    public List<MetadataItem>? Metadata { get; set; }
+
     public string TempDataPath { get; set; } // todo это отсюда уберём
     public string TempPreviewPath { get; set; }
 }

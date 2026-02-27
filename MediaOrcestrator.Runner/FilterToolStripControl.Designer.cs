@@ -31,6 +31,7 @@ namespace MediaOrcestrator.Runner
             uiStatusLabel = new ToolStripLabel();
             uiStatusFilterComboBox = new ToolStripComboBox();
             uiRelationsDropDownButton = new ToolStripDropDownButton();
+            uiMetadataDropDownButton = new ToolStripDropDownButton();
             uiToolStrip.SuspendLayout();
             SuspendLayout();
             // 
@@ -44,6 +45,7 @@ namespace MediaOrcestrator.Runner
                 uiStatusLabel,
                 uiStatusFilterComboBox,
                 uiRelationsDropDownButton,
+                uiMetadataDropDownButton,
             });
             uiToolStrip.Dock = DockStyle.Fill;
             uiToolStrip.Name = "uiToolStrip";
@@ -91,6 +93,13 @@ namespace MediaOrcestrator.Runner
             uiRelationsDropDownButton.Text = "Фильтр по связям";
             uiRelationsDropDownButton.Margin = new Padding(10, 1, 0, 2);
             // 
+            // uiMetadataDropDownButton
+            // 
+            uiMetadataDropDownButton.Name = "uiMetadataDropDownButton";
+            uiMetadataDropDownButton.Size = new Size(130, 22);
+            uiMetadataDropDownButton.Text = "Колонки метаданных";
+            uiMetadataDropDownButton.Margin = new Padding(10, 1, 0, 2);
+            // 
             // FilterToolStripControl
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
@@ -111,5 +120,6 @@ namespace MediaOrcestrator.Runner
         private ToolStripLabel uiStatusLabel;
         private ToolStripComboBox uiStatusFilterComboBox;
         private ToolStripDropDownButton uiRelationsDropDownButton;
+        private ToolStripDropDownButton uiMetadataDropDownButton;
     }
 }

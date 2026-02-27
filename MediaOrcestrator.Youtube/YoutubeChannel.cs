@@ -53,6 +53,22 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger) : ISourceType
             DefaultValue = @"c:\Services\utils\ffmpeg\ffmpeg.exe",
             Description = "Скачать можно с https://ffmpeg.org/download.html",
         },
+        new()
+        {
+            Key = "js_runtime",
+            IsRequired = true,
+            Title = "вариант JS runtime",
+            DefaultValue = "none",
+            Type = SettingType.Dropdown,
+            Options =
+            [
+                new() { Value = "none", Label = "none" },
+                new() { Value = "deno", Label = "deno" },
+                new() { Value = "node", Label = "node" },
+                new() { Value = "quickjs", Label = "quickjs" },
+            ],
+            Description = "JavaScript runtime для YouTube extraction (требуется для yt-dlp)",
+        },
     ];
 
     public async IAsyncEnumerable<MediaDto> GetMedia(Dictionary<string, string> settings)
@@ -78,13 +94,51 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger) : ISourceType
         await foreach (var video in uploads)
         {
             logger.LogDebug("Обработка видео: '{VideoTitle}' (ID: {VideoId})", video.Title, video.Id);
+            var thumbnails = video.Thumbnails.Count > 0 ? video.Thumbnails.OrderByDescending(t => t.Resolution.Area).ToList() : null;
+            var previewPath = thumbnails?.FirstOrDefault()?.Url ?? string.Empty;
+
+            // TODO: Долго. Возможно стоить вынести заполнение метаданных в отдельный метод
+            var fullVideo = await youtubeClient.Videos.GetAsync(video.Id);
+
+            var metadata = new List<MetadataItem>
+            {
+                new()
+                {
+                    Key = "Duration",
+                    DisplayName = "Длительность",
+                    Value = video.Duration?.ToString() ?? "",
+                    DisplayType = "System.TimeSpan",
+                },
+                new()
+                {
+                    Key = "Author",
+                    DisplayName = "Автор",
+                    Value = video.Author.ChannelTitle,
+                    DisplayType = "System.String",
+                },
+                new()
+                {
+                    Key = "CreationDate",
+                    DisplayName = "Дата создания",
+                    Value = fullVideo.UploadDate.ToString("O"),
+                    DisplayType = "System.DateTime",
+                },
+                new()
+                {
+                    Key = "Views",
+                    DisplayName = "Просмотры",
+                    Value = fullVideo.Engagement.ViewCount.ToString(),
+                    DisplayType = "System.Int64",
+                },
+            };
 
             yield return new()
             {
                 Id = video.Id.Value,
                 Title = video.Title,
                 DataPath = video.Url,
-                PreviewPath = video.Thumbnails.Count > 0 ? video.Thumbnails[0].Url : string.Empty,
+                PreviewPath = previewPath,
+                Metadata = metadata,
             };
         }
 
@@ -134,7 +188,8 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger) : ISourceType
 
         var ytDlpPath = settings["yt_dlp_path"];
         var ffmpegPath = settings["ffmpeg_path"];
-        var ytDlp = new YtDlp(ytDlpPath, ffmpegPath);
+        var jsRuntime = settings.GetValueOrDefault("js_runtime", "none");
+        var ytDlp = new YtDlp(ytDlpPath, ffmpegPath, jsRuntime);
 
         object progressLock = new();
         double oldPercent = -1;

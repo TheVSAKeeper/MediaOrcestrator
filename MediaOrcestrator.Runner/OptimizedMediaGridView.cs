@@ -1,4 +1,5 @@
 ﻿using MediaOrcestrator.Domain;
+using MediaOrcestrator.Modules;
 using System.ComponentModel;
 
 namespace MediaOrcestrator.Runner;
@@ -21,6 +22,7 @@ public class OptimizedMediaGridView : DataGridView
         AllowUserToDeleteRows = false;
         AllowUserToResizeRows = false;
         AllowUserToResizeColumns = true;
+        AllowUserToOrderColumns = true;
         ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
         ColumnHeadersHeight = 35;
         ReadOnly = false;
@@ -35,20 +37,35 @@ public class OptimizedMediaGridView : DataGridView
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public List<Source>? CurrentSources { get; private set; }
 
-    public void SetupColumns(List<Source> sources)
+    public void SetupColumns(List<Source> sources, List<MetadataItem> selectedMetadataFields)
     {
-        if (Columns.Count == sources.Count + FirstSourceColumnIndex)
+        var expectedColumnCount = FirstSourceColumnIndex + selectedMetadataFields.Count + sources.Count;
+        if (Columns.Count == expectedColumnCount)
         {
             var columnsMatch = true;
-            for (var i = 0; i < sources.Count; i++)
+            for (var i = 0; i < selectedMetadataFields.Count; i++)
             {
-                if (Columns[i + FirstSourceColumnIndex].Name == sources[i].Id)
+                if (Columns[i + FirstSourceColumnIndex].Name == "Meta_" + selectedMetadataFields[i].Key)
                 {
                     continue;
                 }
 
                 columnsMatch = false;
                 break;
+            }
+
+            if (columnsMatch)
+            {
+                for (var i = 0; i < sources.Count; i++)
+                {
+                    if (Columns[i + FirstSourceColumnIndex + selectedMetadataFields.Count].Name == sources[i].Id)
+                    {
+                        continue;
+                    }
+
+                    columnsMatch = false;
+                    break;
+                }
             }
 
             if (columnsMatch)
@@ -79,9 +96,47 @@ public class OptimizedMediaGridView : DataGridView
 
         Columns.Add("Title", "Название");
         //Columns[TitleColumnIndex].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
-        Columns[TitleColumnIndex].Width = this.Width - 80 * sources.Count;
+        Columns[TitleColumnIndex].Width = Width - 80 * sources.Count - 100 * selectedMetadataFields.Count;
+
         Columns[TitleColumnIndex].ReadOnly = true;
         Columns[TitleColumnIndex].HeaderCell.Style.Font = _headerFont;
+
+        foreach (var meta in selectedMetadataFields)
+        {
+            var colIndex = Columns.Add("Meta_" + meta.Key, meta.DisplayName ?? meta.Key);
+            Columns[colIndex].Width = 100;
+            Columns[colIndex].ReadOnly = true;
+            Columns[colIndex].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
+            Columns[colIndex].HeaderCell.Style.Font = _headerFont;
+
+            if (string.IsNullOrEmpty(meta.DisplayType))
+            {
+                continue;
+            }
+
+            if (meta.DisplayType == "ByteSize")
+            {
+                Columns[colIndex].ValueType = typeof(long);
+                Columns[colIndex].Tag = "ByteSize";
+                continue;
+            }
+
+            var targetType = Type.GetType(meta.DisplayType);
+            if (targetType == null)
+            {
+                continue;
+            }
+
+            Columns[colIndex].ValueType = targetType;
+            if (targetType == typeof(DateTime))
+            {
+                Columns[colIndex].DefaultCellStyle.Format = "g";
+            }
+            else if (targetType == typeof(int) || targetType == typeof(long) || targetType == typeof(double))
+            {
+                Columns[colIndex].DefaultCellStyle.Format = "N0";
+            }
+        }
 
         foreach (var source in sources)
         {
@@ -101,7 +156,7 @@ public class OptimizedMediaGridView : DataGridView
         ResumeLayout();
     }
 
-    public void PopulateGrid(List<Source> sources, List<Media> mediaData)
+    public void PopulateGrid(List<Source> sources, List<Media> mediaData, List<MetadataItem> selectedMetadataFields)
     {
         CurrentSources = sources;
 
@@ -123,14 +178,49 @@ public class OptimizedMediaGridView : DataGridView
                 row.Cells[TitleColumnIndex].Value = media.Title;
                 row.Cells[TitleColumnIndex].ToolTipText = media.Title;
 
+                for (var i = 0; i < selectedMetadataFields.Count; i++)
+                {
+                    var key = selectedMetadataFields[i].Key;
+                    var metaItem = media.Metadata.FirstOrDefault(m => m.Key == key);
+                    object? cellValue = metaItem?.Value;
+
+                    if (metaItem != null && !string.IsNullOrEmpty(metaItem.DisplayType) && !string.IsNullOrEmpty(metaItem.Value))
+                    {
+                        if (metaItem.DisplayType == "ByteSize")
+                        {
+                            cellValue = long.TryParse(metaItem.Value, out var bytes) ? bytes : null;
+                        }
+                        else
+                        {
+                            var targetType = Type.GetType(metaItem.DisplayType);
+                            if (targetType != null)
+                            {
+                                try
+                                {
+                                    // TODO: Шляпно. Возможно стоит сделать явную типизацию
+                                    cellValue = TypeDescriptor.GetConverter(targetType).ConvertFromInvariantString(metaItem.Value);
+                                }
+                                catch
+                                {
+                                    cellValue = null;
+                                }
+                            }
+                        }
+                    }
+
+                    row.Cells[i + FirstSourceColumnIndex].Value = cellValue;
+                }
+
                 var platformStatuses = media.Sources.ToDictionary(x => x.SourceId, x => x.Status);
                 var platformSortNumbers = media.Sources.ToDictionary(x => x.SourceId, x => x.SortNumber);
+
+                var sourceStartIdx = FirstSourceColumnIndex + selectedMetadataFields.Count;
 
                 for (var i = 0; i < sources.Count; i++)
                 {
                     var status = platformStatuses.GetValueOrDefault(sources[i].Id, MediaSourceLink.StatusNone);
                     var sort = platformSortNumbers.GetValueOrDefault(sources[i].Id, -1);
-                    var cell = row.Cells[i + FirstSourceColumnIndex];
+                    var cell = row.Cells[i + sourceStartIdx];
                     cell.Value = sort;
                     cell.Tag = status;
                     cell.ToolTipText =
@@ -224,6 +314,13 @@ public class OptimizedMediaGridView : DataGridView
             return;
         }
 
+        if (Columns[e.ColumnIndex].Tag is "ByteSize" && e.Value is long byteValue)
+        {
+            e.Value = FormatFileSize(byteValue);
+            e.FormattingApplied = true;
+            return;
+        }
+
         if (Rows[e.RowIndex].Cells[e.ColumnIndex].Tag is not string status)
         {
             return;
@@ -234,6 +331,26 @@ public class OptimizedMediaGridView : DataGridView
             e.Value = GetStatusSymbol(status);
             e.CellStyle.ForeColor = GetStatusColor(status);
         }
+    }
+
+    private static string FormatFileSize(long bytes)
+    {
+        if (bytes < 1024)
+        {
+            return $"{bytes} Б";
+        }
+
+        if (bytes < 1024 * 1024)
+        {
+            return $"{bytes / 1024.0:F1} КБ";
+        }
+
+        if (bytes < 1024L * 1024 * 1024)
+        {
+            return $"{bytes / (1024.0 * 1024):F1} МБ";
+        }
+
+        return $"{bytes / (1024.0 * 1024 * 1024):F2} ГБ";
     }
 
     private static string GetStatusSymbol(string? status)

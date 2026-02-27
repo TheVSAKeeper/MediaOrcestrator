@@ -9,11 +9,11 @@ namespace MediaOrcestrator.Youtube;
 
 public sealed record YtDlpProgress(int PartNumber, double Progress);
 
-public sealed partial class YtDlp(string path, string ffmpegPath)
+public sealed partial class YtDlp(string path, string ffmpegPath, string jsRuntime = "none")
 {
     public async Task DownloadAsync(string url, string outputPath, IProgress<YtDlpProgress>? progress = null, CancellationToken cancellationToken = default)
     {
-        var arguments = new[]
+        var arguments = new List<string>
         {
             "-f", "bestvideo+bestaudio/best",
             "--merge-output-format", "mp4",
@@ -21,8 +21,15 @@ public sealed partial class YtDlp(string path, string ffmpegPath)
             "--no-colors",
             "--ffmpeg-location", ffmpegPath,
             "-o", outputPath,
-            url,
         };
+
+        if (!string.Equals(jsRuntime, "none", StringComparison.OrdinalIgnoreCase))
+        {
+            arguments.Add("--js-runtimes");
+            arguments.Add(jsRuntime);
+        }
+
+        arguments.Add(url);
 
         var partNumber = 0;
 

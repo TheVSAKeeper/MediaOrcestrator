@@ -71,11 +71,37 @@ public class HardDiskDriveChannel(ILogger<HardDiskDriveChannel> logger) : ISourc
         {
             logger.LogDebug("Обработка файла: ID={FileId}, Название='{Title}'", file.Id, file.Title);
 
+            var fullPath = Path.Combine(basePath, file.Id, file.Path);
+            var fileInfo = new FileInfo(fullPath);
+            var fileExists = fileInfo.Exists;
+
             yield return new()
             {
                 Id = file.Id,
                 Description = file.Description,
                 Title = file.Title,
+                // TODO: Возможно стоить вынести в отдельный метод для заполнения у уже загруженного
+                Metadata =
+                [
+                    new()
+                    {
+                        Key = "Size",
+                        DisplayName = "Размер",
+                        Value = fileExists
+                            ? fileInfo.Length.ToString()
+                            : "0",
+                        DisplayType = "ByteSize",
+                    },
+                    new()
+                    {
+                        Key = "CreationDate",
+                        DisplayName = "Дата создания",
+                        Value = fileExists
+                            ? fileInfo.CreationTime.ToString("O")
+                            : "",
+                        DisplayType = "System.DateTime",
+                    },
+                ],
             };
         }
 
