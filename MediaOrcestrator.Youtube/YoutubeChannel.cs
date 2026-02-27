@@ -53,6 +53,22 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger) : ISourceType
             DefaultValue = @"c:\Services\utils\ffmpeg\ffmpeg.exe",
             Description = "Скачать можно с https://ffmpeg.org/download.html",
         },
+        new()
+        {
+            Key = "js_runtime",
+            IsRequired = true,
+            Title = "вариант JS runtime",
+            DefaultValue = "none",
+            Type = SettingType.Dropdown,
+            Options =
+            [
+                new() { Value = "none", Label = "none" },
+                new() { Value = "deno", Label = "deno" },
+                new() { Value = "node", Label = "node" },
+                new() { Value = "quickjs", Label = "quickjs" },
+            ],
+            Description = "JavaScript runtime для YouTube extraction (требуется для yt-dlp)",
+        },
     ];
 
     public async IAsyncEnumerable<MediaDto> GetMedia(Dictionary<string, string> settings)
@@ -172,7 +188,8 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger) : ISourceType
 
         var ytDlpPath = settings["yt_dlp_path"];
         var ffmpegPath = settings["ffmpeg_path"];
-        var ytDlp = new YtDlp(ytDlpPath, ffmpegPath);
+        var jsRuntime = settings.GetValueOrDefault("js_runtime", "none");
+        var ytDlp = new YtDlp(ytDlpPath, ffmpegPath, jsRuntime);
 
         object progressLock = new();
         double oldPercent = -1;
