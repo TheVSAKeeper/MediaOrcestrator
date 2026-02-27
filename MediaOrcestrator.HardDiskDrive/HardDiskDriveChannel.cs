@@ -1,6 +1,7 @@
 ﻿using LiteDB;
 using MediaOrcestrator.Modules;
 using Microsoft.Extensions.Logging;
+using System.Runtime.CompilerServices;
 
 namespace MediaOrcestrator.HardDiskDrive;
 
@@ -38,7 +39,7 @@ public class HardDiskDriveChannel(ILogger<HardDiskDriveChannel> logger) : ISourc
         },
     ];
 
-    public async IAsyncEnumerable<MediaDto> GetMedia(Dictionary<string, string> settings)
+    public async IAsyncEnumerable<MediaDto> GetMedia(Dictionary<string, string> settings, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var basePath = settings["path"];
         var dbFileName = settings.GetValueOrDefault("dbFileName", "data.db");
@@ -114,7 +115,7 @@ public class HardDiskDriveChannel(ILogger<HardDiskDriveChannel> logger) : ISourc
         throw new NotImplementedException("Метод GetMediaById не реализован");
     }
 
-    public Task<MediaDto> Download(string videoId, Dictionary<string, string> settings)
+    public Task<MediaDto> Download(string videoId, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
     {
         logger.LogInformation("Получение информации о файле с жёсткого диска. ID: {VideoId}", videoId);
 
@@ -158,7 +159,7 @@ public class HardDiskDriveChannel(ILogger<HardDiskDriveChannel> logger) : ISourc
         });
     }
 
-    public Task<string> Upload(MediaDto media, Dictionary<string, string> settings)
+    public Task<string> Upload(MediaDto media, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
     {
         logger.LogInformation("Начало сохранения файла на жёсткий диск. Название: '{Title}'", media.Title);
 
@@ -249,7 +250,7 @@ public class HardDiskDriveChannel(ILogger<HardDiskDriveChannel> logger) : ISourc
         return Task.FromResult(hddId);
     }
 
-    public Task DeleteAsync(string externalId, Dictionary<string, string> settings)
+    public Task DeleteAsync(string externalId, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
     {
         logger.LogInformation("Удаление медиа из HDD. ID: {ExternalId}", externalId);
 

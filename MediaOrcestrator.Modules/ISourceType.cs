@@ -17,12 +17,12 @@ public interface ISourceType
     /// </summary>
     /// <param name="settings"></param>
     /// <returns></returns>
-    IAsyncEnumerable<MediaDto> GetMedia(Dictionary<string, string> settings);
+    IAsyncEnumerable<MediaDto> GetMedia(Dictionary<string, string> settings, CancellationToken cancellationToken = default);
 
     MediaDto GetMediaById();
-    Task<string> Upload(MediaDto media, Dictionary<string, string> settings);
-    Task<MediaDto> Download(string videoId, Dictionary<string, string> settings);
-    Task DeleteAsync(string externalId, Dictionary<string, string> settings);
+    Task<string> Upload(MediaDto media, Dictionary<string, string> settings, CancellationToken cancellationToken = default);
+    Task<MediaDto> Download(string videoId, Dictionary<string, string> settings, CancellationToken cancellationToken = default);
+    Task DeleteAsync(string externalId, Dictionary<string, string> settings, CancellationToken cancellationToken = default);
 }
 
 public enum SettingType

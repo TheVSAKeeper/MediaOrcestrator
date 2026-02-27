@@ -269,7 +269,7 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
             mediaCount + relationCount + sourceCount, mediaCount, relationCount, sourceCount);
     }
 
-    public async Task TransferByRelation(Media media, SourceSyncRelation rel)
+    public async Task TransferByRelation(Media media, SourceSyncRelation rel, CancellationToken cancellationToken = default)
     {
         var fromMediaSource = media.Sources.FirstOrDefault(x => x.SourceId == rel.From.Id);
         if (fromMediaSource == null)
@@ -299,9 +299,9 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
         }
         else
         {
-            var tempMedia = await rel.From.Type.Download(fromMediaSource.ExternalId, rel.From.Settings);
+            var tempMedia = await rel.From.Type.Download(fromMediaSource.ExternalId, rel.From.Settings, cancellationToken);
             tempMedia.Id = media.Id;
-            externalId = await rel.To.Type.Upload(tempMedia, rel.To.Settings);
+            externalId = await rel.To.Type.Upload(tempMedia, rel.To.Settings, cancellationToken);
         }
 
         toMediaSource = new()
@@ -318,7 +318,7 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
         logger.LogInformation("Успешно синхронизировано медиа {Media} в {ToSource}. ExternalId: {ExternalId}", media, rel.To, externalId);
     }
 
-    public async Task DeleteMediaFromSourceAsync(Media media, Source source)
+    public async Task DeleteMediaFromSourceAsync(Media media, Source source, CancellationToken cancellationToken = default)
     {
         var sourceLink = media.Sources.FirstOrDefault(s => s.SourceId == source.Id);
         if (sourceLink == null)
@@ -332,7 +332,7 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
 
         try
         {
-            await source.Type.DeleteAsync(sourceLink.ExternalId, source.Settings);
+            await source.Type.DeleteAsync(sourceLink.ExternalId, source.Settings, cancellationToken);
             logger.LogInformation("Успешно удалено медиа {MediaId} из источника {SourceId}", media.Id, source.Id);
         }
         catch (NotSupportedException exception)

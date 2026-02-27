@@ -1,5 +1,6 @@
 using MediaOrcestrator.Modules;
 using Microsoft.Extensions.Logging;
+using System.Runtime.CompilerServices;
 using YoutubeExplode;
 using YoutubeExplode.Channels;
 
@@ -70,7 +71,7 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger) : ISourceType
         },
     ];
 
-    public async IAsyncEnumerable<MediaDto> GetMedia(Dictionary<string, string> settings)
+    public async IAsyncEnumerable<MediaDto> GetMedia(Dictionary<string, string> settings, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         //var channelUrl = "https://www.youtube.com/@bobito217";
 
@@ -168,7 +169,7 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger) : ISourceType
         throw new NotImplementedException();
     }
 
-    public async Task<MediaDto> Download(string videoId, Dictionary<string, string> settings)
+    public async Task<MediaDto> Download(string videoId, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
     {
         logger.LogInformation("Начало загрузки видео с YouTube. ID: {VideoId}", videoId);
 
@@ -229,8 +230,12 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger) : ISourceType
 
         try
         {
-            await ytDlp.DownloadAsync($"https://www.youtube.com/watch?v={videoId}", finalPath, progress);
+            await ytDlp.DownloadAsync($"https://www.youtube.com/watch?v={videoId}", finalPath, progress, cancellationToken);
             logger.LogInformation("Видео успешно загружено. ID: {VideoId}, Путь: {FilePath}", videoId, finalPath);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -249,13 +254,13 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger) : ISourceType
         // bob217 -> 9I_JIereHga -> bob217
     }
 
-    public Task<string> Upload(MediaDto media, Dictionary<string, string> settings)
+    public Task<string> Upload(MediaDto media, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
     {
         logger.LogWarning("Загрузка на YouTube не реализована. Медиа: {Title}", media.Title);
         return Task.FromResult("not_implemented");
     }
 
-    public Task DeleteAsync(string externalId, Dictionary<string, string> settings)
+    public Task DeleteAsync(string externalId, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
     {
         logger.LogWarning("Удаление из YouTube не поддерживается. Нужно подключать апю ютуба. Media ID: {ExternalId}", externalId);
         throw new NotSupportedException(@"Удалите видео вручную через веб-интерфейс YouTube Studio. (\/)._.(\/)");

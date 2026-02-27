@@ -1,5 +1,6 @@
 ﻿using MediaOrcestrator.Modules;
 using Microsoft.Extensions.Logging;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 
@@ -59,7 +60,7 @@ public class RutubeChannel(ILogger<RutubeChannel> logger, ILogger<RutubeService>
         }
     }
 
-    public async IAsyncEnumerable<MediaDto> GetMedia(Dictionary<string, string> settings)
+    public async IAsyncEnumerable<MediaDto> GetMedia(Dictionary<string, string> settings, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         logger.LogWarning("Получение списка медиа из RuTube не реализовано");
         await Task.CompletedTask;
@@ -71,13 +72,13 @@ public class RutubeChannel(ILogger<RutubeChannel> logger, ILogger<RutubeService>
         throw new NotImplementedException();
     }
 
-    public Task<MediaDto> Download(string videoId, Dictionary<string, string> settings)
+    public Task<MediaDto> Download(string videoId, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
     {
         logger.LogWarning("Загрузка видео с RuTube не реализована. ID: {VideoId}", videoId);
         throw new NotImplementedException("Загрузка с RuTube не поддерживается");
     }
 
-    public async Task<string> Upload(MediaDto media, Dictionary<string, string> settings)
+    public async Task<string> Upload(MediaDto media, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
     {
         logger.LogInformation("Начало загрузки видео на RuTube. Название: '{Title}'", media.Title);
 
@@ -106,7 +107,7 @@ public class RutubeChannel(ILogger<RutubeChannel> logger, ILogger<RutubeService>
         }
     }
 
-    public async Task DeleteAsync(string externalId, Dictionary<string, string> settings)
+    public async Task DeleteAsync(string externalId, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
     {
         logger.LogInformation("Удаление медиа из RuTube. ID: {ExternalId}", externalId);
 
