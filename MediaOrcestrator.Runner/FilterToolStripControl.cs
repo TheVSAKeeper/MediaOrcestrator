@@ -1,4 +1,5 @@
 ﻿using MediaOrcestrator.Domain;
+using MediaOrcestrator.Modules;
 
 namespace MediaOrcestrator.Runner;
 
@@ -69,9 +70,9 @@ public partial class FilterToolStripControl : UserControl
         }
     }
 
-    public void UpdateMetadataFilter(List<string> availableMetadataKeys)
+    public void UpdateMetadataFilter(List<MetadataItem> availableMetadata)
     {
-        var newSet = availableMetadataKeys.ToHashSet();
+        var newSet = availableMetadata.Select(m => m.Key).ToHashSet();
         if (_availableMetadataFields.SetEquals(newSet))
         {
             return;
@@ -83,6 +84,7 @@ public partial class FilterToolStripControl : UserControl
             _availableMetadataFields.Add(k);
         }
 
+        // TODO: Автоматический выбор всех по умолчанию. Возможно стоит убрать
         if (!_metadataInitialized)
         {
             foreach (var k in newSet)
@@ -95,11 +97,12 @@ public partial class FilterToolStripControl : UserControl
 
         uiMetadataDropDownButton.DropDownItems.Clear();
 
-        foreach (var key in availableMetadataKeys)
+        foreach (var meta in availableMetadata)
         {
+            var key = meta.Key;
             var isChecked = _selectedMetadataFields.Contains(key);
 
-            var item = new ToolStripMenuItem(key)
+            var item = new ToolStripMenuItem(meta.DisplayName ?? key)
             {
                 CheckOnClick = true,
                 Checked = isChecked,

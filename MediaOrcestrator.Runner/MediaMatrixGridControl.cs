@@ -48,9 +48,16 @@ public partial class MediaMatrixGridControl : UserControl
                 return (filteredMedia, filteredSources, allMedia.Count);
             });
 
-            var allMetadataKeys = mediaData.SelectMany(m => m.Metadata).Select(m => m.Key).Distinct().OrderBy(k => k).ToList();
-            uiFilterControl.UpdateMetadataFilter(allMetadataKeys);
-            var selectedMetadata = uiFilterControl.GetSelectedMetadataFields();
+            var allMetadataInfos = mediaData
+                .SelectMany(m => m.Metadata)
+                .GroupBy(m => m.Key)
+                .Select(g => g.First())
+                .OrderBy(m => m.Key)
+                .ToList();
+
+            uiFilterControl.UpdateMetadataFilter(allMetadataInfos);
+            var selectedMetadataKeys = uiFilterControl.GetSelectedMetadataFields();
+            var selectedMetadata = allMetadataInfos.Where(m => selectedMetadataKeys.Contains(m.Key)).ToList();
 
             uiMediaGrid.SetupColumns(sources, selectedMetadata);
             uiMediaGrid.PopulateGrid(sources, mediaData, selectedMetadata);

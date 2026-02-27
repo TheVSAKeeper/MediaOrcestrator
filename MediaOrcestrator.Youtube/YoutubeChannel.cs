@@ -81,14 +81,39 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger) : ISourceType
             var thumbnails = video.Thumbnails.Count > 0 ? video.Thumbnails.OrderByDescending(t => t.Resolution.Area).ToList() : null;
             var previewPath = thumbnails?.FirstOrDefault()?.Url ?? string.Empty;
 
+            // TODO: Долго. Возможно стоить вынести заполнение метаданных в отдельный метод
             var fullVideo = await youtubeClient.Videos.GetAsync(video.Id);
 
             var metadata = new List<MetadataItem>
             {
-                new() { Key = "Duration", Value = video.Duration?.ToString() ?? "", DisplayType = "TimeSpan" },
-                new() { Key = "Author", Value = video.Author.ChannelTitle, DisplayType = "String" },
-                new() { Key = "CreationDate", Value = fullVideo.UploadDate.ToString("O"), DisplayType = "DateTime" },
-                new() { Key = "Views", Value = fullVideo.Engagement.ViewCount.ToString(), DisplayType = "String" },
+                new()
+                {
+                    Key = "Duration",
+                    DisplayName = "Длительность",
+                    Value = video.Duration?.ToString() ?? "",
+                    DisplayType = "System.TimeSpan",
+                },
+                new()
+                {
+                    Key = "Author",
+                    DisplayName = "Автор",
+                    Value = video.Author.ChannelTitle,
+                    DisplayType = "System.String",
+                },
+                new()
+                {
+                    Key = "CreationDate",
+                    DisplayName = "Дата создания",
+                    Value = fullVideo.UploadDate.ToString("O"),
+                    DisplayType = "System.DateTime",
+                },
+                new()
+                {
+                    Key = "Views",
+                    DisplayName = "Просмотры",
+                    Value = fullVideo.Engagement.ViewCount.ToString(),
+                    DisplayType = "System.Int64",
+                },
             };
 
             yield return new()

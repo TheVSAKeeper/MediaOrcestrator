@@ -1,4 +1,5 @@
 ﻿using MediaOrcestrator.Domain;
+using MediaOrcestrator.Modules;
 using System.ComponentModel;
 
 namespace MediaOrcestrator.Runner;
@@ -36,7 +37,7 @@ public class OptimizedMediaGridView : DataGridView
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public List<Source>? CurrentSources { get; private set; }
 
-    public void SetupColumns(List<Source> sources, List<string> selectedMetadataFields)
+    public void SetupColumns(List<Source> sources, List<MetadataItem> selectedMetadataFields)
     {
         var expectedColumnCount = FirstSourceColumnIndex + selectedMetadataFields.Count + sources.Count;
         if (Columns.Count == expectedColumnCount)
@@ -44,7 +45,7 @@ public class OptimizedMediaGridView : DataGridView
             var columnsMatch = true;
             for (var i = 0; i < selectedMetadataFields.Count; i++)
             {
-                if (Columns[i + FirstSourceColumnIndex].Name == "Meta_" + selectedMetadataFields[i])
+                if (Columns[i + FirstSourceColumnIndex].Name == "Meta_" + selectedMetadataFields[i].Key)
                 {
                     continue;
                 }
@@ -100,13 +101,34 @@ public class OptimizedMediaGridView : DataGridView
         Columns[TitleColumnIndex].ReadOnly = true;
         Columns[TitleColumnIndex].HeaderCell.Style.Font = _headerFont;
 
-        foreach (var metaKey in selectedMetadataFields)
+        foreach (var meta in selectedMetadataFields)
         {
-            var colIndex = Columns.Add("Meta_" + metaKey, metaKey);
+            var colIndex = Columns.Add("Meta_" + meta.Key, meta.DisplayName ?? meta.Key);
             Columns[colIndex].Width = 100;
             Columns[colIndex].ReadOnly = true;
             Columns[colIndex].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
             Columns[colIndex].HeaderCell.Style.Font = _headerFont;
+
+            if (string.IsNullOrEmpty(meta.DisplayType))
+            {
+                continue;
+            }
+
+            var targetType = Type.GetType(meta.DisplayType);
+            if (targetType == null)
+            {
+                continue;
+            }
+
+            Columns[colIndex].ValueType = targetType;
+            if (targetType == typeof(DateTime))
+            {
+                Columns[colIndex].DefaultCellStyle.Format = "g";
+            }
+            else if (targetType == typeof(int) || targetType == typeof(long) || targetType == typeof(double))
+            {
+                Columns[colIndex].DefaultCellStyle.Format = "N0";
+            }
         }
 
         foreach (var source in sources)
@@ -127,7 +149,7 @@ public class OptimizedMediaGridView : DataGridView
         ResumeLayout();
     }
 
-    public void PopulateGrid(List<Source> sources, List<Media> mediaData, List<string> selectedMetadataFields)
+    public void PopulateGrid(List<Source> sources, List<Media> mediaData, List<MetadataItem> selectedMetadataFields)
     {
         CurrentSources = sources;
 
@@ -151,9 +173,28 @@ public class OptimizedMediaGridView : DataGridView
 
                 for (var i = 0; i < selectedMetadataFields.Count; i++)
                 {
-                    var key = selectedMetadataFields[i];
+                    var key = selectedMetadataFields[i].Key;
                     var metaItem = media.Metadata.FirstOrDefault(m => m.Key == key);
-                    row.Cells[i + FirstSourceColumnIndex].Value = metaItem?.Value ?? string.Empty;
+                    object? cellValue = metaItem?.Value;
+
+                    if (metaItem != null && !string.IsNullOrEmpty(metaItem.DisplayType) && !string.IsNullOrEmpty(metaItem.Value))
+                    {
+                        var targetType = Type.GetType(metaItem.DisplayType);
+                        if (targetType != null)
+                        {
+                            try
+                            {
+                                // TODO: Шляпно. Возможно стоит сделать явную типизацию
+                                cellValue = TypeDescriptor.GetConverter(targetType).ConvertFromInvariantString(metaItem.Value);
+                            }
+                            catch
+                            {
+                                cellValue = null;
+                            }
+                        }
+                    }
+
+                    row.Cells[i + FirstSourceColumnIndex].Value = cellValue;
                 }
 
                 var platformStatuses = media.Sources.ToDictionary(x => x.SourceId, x => x.Status);
