@@ -263,57 +263,11 @@ public partial class SyncTreeControl : UserControl
         LogToUi($"Выполнение: {intent.Media.Title} ({intent.From.TypeId} -> {intent.To.TypeId})");
 
         var isCurrentIntentCompleted = false;
+
         try
         {
-            var tryCount = 50;
-            for (var i = 1; i <= tryCount; i++)
-            {
-                try
-                {
-                    await _orcestrator.TransferByRelation(intent.Media, intent.Relation, ct);
-                    ct.ThrowIfCancellationRequested();
-
-                    UpdateNodeState(node, IconOk, Color.Green, $"[OK] {intent.From.TitleFull} -> {intent.To.TitleFull}");
-                    if (node != null)
-                    {
-                        node.Checked = false;
-                    }
-
-                    LogToUi($"[Успех] {intent.Media.Title} передан в {intent.To.Title}", Color.LightGreen);
-                    isCurrentIntentCompleted = true;
-                    break;
-                }
-                catch (OperationCanceledException)
-                {
-                    throw;
-                }
-                catch (Exception ex)
-                {
-                    if (i == tryCount)
-                    {
-                        UpdateNodeState(node, IconError, Color.Red, $"[Ошибка] {intent.From.TitleFull} -> {intent.To.TitleFull}");
-                        throw;
-                    }
-
-                    _logger.LogError(ex, "Ошибка при выполнении синхронизации для {Intent}", intent);
-                    LogToUi($"Ошибка для {intent.Media.Title}: {ex.Message}", Color.Red);
-                    var sleepSecond = i switch
-                    {
-                        > 3 and < 6 => 300,
-                        < 9 => 1800,
-                        _ => 3600,
-                    };
-
-                    LogToUi($"Попытка №{i + 1} через {sleepSecond} секунд");
-                    var nextTryDate = DateTime.Now.AddSeconds(sleepSecond);
-                    while (DateTime.Now < nextTryDate)
-                    {
-                        await Task.Delay(5000, ct);
-                    }
-
-                    UpdateNodeState(node, IconError, Color.Red, $"[В работе. Попытка {i + 1}/{tryCount}] {intent.From.TitleFull} -> {intent.To.TitleFull}");
-                }
-            }
+            await TransferWithRetryAsync(intent, node, ct);
+            isCurrentIntentCompleted = true;
 
             foreach (var nextIntent in intent.NextIntents)
             {
@@ -328,6 +282,54 @@ public partial class SyncTreeControl : UserControl
             }
 
             throw;
+        }
+    }
+
+    private async Task TransferWithRetryAsync(SyncIntent intent, TreeNode? node, CancellationToken ct)
+    {
+        var tryCount = 50;
+        for (var i = 1; i <= tryCount; i++)
+        {
+            try
+            {
+                await _orcestrator!.TransferByRelation(intent.Media, intent.Relation, ct);
+                ct.ThrowIfCancellationRequested();
+
+                UpdateNodeState(node, IconOk, Color.Green, $"[OK] {intent.From.TitleFull} -> {intent.To.TitleFull}");
+                if (node != null)
+                {
+                    node.Checked = false;
+                }
+
+                LogToUi($"[Успех] {intent.Media.Title} передан в {intent.To.Title}", Color.LightGreen);
+                return;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                if (i == tryCount)
+                {
+                    UpdateNodeState(node, IconError, Color.Red, $"[Ошибка] {intent.From.TitleFull} -> {intent.To.TitleFull}");
+                    throw;
+                }
+
+                _logger!.LogError(ex, "Ошибка при выполнении синхронизации для {Intent}", intent);
+                LogToUi($"Ошибка для {intent.Media.Title}: {ex.Message}", Color.Red);
+                var sleepSecond = i switch
+                {
+                    > 3 and < 6 => 300,
+                    < 9 => 1800,
+                    _ => 3600,
+                };
+
+                LogToUi($"Попытка №{i + 1} через {sleepSecond} секунд");
+                var nextTryDate = DateTime.Now.AddSeconds(sleepSecond);
+                while (DateTime.Now < nextTryDate)
+                {
+                    await Task.Delay(5000, ct);
+                }
+
+                UpdateNodeState(node, IconError, Color.Red, $"[В работе. Попытка {i + 1}/{tryCount}] {intent.From.TitleFull} -> {intent.To.TitleFull}");
+            }
         }
     }
 
