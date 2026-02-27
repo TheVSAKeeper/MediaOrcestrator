@@ -114,6 +114,13 @@ public class OptimizedMediaGridView : DataGridView
                 continue;
             }
 
+            if (meta.DisplayType == "ByteSize")
+            {
+                Columns[colIndex].ValueType = typeof(long);
+                Columns[colIndex].Tag = "ByteSize";
+                continue;
+            }
+
             var targetType = Type.GetType(meta.DisplayType);
             if (targetType == null)
             {
@@ -179,17 +186,24 @@ public class OptimizedMediaGridView : DataGridView
 
                     if (metaItem != null && !string.IsNullOrEmpty(metaItem.DisplayType) && !string.IsNullOrEmpty(metaItem.Value))
                     {
-                        var targetType = Type.GetType(metaItem.DisplayType);
-                        if (targetType != null)
+                        if (metaItem.DisplayType == "ByteSize")
                         {
-                            try
+                            cellValue = long.TryParse(metaItem.Value, out var bytes) ? bytes : null;
+                        }
+                        else
+                        {
+                            var targetType = Type.GetType(metaItem.DisplayType);
+                            if (targetType != null)
                             {
-                                // TODO: Шляпно. Возможно стоит сделать явную типизацию
-                                cellValue = TypeDescriptor.GetConverter(targetType).ConvertFromInvariantString(metaItem.Value);
-                            }
-                            catch
-                            {
-                                cellValue = null;
+                                try
+                                {
+                                    // TODO: Шляпно. Возможно стоит сделать явную типизацию
+                                    cellValue = TypeDescriptor.GetConverter(targetType).ConvertFromInvariantString(metaItem.Value);
+                                }
+                                catch
+                                {
+                                    cellValue = null;
+                                }
                             }
                         }
                     }
@@ -300,6 +314,13 @@ public class OptimizedMediaGridView : DataGridView
             return;
         }
 
+        if (Columns[e.ColumnIndex].Tag is "ByteSize" && e.Value is long byteValue)
+        {
+            e.Value = FormatFileSize(byteValue);
+            e.FormattingApplied = true;
+            return;
+        }
+
         if (Rows[e.RowIndex].Cells[e.ColumnIndex].Tag is not string status)
         {
             return;
@@ -310,6 +331,26 @@ public class OptimizedMediaGridView : DataGridView
             e.Value = GetStatusSymbol(status);
             e.CellStyle.ForeColor = GetStatusColor(status);
         }
+    }
+
+    private static string FormatFileSize(long bytes)
+    {
+        if (bytes < 1024)
+        {
+            return $"{bytes} Б";
+        }
+
+        if (bytes < 1024 * 1024)
+        {
+            return $"{bytes / 1024.0:F1} КБ";
+        }
+
+        if (bytes < 1024L * 1024 * 1024)
+        {
+            return $"{bytes / (1024.0 * 1024):F1} МБ";
+        }
+
+        return $"{bytes / (1024.0 * 1024 * 1024):F2} ГБ";
     }
 
     private static string GetStatusSymbol(string? status)

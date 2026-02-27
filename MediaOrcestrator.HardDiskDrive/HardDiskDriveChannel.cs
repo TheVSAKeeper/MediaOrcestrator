@@ -90,7 +90,7 @@ public class HardDiskDriveChannel(ILogger<HardDiskDriveChannel> logger) : ISourc
                         Value = fileExists
                             ? fileInfo.Length.ToString()
                             : "0",
-                        DisplayType = "System.Int64",
+                        DisplayType = "ByteSize",
                     },
                     new()
                     {
