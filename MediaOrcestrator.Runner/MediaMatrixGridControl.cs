@@ -1,4 +1,5 @@
 ﻿using MediaOrcestrator.Domain;
+using Microsoft.Extensions.Logging;
 using System.Text;
 
 namespace MediaOrcestrator.Runner;
@@ -6,6 +7,7 @@ namespace MediaOrcestrator.Runner;
 public partial class MediaMatrixGridControl : UserControl
 {
     private Orcestrator? _orcestrator;
+    private ILogger<MediaMatrixGridControl>? _logger;
 
     public MediaMatrixGridControl()
     {
@@ -13,9 +15,10 @@ public partial class MediaMatrixGridControl : UserControl
         uiFilterControl.FilterChanged += (_, _) => RefreshData();
     }
 
-    public void Initialize(Orcestrator orcestrator)
+    public void Initialize(Orcestrator orcestrator, ILogger<MediaMatrixGridControl> logger)
     {
         _orcestrator = orcestrator;
+        _logger = logger;
         uiFilterControl.PopulateRelationsFilter(orcestrator);
     }
 
@@ -34,6 +37,7 @@ public partial class MediaMatrixGridControl : UserControl
             return;
         }
 
+        _logger?.LogInformation("Начато обновление списка медиа...");
         UpdateLoadingIndicator(true);
 
         try
@@ -62,6 +66,12 @@ public partial class MediaMatrixGridControl : UserControl
             uiMediaGrid.SetupColumns(sources, selectedMetadata);
             uiMediaGrid.PopulateGrid(sources, mediaData, selectedMetadata);
             UpdateStatusBar(allMediaCount, mediaData.Count);
+
+            _logger?.LogInformation("Список медиа успешно обновлен. Отображается: {Count} из {Total}", mediaData.Count, allMediaCount);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Ошибка при обновлении списка медиа.");
         }
         finally
         {
@@ -139,6 +149,8 @@ public partial class MediaMatrixGridControl : UserControl
             return;
         }
 
+        _logger?.LogInformation("Запуск операции объединения медиа. Выбрано элементов: {Count}", selectedMediaList.Count);
+
         try
         {
             var mergePreview = ValidateMergeOperation(selectedMediaList);
@@ -173,9 +185,11 @@ public partial class MediaMatrixGridControl : UserControl
 
             if (result != DialogResult.Yes)
             {
+                _logger?.LogInformation("Объединение медиа отменено пользователем.");
                 return;
             }
 
+            _logger?.LogInformation("Выполняется объединение медиа. Целевое медиа: '{TargetMedia}'", mergePreview.TargetMedia.Title);
             mergePreview.TargetMedia.Sources = mergePreview.ResultingSources;
             _orcestrator.UpdateMedia(mergePreview.TargetMedia);
 
@@ -185,6 +199,8 @@ public partial class MediaMatrixGridControl : UserControl
             }
 
             RefreshData();
+
+            _logger?.LogInformation("Объединение медиа успешно завершено. Итоговое количество источников: {TotalSourcesCount}", mergePreview.TotalSourcesCount);
 
             MessageBox.Show($"""
                              Медиа успешно объединены.
@@ -197,6 +213,7 @@ public partial class MediaMatrixGridControl : UserControl
         }
         catch (Exception ex)
         {
+            _logger?.LogError(ex, "Ошибка при объединении медиа.");
             MessageBox.Show($"""
                              Произошла ошибка при объединении медиа:
 
@@ -439,11 +456,13 @@ public partial class MediaMatrixGridControl : UserControl
                     UpdateLoadingIndicator(true);
                     try
                     {
+                        _logger?.LogInformation("Запуск синхронизации медиа '{Title}' из {From} в {To}", media.Title, rel.From.TitleFull, rel.To.TitleFull);
                         await _orcestrator.TransferByRelation(media, rel);
+                        _logger?.LogInformation("Синхронизация медиа '{Title}' успешно завершена", media.Title);
                     }
                     catch (Exception ex)
                     {
-                        // TODO: Логирование
+                        _logger?.LogError(ex, "Ошибка при синхронизации медиа '{Title}' из {From} в {To}.", media.Title, rel.From.TitleFull, rel.To.TitleFull);
                         MessageBox.Show($"Ошибка при синхронизации: {ex.Message}", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     }
                     finally
@@ -511,9 +530,11 @@ public partial class MediaMatrixGridControl : UserControl
     {
         var isLastSource = media.Sources.Count == 1;
 
+        _logger?.LogInformation("Попытка удаления медиа '{Title}' из источника '{Source}'", media.Title, source.TitleFull);
         var result = ShowDeleteConfirmation(media, source, isLastSource);
         if (result != DialogResult.Yes)
         {
+            _logger?.LogInformation("Пользователь отменил удаление медиа '{Title}'", media.Title);
             return;
         }
 
@@ -522,6 +543,7 @@ public partial class MediaMatrixGridControl : UserControl
         try
         {
             await _orcestrator.DeleteMediaFromSourceAsync(media, source);
+            _logger?.LogInformation("Медиа '{Title}' успешно удалено из источника '{Source}'", media.Title, source.TitleFull);
         }
         catch (InvalidOperationException ex)
         {
@@ -532,6 +554,7 @@ public partial class MediaMatrixGridControl : UserControl
         }
         catch (UnauthorizedAccessException ex)
         {
+            _logger?.LogError(ex, "Ошибка авторизации при удалении медиа '{Title}' из '{Source}'.", media.Title, source.TitleFull);
             MessageBox.Show($"""
                              Ошибка авторизации при удалении из {source.TitleFull}.
 
@@ -545,6 +568,7 @@ public partial class MediaMatrixGridControl : UserControl
         }
         catch (IOException ex)
         {
+            _logger?.LogError(ex, "Ошибка файловой системы при удалении медиа '{Title}' из '{Source}'.", media.Title, source.TitleFull);
             MessageBox.Show($"""
                              Ошибка файловой системы при удалении из {source.TitleFull}.
 
@@ -595,6 +619,7 @@ public partial class MediaMatrixGridControl : UserControl
 
     private async Task HandleUpdateMetadataAsync(Media media)
     {
+        _logger?.LogInformation("Запуск принудительного обновления метаданных для медиа: '{Title}'", media.Title);
         UpdateLoadingIndicator(true);
         try
         {
@@ -602,9 +627,12 @@ public partial class MediaMatrixGridControl : UserControl
             {
                 await _orcestrator.ForceUpdateMetadataAsync(media);
             }
+
+            _logger?.LogInformation("Метаданные для медиа '{Title}' успешно обновлены", media.Title);
         }
         catch (Exception ex)
         {
+            _logger?.LogError(ex, "Ошибка при обновлении метаданных для медиа '{Title}'.", media.Title);
             MessageBox.Show($"Ошибка при обновлении метаданных: {ex.Message}", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
         finally
@@ -623,10 +651,12 @@ public partial class MediaMatrixGridControl : UserControl
 
         if (sourceId != null)
         {
+            _logger?.LogInformation("Очистка метаданных для медиа '{Title}', источник: {SourceId}", media.Title, sourceId);
             _orcestrator.ClearSourceMetadata(media, sourceId);
         }
         else
         {
+            _logger?.LogInformation("Очистка всех метаданных для медиа '{Title}'", media.Title);
             _orcestrator.ClearAllMetadata(media);
         }
 
