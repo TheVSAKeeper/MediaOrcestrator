@@ -314,21 +314,23 @@ public partial class SyncTreeControl : UserControl
 
                 _logger!.LogError(ex, "Ошибка при выполнении синхронизации для {Intent}", intent);
                 LogToUi($"Ошибка для {intent.Media.Title}: {ex.Message}", Color.Red);
-                var sleepSecond = i switch
+                var nextTryDelay = i switch
                 {
-                    > 3 and < 6 => 300,
-                    < 9 => 1800,
-                    _ => 3600,
+                    1 => TimeSpan.FromMinutes(1),
+                    <= 3 => TimeSpan.FromMinutes(5),
+                    <= 8 => TimeSpan.FromMinutes(30),
+                    _ => TimeSpan.FromHours(1),
                 };
 
-                LogToUi($"Попытка №{i + 1} через {sleepSecond} секунд");
-                var nextTryDate = DateTime.Now.AddSeconds(sleepSecond);
-                while (DateTime.Now < nextTryDate)
-                {
-                    await Task.Delay(5000, ct);
-                }
+                var nextTryDate = DateTime.Now.Add(nextTryDelay);
+                LogToUi($"Попытка №{i + 1} через {nextTryDelay.TotalMinutes} мин (запланирована на {nextTryDate:dd.MM HH:mm:ss})");
+                UpdateNodeState(node,
+                    IconError,
+                    Color.Red,
+                    $"[В работе. Ожидание {nextTryDelay.TotalMinutes} мин перед попыткой {i + 1}/{tryCount}]"
+                    + $" {intent.From.TitleFull} -> {intent.To.TitleFull}");
 
-                UpdateNodeState(node, IconError, Color.Red, $"[В работе. Попытка {i + 1}/{tryCount}] {intent.From.TitleFull} -> {intent.To.TitleFull}");
+                await Task.Delay(nextTryDelay, ct);
             }
         }
     }
