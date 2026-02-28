@@ -23,11 +23,15 @@ public partial class SyncTreeControl : UserControl
     {
         InitializeComponent();
         InitializeImageList();
+        uiTreeView.AllowDrop = true;
+        uiTreeView.ItemDrag += uiTreeView_ItemDrag;
+        uiTreeView.DragOver += uiTreeView_DragOver;
+        uiTreeView.DragDrop += uiTreeView_DragDrop;
         uiTreeView.AfterCheck += UiTreeView_AfterCheck;
         uiFilterControl.FilterChanged += (_, _) => ApplyTreeFilter();
     }
 
-    public void Initialize(SyncPlanner planner, List<SyncIntent> rootIntents, Orcestrator orcestrator, ILogger<SyncTreeControl> logger)
+    public void Initialize(SyncPlanner planner, Orcestrator orcestrator, ILogger<SyncTreeControl> logger)
     {
         // TODO: DI
         _orcestrator = orcestrator;
@@ -67,6 +71,72 @@ public partial class SyncTreeControl : UserControl
         finally
         {
             _suppressCheckEvents = false;
+        }
+    }
+
+    private void uiTreeView_ItemDrag(object? sender, ItemDragEventArgs e)
+    {
+        if (e is { Button: MouseButtons.Left, Item: TreeNode { Parent: null } node })
+        {
+            DoDragDrop(node, DragDropEffects.Move);
+        }
+    }
+
+    private void uiTreeView_DragOver(object? sender, DragEventArgs e)
+    {
+        if (e.Data == null || !e.Data.GetDataPresent(typeof(TreeNode)))
+        {
+            e.Effect = DragDropEffects.None;
+            return;
+        }
+
+        var point = uiTreeView.PointToClient(new(e.X, e.Y));
+        var targetNode = uiTreeView.GetNodeAt(point);
+
+        e.Effect = targetNode?.Parent == null ? DragDropEffects.Move : DragDropEffects.None;
+    }
+
+    private void uiTreeView_DragDrop(object? sender, DragEventArgs e)
+    {
+        if (e.Data?.GetData(typeof(TreeNode)) is not TreeNode draggedNode)
+        {
+            return;
+        }
+
+        var point = uiTreeView.PointToClient(new(e.X, e.Y));
+        var targetNode = uiTreeView.GetNodeAt(point);
+
+        if (draggedNode == targetNode)
+        {
+            return;
+        }
+
+        uiTreeView.BeginUpdate();
+        try
+        {
+            draggedNode.Remove();
+
+            if (targetNode == null)
+            {
+                uiTreeView.Nodes.Add(draggedNode);
+            }
+            else
+            {
+                var targetIndex = targetNode.Index;
+
+                if (point.Y > targetNode.Bounds.Top + targetNode.Bounds.Height / 2)
+                {
+                    targetIndex++;
+                }
+
+                uiTreeView.Nodes.Insert(targetIndex, draggedNode);
+            }
+
+            uiTreeView.SelectedNode = draggedNode;
+        }
+        finally
+        {
+            uiTreeView.EndUpdate();
         }
     }
 
@@ -437,6 +507,11 @@ public partial class SyncTreeControl : UserControl
             }
 
             uiTreeView.ExpandAll();
+
+            if (uiTreeView.Nodes.Count > 0)
+            {
+                uiTreeView.TopNode = uiTreeView.Nodes[0];
+            }
         }
         finally
         {

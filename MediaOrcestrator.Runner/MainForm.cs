@@ -36,7 +36,7 @@ public partial class MainForm : Form
         }
 
         var planner = _serviceProvider.GetRequiredService<SyncPlanner>();
-        uiSyncTreeControl.Initialize(planner, [], _orcestrator, _serviceProvider.GetRequiredService<ILogger<SyncTreeControl>>());
+        uiSyncTreeControl.Initialize(planner, _orcestrator, _serviceProvider.GetRequiredService<ILogger<SyncTreeControl>>());
     }
 
     private async void uiSyncButton_Click(object sender, EventArgs e)
