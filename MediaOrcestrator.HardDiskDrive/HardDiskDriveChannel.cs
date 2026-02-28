@@ -71,48 +71,40 @@ public class HardDiskDriveChannel(ILogger<HardDiskDriveChannel> logger) : ISourc
         foreach (var file in files)
         {
             logger.LogDebug("Обработка файла: ID={FileId}, Название='{Title}'", file.Id, file.Title);
-
-            var fullPath = Path.Combine(basePath, file.Id, file.Path);
-            var fileInfo = new FileInfo(fullPath);
-            var fileExists = fileInfo.Exists;
-
-            yield return new()
-            {
-                Id = file.Id,
-                Description = file.Description,
-                Title = file.Title,
-                // TODO: Возможно стоить вынести в отдельный метод для заполнения у уже загруженного
-                Metadata =
-                [
-                    new()
-                    {
-                        Key = "Size",
-                        DisplayName = "Размер",
-                        Value = fileExists
-                            ? fileInfo.Length.ToString()
-                            : "0",
-                        DisplayType = "ByteSize",
-                    },
-                    new()
-                    {
-                        Key = "CreationDate",
-                        DisplayName = "Дата создания",
-                        Value = fileExists
-                            ? fileInfo.CreationTime.ToString("O")
-                            : "",
-                        DisplayType = "System.DateTime",
-                    },
-                ],
-            };
+            yield return CreateMediaDto(file, basePath);
         }
 
         logger.LogInformation("Завершено получение медиа с жёсткого диска");
     }
 
-    public MediaDto GetMediaById()
+    public async Task<MediaDto?> GetMediaByIdAsync(string externalId, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
     {
-        logger.LogWarning("Метод GetMediaById не реализован");
-        throw new NotImplementedException("Метод GetMediaById не реализован");
+        var basePath = settings["path"];
+        var dbFileName = settings.GetValueOrDefault("dbFileName", "data.db");
+
+        if (!Directory.Exists(basePath))
+        {
+            return null;
+        }
+
+        var dbPath = Path.Combine(basePath, dbFileName);
+
+        if (!File.Exists(dbPath))
+        {
+            return null;
+        }
+
+        using var db = new LiteDatabase(dbPath);
+        var file = db.GetCollection<DriveMedia>("files").FindById(externalId);
+
+        if (file == null)
+        {
+            return null;
+        }
+
+        await Task.CompletedTask;
+
+        return CreateMediaDto(file, basePath);
     }
 
     public Task<MediaDto> Download(string videoId, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
@@ -304,6 +296,37 @@ public class HardDiskDriveChannel(ILogger<HardDiskDriveChannel> logger) : ISourc
         logger.LogInformation("Медиа {ExternalId} удалено из базы данных HDD", externalId);
 
         return Task.CompletedTask;
+    }
+
+    private static MediaDto CreateMediaDto(DriveMedia file, string basePath)
+    {
+        var fullPath = Path.Combine(basePath, file.Id, file.Path);
+        var fileInfo = new FileInfo(fullPath);
+        var fileExists = fileInfo.Exists;
+
+        return new()
+        {
+            Id = file.Id,
+            Description = file.Description,
+            Title = file.Title,
+            Metadata =
+            [
+                new()
+                {
+                    Key = "Size",
+                    DisplayName = "Размер",
+                    Value = fileExists ? fileInfo.Length.ToString() : "0",
+                    DisplayType = "ByteSize",
+                },
+                new()
+                {
+                    Key = "CreationDate",
+                    DisplayName = "Дата создания",
+                    Value = fileExists ? fileInfo.CreationTime.ToString("O") : "",
+                    DisplayType = "System.DateTime",
+                },
+            ],
+        };
     }
 }
 

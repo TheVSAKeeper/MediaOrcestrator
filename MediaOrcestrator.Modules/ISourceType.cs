@@ -19,7 +19,7 @@ public interface ISourceType
     /// <returns></returns>
     IAsyncEnumerable<MediaDto> GetMedia(Dictionary<string, string> settings, CancellationToken cancellationToken = default);
 
-    MediaDto GetMediaById();
+    Task<MediaDto?> GetMediaByIdAsync(string externalId, Dictionary<string, string> settings, CancellationToken cancellationToken = default);
     Task<string> Upload(MediaDto media, Dictionary<string, string> settings, CancellationToken cancellationToken = default);
     Task<MediaDto> Download(string videoId, Dictionary<string, string> settings, CancellationToken cancellationToken = default);
     Task DeleteAsync(string externalId, Dictionary<string, string> settings, CancellationToken cancellationToken = default);

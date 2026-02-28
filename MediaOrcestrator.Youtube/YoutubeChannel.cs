@@ -1,8 +1,10 @@
-using MediaOrcestrator.Modules;
+﻿using MediaOrcestrator.Modules;
 using Microsoft.Extensions.Logging;
 using System.Runtime.CompilerServices;
 using YoutubeExplode;
 using YoutubeExplode.Channels;
+using YoutubeExplode.Common;
+using YoutubeExplode.Videos;
 
 namespace MediaOrcestrator.Youtube;
 
@@ -89,57 +91,15 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger) : ISourceType
 
         logger.LogDebug("Канал найден. Название: '{ChannelTitle}', ID: {ChannelId}", channel.Title, channel.Id);
 
-        var uploads = youtubeClient.Channels.GetUploadsAsync(channel.Id);
+        var uploads = youtubeClient.Channels.GetUploadsAsync(channel.Id, cancellationToken);
 
         await foreach (var video in uploads)
         {
             logger.LogDebug("Обработка видео: '{VideoTitle}' (ID: {VideoId})", video.Title, video.Id);
-            var thumbnails = video.Thumbnails.Count > 0 ? video.Thumbnails.OrderByDescending(t => t.Resolution.Area).ToList() : null;
-            var previewPath = thumbnails?.FirstOrDefault()?.Url ?? string.Empty;
 
             // TODO: Долго. Возможно стоить вынести заполнение метаданных в отдельный метод
-            var fullVideo = await youtubeClient.Videos.GetAsync(video.Id);
-
-            var metadata = new List<MetadataItem>
-            {
-                new()
-                {
-                    Key = "Duration",
-                    DisplayName = "Длительность",
-                    Value = video.Duration?.ToString() ?? "",
-                    DisplayType = "System.TimeSpan",
-                },
-                new()
-                {
-                    Key = "Author",
-                    DisplayName = "Автор",
-                    Value = video.Author.ChannelTitle,
-                    DisplayType = "System.String",
-                },
-                new()
-                {
-                    Key = "CreationDate",
-                    DisplayName = "Дата создания",
-                    Value = fullVideo.UploadDate.ToString("O"),
-                    DisplayType = "System.DateTime",
-                },
-                new()
-                {
-                    Key = "Views",
-                    DisplayName = "Просмотры",
-                    Value = fullVideo.Engagement.ViewCount.ToString(),
-                    DisplayType = "System.Int64",
-                },
-            };
-
-            yield return new()
-            {
-                Id = video.Id.Value,
-                Title = video.Title,
-                DataPath = video.Url,
-                PreviewPath = previewPath,
-                Metadata = metadata,
-            };
+            var fullVideo = await youtubeClient.Videos.GetAsync(video.Id, cancellationToken);
+            yield return CreateMediaDto(fullVideo);
         }
 
         logger.LogInformation("Завершено получение медиа для канала: {ChannelUrl}", channelUrl);
@@ -164,9 +124,23 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger) : ISourceType
         return null;
     }
 
-    public MediaDto GetMediaById()
+    public async Task<MediaDto?> GetMediaByIdAsync(string externalId, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
+        try
+        {
+            using var youtubeClient = new YoutubeClient();
+            var video = await youtubeClient.Videos.GetAsync(externalId, cancellationToken);
+            return CreateMediaDto(video);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Не удалось получить YouTube по ID: {VideoId}", externalId);
+            return null;
+        }
     }
 
     public async Task<MediaDto> Download(string videoId, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
@@ -175,7 +149,7 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger) : ISourceType
 
         using var youtubeClient = new YoutubeClient();
 
-        var video = await youtubeClient.Videos.GetAsync(videoId);
+        var video = await youtubeClient.Videos.GetAsync(videoId, cancellationToken);
         logger.LogDebug("Получена информация о видео. Название: '{Title}', Длительность: {Duration}",
             video.Title, video.Duration);
 
@@ -243,14 +217,7 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger) : ISourceType
             throw;
         }
 
-        return new()
-        {
-            Id = videoId,
-            Title = video.Title,
-            Description = video.Description,
-            TempDataPath = finalPath,
-        };
-
+        return CreateMediaDto(video);
         // bob217 -> 9I_JIereHga -> bob217
     }
 
@@ -264,5 +231,52 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger) : ISourceType
     {
         logger.LogWarning("Удаление из YouTube не поддерживается. Нужно подключать апю ютуба. Media ID: {ExternalId}", externalId);
         throw new NotSupportedException(@"Удалите видео вручную через веб-интерфейс YouTube Studio. (\/)._.(\/)");
+    }
+
+    private static MediaDto CreateMediaDto(Video video)
+    {
+        var thumbnail = video.Thumbnails.TryGetWithHighestResolution();
+        var previewPath = thumbnail?.Url ?? string.Empty;
+
+        var metadata = new List<MetadataItem>
+        {
+            new()
+            {
+                Key = "Duration",
+                DisplayName = "Длительность",
+                Value = video.Duration?.ToString() ?? "",
+                DisplayType = "System.TimeSpan",
+            },
+            new()
+            {
+                Key = "Author",
+                DisplayName = "Автор",
+                Value = video.Author.ChannelTitle,
+                DisplayType = "System.String",
+            },
+            new()
+            {
+                Key = "CreationDate",
+                DisplayName = "Дата создания",
+                Value = video.UploadDate.ToString("O"),
+                DisplayType = "System.DateTime",
+            },
+            new()
+            {
+                Key = "Views",
+                DisplayName = "Просмотры",
+                Value = video.Engagement.ViewCount.ToString(),
+                DisplayType = "System.Int64",
+            },
+        };
+
+        return new()
+        {
+            Id = video.Id.Value,
+            Title = video.Title,
+            DataPath = video.Url,
+            PreviewPath = previewPath,
+            Metadata = metadata,
+        };
     }
 }

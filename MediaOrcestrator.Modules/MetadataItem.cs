@@ -2,6 +2,7 @@ namespace MediaOrcestrator.Modules;
 
 public sealed class MetadataItem
 {
+    public string? SourceId { get; set; }
     public required string Key { get; set; }
     public required string Value { get; set; }
     public string? DisplayName { get; set; }

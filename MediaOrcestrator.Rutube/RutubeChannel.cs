@@ -67,7 +67,7 @@ public class RutubeChannel(ILogger<RutubeChannel> logger, ILogger<RutubeService>
         yield break;
     }
 
-    public MediaDto GetMediaById()
+    public Task<MediaDto?> GetMediaByIdAsync(string externalId, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
     {
         throw new NotImplementedException();
     }
