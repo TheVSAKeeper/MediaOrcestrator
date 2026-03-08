@@ -1,5 +1,6 @@
 ﻿using MediaOrcestrator.Modules;
 using Microsoft.Extensions.Logging;
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
@@ -29,6 +30,13 @@ public class RutubeChannel(ILogger<RutubeChannel> logger, ILogger<RutubeService>
             Title = "идентификатор категории",
             Description = "Категория RuTube для загружаемых видео. Нажмите 'Загрузить категории' для получения списка",
             Type = SettingType.Dropdown,
+        },
+        new()
+        {
+            Key = "publish_at",
+            IsRequired = false,
+            Title = "время публикации",
+            Description = "Время отложенной публикации. Форматы: ЧЧ:ММ (например, 20:00) - публикация сегодня в это время, если оно уже прошло - завтра; +N (например, +3) - публикация через N часов от момента загрузки. Если не указано - видео публикуется немедленно",
         },
     ];
 
@@ -94,9 +102,30 @@ public class RutubeChannel(ILogger<RutubeChannel> logger, ILogger<RutubeService>
         var rutubeCategoryId = settings["category_id"];
         var rutubeService = await CreateRutubeServiceAsync(settings);
 
+        DateTime? publishAt = null;
+        if (settings.TryGetValue("publish_at", out var publishAtRaw) && !string.IsNullOrWhiteSpace(publishAtRaw))
+        {
+            var publishAtTrimmed = publishAtRaw.Trim();
+            if (publishAtTrimmed.StartsWith('+') && double.TryParse(publishAtTrimmed[1..], NumberStyles.Any, CultureInfo.InvariantCulture, out var relativeHours))
+            {
+                publishAt = DateTime.Now.AddHours(relativeHours);
+                logger.LogInformation("Отложенная публикация запланирована через {Hours} ч. - на {PublishAt}", relativeHours, publishAt.Value);
+            }
+            else if (TimeOnly.TryParseExact(publishAtTrimmed, "HH:mm", out var timeOnly))
+            {
+                var today = DateTime.Today.Add(timeOnly.ToTimeSpan());
+                publishAt = today > DateTime.Now ? today : today.AddDays(1);
+                logger.LogInformation("Отложенная публикация запланирована на {PublishAt}", publishAt.Value);
+            }
+            else
+            {
+                logger.LogWarning("Не удалось разобрать время публикации '{PublishAtRaw}'. Ожидается формат ЧЧ:ММ или +N (часов). Видео будет опубликовано немедленно", publishAtRaw);
+            }
+        }
+
         try
         {
-            var videoId = await rutubeService.UploadVideoAsync(filePath, media.Title, media.Description, rutubeCategoryId);
+            var videoId = await rutubeService.UploadVideoAsync(filePath, media.Title, media.Description, rutubeCategoryId, media.PreviewPath, publishAt);
             logger.LogInformation("Видео успешно загружено на RuTube. Video ID: {SessionId}, Название: '{Title}'", videoId, media.Title);
             return videoId;
         }

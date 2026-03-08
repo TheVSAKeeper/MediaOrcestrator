@@ -217,7 +217,7 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger) : ISourceType
             throw;
         }
 
-        return CreateMediaDto(video);
+        return CreateMediaDto(video, finalPath);
         // bob217 -> 9I_JIereHga -> bob217
     }
 
@@ -233,7 +233,7 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger) : ISourceType
         throw new NotSupportedException(@"Удалите видео вручную через веб-интерфейс YouTube Studio. (\/)._.(\/)");
     }
 
-    private static MediaDto CreateMediaDto(Video video)
+    private static MediaDto CreateMediaDto(Video video, string? tempDataPath = null)
     {
         var thumbnail = video.Thumbnails.TryGetWithHighestResolution();
         var previewPath = thumbnail?.Url ?? string.Empty;
@@ -277,6 +277,7 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger) : ISourceType
             DataPath = video.Url,
             PreviewPath = previewPath,
             Metadata = metadata,
+            TempDataPath = tempDataPath,
         };
     }
 }

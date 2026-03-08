@@ -86,15 +86,35 @@ public partial class SourceSettingsForm : Form
 
     private static Label CreateDescriptionLabel(string text)
     {
-        return new()
+        var descriptionLabel = new Label
         {
             Text = text,
             Dock = DockStyle.Top,
-            AutoSize = true,
+            AutoSize = false,
             Font = new("Segoe UI", 8F),
             ForeColor = Color.FromArgb(128, 128, 128),
-            Padding = new(0, 5, 0, 0),
+            Padding = new(0, 5, 0, 2),
         };
+
+        descriptionLabel.SizeChanged += (s, _) =>
+        {
+            var label = (Label)s!;
+            if (label.Width <= 0)
+            {
+                return;
+            }
+
+            var proposedSize = new Size(label.Width, int.MaxValue);
+            var measureText = TextRenderer.MeasureText(label.Text, label.Font, proposedSize, TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl);
+            var measuredHeight = measureText.Height + label.Padding.Vertical;
+
+            if (label.Height != measuredHeight)
+            {
+                label.Height = measuredHeight;
+            }
+        };
+
+        return descriptionLabel;
     }
 
     private static string GetControlValue(Control control)
