@@ -220,3 +220,9 @@ public sealed class PublicationResponse
     [JsonPropertyName("timestamp")]
     public string Timestamp { get; set; } = string.Empty;
 }
+
+public sealed class ThumbnailResponse
+{
+    [JsonPropertyName("thumbnail_url")]
+    public string ThumbnailUrl { get; set; } = string.Empty;
+}

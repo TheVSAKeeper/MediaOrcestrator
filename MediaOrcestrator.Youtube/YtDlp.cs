@@ -1,6 +1,5 @@
 using CliWrap;
 using CliWrap.Exceptions;
-using MediaOrcestrator.Core.Extensions;
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -11,7 +10,11 @@ public sealed record YtDlpProgress(int PartNumber, double Progress);
 
 public sealed partial class YtDlp(string path, string ffmpegPath, string jsRuntime = "none")
 {
-    public async Task DownloadAsync(string url, string outputPath, IProgress<YtDlpProgress>? progress = null, CancellationToken cancellationToken = default)
+    public async Task DownloadAsync(
+        string url,
+        string outputPath,
+        IProgress<YtDlpProgress>? progress = null,
+        CancellationToken cancellationToken = default)
     {
         var arguments = new List<string>
         {
@@ -53,7 +56,26 @@ public sealed partial class YtDlp(string path, string ffmpegPath, string jsRunti
         }
     }
 
-    public async ValueTask ExecuteAsync(IEnumerable<string> arguments, IProgress<double>? progress = null, Action<string>? outputCallback = null, CancellationToken cancellationToken = default)
+    private static PipeTarget CreateProgressRouter(IProgress<double> progress)
+    {
+        return PipeTarget.ToDelegate(line =>
+        {
+            var match = ProgressRegex().Match(line);
+            if (match.Success && double.TryParse(match.Groups[1].Value, NumberStyles.Any, CultureInfo.InvariantCulture, out var percent))
+            {
+                progress.Report((percent / 100.0).Clamp(0, 1));
+            }
+        });
+    }
+
+    [GeneratedRegex(@"\[download\]\s+(\d+\.?\d*)%")]
+    private static partial Regex ProgressRegex();
+
+    private async ValueTask ExecuteAsync(
+        IEnumerable<string> arguments,
+        IProgress<double>? progress = null,
+        Action<string>? outputCallback = null,
+        CancellationToken cancellationToken = default)
     {
         StringBuilder stdErrBuffer = new();
 
@@ -83,19 +105,4 @@ public sealed partial class YtDlp(string path, string ffmpegPath, string jsRunti
             throw new InvalidOperationException(message, exception);
         }
     }
-
-    private static PipeTarget CreateProgressRouter(IProgress<double> progress)
-    {
-        return PipeTarget.ToDelegate(line =>
-        {
-            var match = ProgressRegex().Match(line);
-            if (match.Success && double.TryParse(match.Groups[1].Value, NumberStyles.Any, CultureInfo.InvariantCulture, out var percent))
-            {
-                progress.Report((percent / 100.0).Clamp(0, 1));
-            }
-        });
-    }
-
-    [GeneratedRegex(@"\[download\]\s+(\d+\.?\d*)%")]
-    private static partial Regex ProgressRegex();
 }

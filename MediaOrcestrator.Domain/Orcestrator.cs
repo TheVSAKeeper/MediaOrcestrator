@@ -59,9 +59,11 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
                 {
                     if (s.Metadata is { Count: > 0 } && foundMediaSource.Media != null)
                     {
+                        var providedKeys = new HashSet<string>();
                         foreach (var item in s.Metadata)
                         {
-                            var existing = foundMediaSource.Media.Metadata.FirstOrDefault(m => m.Key == item.Key);
+                            providedKeys.Add(item.Key);
+                            var existing = foundMediaSource.Media.Metadata.FirstOrDefault(m => m.Key == item.Key && m.SourceId == mediaSource.Id);
                             if (existing != null)
                             {
                                 existing.Value = item.Value;
@@ -70,10 +72,12 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
                             }
                             else
                             {
+                                item.SourceId = mediaSource.Id;
                                 foundMediaSource.Media.Metadata.Add(item);
                             }
                         }
 
+                        foundMediaSource.Media.Metadata.RemoveAll(m => m.SourceId == mediaSource.Id && !providedKeys.Contains(m.Key));
                         mediaCol.Update(foundMediaSource.Media);
                     }
 
@@ -87,6 +91,11 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
             foreach (var s in mediaList)
             {
                 var mediaId = Guid.NewGuid().ToString();
+                foreach (var item in s.Metadata ?? [])
+                {
+                    item.SourceId = mediaSource.Id;
+                }
+
                 var myMedia = new Media
                 {
                     Title = s.Title,
@@ -105,6 +114,7 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
                     SourceId = mediaSource.Id,
                     SortNumber = sortNumber,
                 };
+
                 sortNumber++;
 
                 myMedia.Sources.Add(newMediaSource);
@@ -147,6 +157,75 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
     public void UpdateMedia(Media media)
     {
         db.GetCollection<Media>("medias").Update(media);
+    }
+
+    public async Task ForceUpdateMetadataAsync(Media media, CancellationToken ct = default)
+    {
+        logger.LogInformation("Начато принудительное обновление метаданных для {MediaTitle}", media.Title);
+        var sourceTypes = GetSourceTypes();
+        var sources = GetSources();
+
+        media.Metadata.Clear();
+
+        foreach (var sourceLink in media.Sources)
+        {
+            var source = sources.FirstOrDefault(s => s.Id == sourceLink.SourceId);
+            if (source == null || source.IsDisable)
+            {
+                continue;
+            }
+
+            var plugin = sourceTypes.Values.FirstOrDefault(x => x.Name == source.TypeId);
+            if (plugin == null)
+            {
+                continue;
+            }
+
+            try
+            {
+                var dto = await plugin.GetMediaByIdAsync(sourceLink.ExternalId, source.Settings, ct);
+                if (dto is { Metadata.Count: > 0 })
+                {
+                    foreach (var item in dto.Metadata)
+                    {
+                        item.SourceId = source.Id;
+                        media.Metadata.Add(item);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Ошибка при обновлении метаданных из источника {SourceTitle}", source.TitleFull);
+            }
+        }
+
+        UpdateMedia(media);
+        logger.LogInformation("Завершено принудительное обновление метаданных для {MediaTitle}", media.Title);
+    }
+
+    public void ClearSourceMetadata(Media media, string sourceId)
+    {
+        var removedCount = media.Metadata.RemoveAll(m => m.SourceId == sourceId);
+        if (removedCount <= 0)
+        {
+            return;
+        }
+
+        UpdateMedia(media);
+        logger.LogInformation("Очищено {Count} метаданных для источника {SourceId} в медиа {MediaTitle}", removedCount, sourceId, media.Title);
+    }
+
+    public void ClearAllMetadata(Media media)
+    {
+        if (media.Metadata.Count <= 0)
+        {
+            return;
+        }
+
+        var count = media.Metadata.Count;
+        media.Metadata.Clear();
+        UpdateMedia(media);
+        logger.LogInformation("Очищено {Count} метаданных для медиа {MediaTitle}", count, media.Title);
     }
 
     public void RemoveMedia(Media media)
@@ -213,7 +292,6 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
             {
                 item.IsDisable = true;
             }
-
         }
 
         return relations;
@@ -269,7 +347,7 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
             mediaCount + relationCount + sourceCount, mediaCount, relationCount, sourceCount);
     }
 
-    public async Task TransferByRelation(Media media, SourceSyncRelation rel)
+    public async Task TransferByRelation(Media media, SourceSyncRelation rel, CancellationToken cancellationToken = default)
     {
         var fromMediaSource = media.Sources.FirstOrDefault(x => x.SourceId == rel.From.Id);
         if (fromMediaSource == null)
@@ -285,24 +363,26 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
             logger.LogInformation("Пропущено синхронизирование медиа {Media} в {ToSource} / уже имеется", media, rel.To);
             return;
         }
+
         string externalId;
         var debug = false;
         if (debug)
         {
             if (DateTime.Now.Second % 10 < 5)
             {
-                throw new Exception("ошибка");
+                throw new("ошибка");
             }
+
             externalId = Guid.NewGuid().ToString();
         }
         else
         {
-            var tempMedia = await rel.From.Type.Download(fromMediaSource.ExternalId, rel.From.Settings);
+            var tempMedia = await rel.From.Type.Download(fromMediaSource.ExternalId, rel.From.Settings, cancellationToken);
             tempMedia.Id = media.Id;
-            externalId = await rel.To.Type.Upload(tempMedia, rel.To.Settings);
+            externalId = await rel.To.Type.Upload(tempMedia, rel.To.Settings, cancellationToken);
         }
 
-        toMediaSource = new MediaSourceLink
+        toMediaSource = new()
         {
             MediaId = media.Id,
             Media = media,
@@ -316,7 +396,7 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
         logger.LogInformation("Успешно синхронизировано медиа {Media} в {ToSource}. ExternalId: {ExternalId}", media, rel.To, externalId);
     }
 
-    public async Task DeleteMediaFromSourceAsync(Media media, Source source)
+    public async Task DeleteMediaFromSourceAsync(Media media, Source source, CancellationToken cancellationToken = default)
     {
         var sourceLink = media.Sources.FirstOrDefault(s => s.SourceId == source.Id);
         if (sourceLink == null)
@@ -330,7 +410,7 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
 
         try
         {
-            await source.Type.DeleteAsync(sourceLink.ExternalId, source.Settings);
+            await source.Type.DeleteAsync(sourceLink.ExternalId, source.Settings, cancellationToken);
             logger.LogInformation("Успешно удалено медиа {MediaId} из источника {SourceId}", media.Id, source.Id);
         }
         catch (NotSupportedException exception)
@@ -347,7 +427,6 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
         CleanupMediaLinks(media, source.Id);
     }
 
-
     private void CleanupMediaLinks(Media media, string sourceId)
     {
         logger.LogInformation("Очистка записей в базе данных для медиа {MediaId}, источник {SourceId}", media.Id, sourceId);
@@ -357,6 +436,12 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
         {
             media.Sources.Remove(linkToRemove);
             logger.LogDebug("Удалена связь MediaSourceLink для источника {SourceId}", sourceId);
+        }
+
+        var removedMetadataCount = media.Metadata.RemoveAll(m => m.SourceId == sourceId);
+        if (removedMetadataCount > 0)
+        {
+            logger.LogDebug("Удалено {RemovedCount} элементов метаданных для источника {SourceId}", removedMetadataCount, sourceId);
         }
 
         if (media.Sources.Count != 0)
@@ -377,12 +462,15 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
 
         public List<MediaSourceLink> GetMedia(string sourceId)
         {
-            if (!_holder.ContainsKey(sourceId))
+            if (_holder.TryGetValue(sourceId, out var value))
             {
-                _holder[sourceId] = [];
+                return value;
             }
 
-            return _holder[sourceId];
+            value = [];
+            _holder[sourceId] = value;
+
+            return value;
         }
     }
 }

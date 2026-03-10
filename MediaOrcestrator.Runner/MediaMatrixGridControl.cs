@@ -1,4 +1,5 @@
 ﻿using MediaOrcestrator.Domain;
+using Microsoft.Extensions.Logging;
 using System.Text;
 
 namespace MediaOrcestrator.Runner;
@@ -6,6 +7,7 @@ namespace MediaOrcestrator.Runner;
 public partial class MediaMatrixGridControl : UserControl
 {
     private Orcestrator? _orcestrator;
+    private ILogger<MediaMatrixGridControl>? _logger;
 
     public MediaMatrixGridControl()
     {
@@ -13,9 +15,10 @@ public partial class MediaMatrixGridControl : UserControl
         uiFilterControl.FilterChanged += (_, _) => RefreshData();
     }
 
-    public void Initialize(Orcestrator orcestrator)
+    public void Initialize(Orcestrator orcestrator, ILogger<MediaMatrixGridControl> logger)
     {
         _orcestrator = orcestrator;
+        _logger = logger;
         uiFilterControl.PopulateRelationsFilter(orcestrator);
     }
 
@@ -34,6 +37,7 @@ public partial class MediaMatrixGridControl : UserControl
             return;
         }
 
+        _logger?.LogInformation("Начато обновление списка медиа...");
         UpdateLoadingIndicator(true);
 
         try
@@ -62,6 +66,12 @@ public partial class MediaMatrixGridControl : UserControl
             uiMediaGrid.SetupColumns(sources, selectedMetadata);
             uiMediaGrid.PopulateGrid(sources, mediaData, selectedMetadata);
             UpdateStatusBar(allMediaCount, mediaData.Count);
+
+            _logger?.LogInformation("Список медиа успешно обновлен. Отображается: {Count} из {Total}", mediaData.Count, allMediaCount);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Ошибка при обновлении списка медиа.");
         }
         finally
         {
@@ -139,6 +149,8 @@ public partial class MediaMatrixGridControl : UserControl
             return;
         }
 
+        _logger?.LogInformation("Запуск операции объединения медиа. Выбрано элементов: {Count}", selectedMediaList.Count);
+
         try
         {
             var mergePreview = ValidateMergeOperation(selectedMediaList);
@@ -173,9 +185,11 @@ public partial class MediaMatrixGridControl : UserControl
 
             if (result != DialogResult.Yes)
             {
+                _logger?.LogInformation("Объединение медиа отменено пользователем.");
                 return;
             }
 
+            _logger?.LogInformation("Выполняется объединение медиа. Целевое медиа: '{TargetMedia}'", mergePreview.TargetMedia.Title);
             mergePreview.TargetMedia.Sources = mergePreview.ResultingSources;
             _orcestrator.UpdateMedia(mergePreview.TargetMedia);
 
@@ -185,6 +199,8 @@ public partial class MediaMatrixGridControl : UserControl
             }
 
             RefreshData();
+
+            _logger?.LogInformation("Объединение медиа успешно завершено. Итоговое количество источников: {TotalSourcesCount}", mergePreview.TotalSourcesCount);
 
             MessageBox.Show($"""
                              Медиа успешно объединены.
@@ -197,6 +213,7 @@ public partial class MediaMatrixGridControl : UserControl
         }
         catch (Exception ex)
         {
+            _logger?.LogError(ex, "Ошибка при объединении медиа.");
             MessageBox.Show($"""
                              Произошла ошибка при объединении медиа:
 
@@ -327,74 +344,19 @@ public partial class MediaMatrixGridControl : UserControl
         }
     }
 
-    // TODO: Прибрать дублирование + портянка
     private void ShowContextMenu(Media media, Point location, Source? specificSource = null)
     {
         _contextMenu?.Dispose();
         _contextMenu = new();
 
+        AddMetadataMenuItems(_contextMenu, media, specificSource);
+
+        _contextMenu.Items.Add(new ToolStripSeparator());
+
         if (specificSource != null)
         {
             var sourceLink = media.Sources.FirstOrDefault(s => s.SourceId == specificSource.Id);
-
-            foreach (var rel in _orcestrator.GetRelations())
-            {
-                if (rel.From.Id != specificSource.Id && rel.To.Id != specificSource.Id)
-                {
-                    continue;
-                }
-
-                var fromSource = media.Sources.FirstOrDefault(x => x.SourceId == rel.From.Id);
-                var toSource = media.Sources.FirstOrDefault(x => x.SourceId == rel.To.Id);
-                var menuText = $"Синхронизировать {rel.From.TitleFull} -> {rel.To.TitleFull}";
-
-                if (fromSource != null && toSource == null)
-                {
-                    var menuItem = new ToolStripMenuItem(menuText, GetSyncIcon());
-                    menuItem.Click += async (_, _) =>
-                    {
-                        UpdateLoadingIndicator(true);
-                        try
-                        {
-                            await _orcestrator.TransferByRelation(media, rel);
-                        }
-                        catch (Exception ex)
-                        {
-                            // TODO: Логирование
-                            MessageBox.Show($"Ошибка при синхронизации: {ex.Message}", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                        }
-                        finally
-                        {
-                            UpdateLoadingIndicator(false);
-                            RefreshData();
-                        }
-                    };
-
-                    _contextMenu.Items.Add(menuItem);
-                }
-                else
-                {
-                    var menuItem = new ToolStripMenuItem(menuText, GetSyncIcon())
-                    {
-                        Enabled = false,
-                    };
-
-                    if (fromSource == null && toSource == null)
-                    {
-                        menuItem.ToolTipText = "Медиа отсутствует в исходном хранилище";
-                    }
-                    else if (fromSource == null)
-                    {
-                        menuItem.ToolTipText = "Исходное хранилище недоступно";
-                    }
-                    else if (toSource != null)
-                    {
-                        menuItem.ToolTipText = "Медиа уже существует в целевом хранилище";
-                    }
-
-                    _contextMenu.Items.Add(menuItem);
-                }
-            }
+            AddSyncMenuItems(_contextMenu, media, specificSource);
 
             if (sourceLink != null && !specificSource.IsDisable)
             {
@@ -404,31 +366,84 @@ public partial class MediaMatrixGridControl : UserControl
                 }
 
                 var deleteMenuItem = new ToolStripMenuItem($"Удалить из {specificSource.TitleFull}", GetDeleteIcon());
-
-                deleteMenuItem.Click += async (s, e) => await HandleDeleteClickAsync(media, specificSource);
-
+                deleteMenuItem.Click += async (_, _) => await HandleDeleteClickAsync(media, specificSource);
                 _contextMenu.Items.Add(deleteMenuItem);
             }
+        }
+        else
+        {
+            AddSyncMenuItems(_contextMenu, media, null);
 
             if (_contextMenu.Items.Count > 0)
             {
                 _contextMenu.Items.Add(new ToolStripSeparator());
             }
 
-            var copyItem = new ToolStripMenuItem("Копировать детали в буфер обмена", GetCopyIcon());
-            copyItem.Click += (s, e) => CopyMediaDetailsToClipboard(media);
-            _contextMenu.Items.Add(copyItem);
-
-            if (_contextMenu.Items.Count > 0)
+            foreach (var sourceLink in media.Sources)
             {
-                _contextMenu.Show(location);
-            }
+                var source = _orcestrator.GetSources()
+                    .FirstOrDefault(s => s.Id == sourceLink.SourceId);
 
-            return;
+                if (source == null || source.IsDisable)
+                {
+                    continue;
+                }
+
+                var deleteMenuItem = new ToolStripMenuItem($"Удалить из {source.TitleFull}", GetDeleteIcon());
+                deleteMenuItem.Click += async (_, _) => await HandleDeleteClickAsync(media, source);
+
+                _contextMenu.Items.Add(deleteMenuItem);
+            }
         }
 
-        foreach (var rel in _orcestrator.GetRelations())
+        if (_contextMenu.Items.Count > 0)
         {
+            _contextMenu.Items.Add(new ToolStripSeparator());
+        }
+
+        var copyItem = new ToolStripMenuItem("Копировать детали в буфер обмена", GetCopyIcon());
+        copyItem.Click += (_, _) => CopyMediaDetailsToClipboard(media);
+        _contextMenu.Items.Add(copyItem);
+
+        if (_contextMenu.Items.Count > 0)
+        {
+            _contextMenu.Show(location);
+        }
+    }
+
+    private void AddMetadataMenuItems(ContextMenuStrip contextMenu, Media media, Source? specificSource)
+    {
+        var viewMetaItem = new ToolStripMenuItem("Просмотр метаданных медиа", null);
+        viewMetaItem.Click += (_, _) => ShowMetadataDialog(media);
+        contextMenu.Items.Add(viewMetaItem);
+
+        var updateMetaItem = new ToolStripMenuItem("Принудительное обновление метаданных", GetSyncIcon());
+        updateMetaItem.Click += async (_, _) => await HandleUpdateMetadataAsync(media);
+        contextMenu.Items.Add(updateMetaItem);
+
+        if (specificSource != null)
+        {
+            var clearSourceMetaItem = new ToolStripMenuItem($"Очистить метаданные источника ({specificSource.TitleFull})", GetDeleteIcon());
+            clearSourceMetaItem.Click += (_, _) => HandleClearMetadata(media, specificSource.Id);
+            contextMenu.Items.Add(clearSourceMetaItem);
+        }
+        else
+        {
+            var clearAllMetaItem = new ToolStripMenuItem("Очистить все метаданные", GetDeleteIcon());
+            clearAllMetaItem.Click += (_, _) => HandleClearMetadata(media, null);
+            contextMenu.Items.Add(clearAllMetaItem);
+        }
+    }
+
+    private void AddSyncMenuItems(ContextMenuStrip contextMenu, Media media, Source? specificSource)
+    {
+        foreach (var rel in _orcestrator!.GetRelations())
+        {
+            if (specificSource != null && rel.From.Id != specificSource.Id && rel.To.Id != specificSource.Id)
+            {
+                continue;
+            }
+
             var fromSource = media.Sources.FirstOrDefault(x => x.SourceId == rel.From.Id);
             var toSource = media.Sources.FirstOrDefault(x => x.SourceId == rel.To.Id);
             var menuText = $"Синхронизировать {rel.From.TitleFull} -> {rel.To.TitleFull}";
@@ -436,16 +451,18 @@ public partial class MediaMatrixGridControl : UserControl
             if (fromSource != null && toSource == null)
             {
                 var menuItem = new ToolStripMenuItem(menuText, GetSyncIcon());
-                menuItem.Click += async (s, e) =>
+                menuItem.Click += async (_, _) =>
                 {
                     UpdateLoadingIndicator(true);
                     try
                     {
+                        _logger?.LogInformation("Запуск синхронизации медиа '{Title}' из {From} в {To}", media.Title, rel.From.TitleFull, rel.To.TitleFull);
                         await _orcestrator.TransferByRelation(media, rel);
+                        _logger?.LogInformation("Синхронизация медиа '{Title}' успешно завершена", media.Title);
                     }
                     catch (Exception ex)
                     {
-                        // TODO: Логирование
+                        _logger?.LogError(ex, "Ошибка при синхронизации медиа '{Title}' из {From} в {To}.", media.Title, rel.From.TitleFull, rel.To.TitleFull);
                         MessageBox.Show($"Ошибка при синхронизации: {ex.Message}", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     }
                     finally
@@ -455,7 +472,7 @@ public partial class MediaMatrixGridControl : UserControl
                     }
                 };
 
-                _contextMenu.Items.Add(menuItem);
+                contextMenu.Items.Add(menuItem);
             }
             else
             {
@@ -477,43 +494,8 @@ public partial class MediaMatrixGridControl : UserControl
                     menuItem.ToolTipText = "Медиа уже существует в целевом хранилище";
                 }
 
-                _contextMenu.Items.Add(menuItem);
+                contextMenu.Items.Add(menuItem);
             }
-        }
-
-        if (_contextMenu.Items.Count > 0)
-        {
-            _contextMenu.Items.Add(new ToolStripSeparator());
-        }
-
-        foreach (var sourceLink in media.Sources)
-        {
-            var source = _orcestrator.GetSources()
-                .FirstOrDefault(s => s.Id == sourceLink.SourceId);
-
-            if (source == null || source.IsDisable)
-            {
-                continue;
-            }
-
-            var deleteMenuItem = new ToolStripMenuItem($"Удалить из {source.TitleFull}", GetDeleteIcon());
-            deleteMenuItem.Click += async (_, _) => await HandleDeleteClickAsync(media, source);
-
-            _contextMenu.Items.Add(deleteMenuItem);
-        }
-
-        if (_contextMenu.Items.Count > 0)
-        {
-            _contextMenu.Items.Add(new ToolStripSeparator());
-        }
-
-        var copyDetailsItem = new ToolStripMenuItem("Копировать детали в буфер обмена", GetCopyIcon());
-        copyDetailsItem.Click += (s, e) => CopyMediaDetailsToClipboard(media);
-        _contextMenu.Items.Add(copyDetailsItem);
-
-        if (_contextMenu.Items.Count > 0)
-        {
-            _contextMenu.Show(location);
         }
     }
 
@@ -548,9 +530,11 @@ public partial class MediaMatrixGridControl : UserControl
     {
         var isLastSource = media.Sources.Count == 1;
 
+        _logger?.LogInformation("Попытка удаления медиа '{Title}' из источника '{Source}'", media.Title, source.TitleFull);
         var result = ShowDeleteConfirmation(media, source, isLastSource);
         if (result != DialogResult.Yes)
         {
+            _logger?.LogInformation("Пользователь отменил удаление медиа '{Title}'", media.Title);
             return;
         }
 
@@ -559,6 +543,7 @@ public partial class MediaMatrixGridControl : UserControl
         try
         {
             await _orcestrator.DeleteMediaFromSourceAsync(media, source);
+            _logger?.LogInformation("Медиа '{Title}' успешно удалено из источника '{Source}'", media.Title, source.TitleFull);
         }
         catch (InvalidOperationException ex)
         {
@@ -569,6 +554,7 @@ public partial class MediaMatrixGridControl : UserControl
         }
         catch (UnauthorizedAccessException ex)
         {
+            _logger?.LogError(ex, "Ошибка авторизации при удалении медиа '{Title}' из '{Source}'.", media.Title, source.TitleFull);
             MessageBox.Show($"""
                              Ошибка авторизации при удалении из {source.TitleFull}.
 
@@ -582,6 +568,7 @@ public partial class MediaMatrixGridControl : UserControl
         }
         catch (IOException ex)
         {
+            _logger?.LogError(ex, "Ошибка файловой системы при удалении медиа '{Title}' из '{Source}'.", media.Title, source.TitleFull);
             MessageBox.Show($"""
                              Ошибка файловой системы при удалении из {source.TitleFull}.
 
@@ -609,6 +596,71 @@ public partial class MediaMatrixGridControl : UserControl
             UpdateLoadingIndicator(false);
             RefreshData();
         }
+    }
+
+    private void ShowMetadataDialog(Media media)
+    {
+        var details = new StringBuilder();
+        if (media.Metadata.Count == 0)
+        {
+            details.AppendLine("Нет метаданных.");
+        }
+        else
+        {
+            foreach (var meta in media.Metadata.OrderBy(m => m.Key))
+            {
+                var sourceName = _orcestrator?.GetSources().FirstOrDefault(s => s.Id == meta.SourceId)?.TitleFull ?? meta.SourceId ?? "Неизвестно";
+                details.AppendLine($"{meta.Key} [{sourceName}]: {meta.Value}");
+            }
+        }
+
+        MessageBox.Show(details.ToString(), $"Метаданные: {media.Title}", MessageBoxButtons.OK, MessageBoxIcon.Information);
+    }
+
+    private async Task HandleUpdateMetadataAsync(Media media)
+    {
+        _logger?.LogInformation("Запуск принудительного обновления метаданных для медиа: '{Title}'", media.Title);
+        UpdateLoadingIndicator(true);
+        try
+        {
+            if (_orcestrator != null)
+            {
+                await _orcestrator.ForceUpdateMetadataAsync(media);
+            }
+
+            _logger?.LogInformation("Метаданные для медиа '{Title}' успешно обновлены", media.Title);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Ошибка при обновлении метаданных для медиа '{Title}'.", media.Title);
+            MessageBox.Show($"Ошибка при обновлении метаданных: {ex.Message}", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+        finally
+        {
+            UpdateLoadingIndicator(false);
+            RefreshData();
+        }
+    }
+
+    private void HandleClearMetadata(Media media, string? sourceId)
+    {
+        if (_orcestrator == null)
+        {
+            return;
+        }
+
+        if (sourceId != null)
+        {
+            _logger?.LogInformation("Очистка метаданных для медиа '{Title}', источник: {SourceId}", media.Title, sourceId);
+            _orcestrator.ClearSourceMetadata(media, sourceId);
+        }
+        else
+        {
+            _logger?.LogInformation("Очистка всех метаданных для медиа '{Title}'", media.Title);
+            _orcestrator.ClearAllMetadata(media);
+        }
+
+        RefreshData();
     }
 
     private void CopyMediaDetailsToClipboard(Media media)

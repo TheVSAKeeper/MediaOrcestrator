@@ -1,6 +1,7 @@
 ﻿using LiteDB;
 using MediaOrcestrator.Modules;
 using Microsoft.Extensions.Logging;
+using System.Runtime.CompilerServices;
 
 namespace MediaOrcestrator.HardDiskDrive;
 
@@ -38,7 +39,7 @@ public class HardDiskDriveChannel(ILogger<HardDiskDriveChannel> logger) : ISourc
         },
     ];
 
-    public async IAsyncEnumerable<MediaDto> GetMedia(Dictionary<string, string> settings)
+    public async IAsyncEnumerable<MediaDto> GetMedia(Dictionary<string, string> settings, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var basePath = settings["path"];
         var dbFileName = settings.GetValueOrDefault("dbFileName", "data.db");
@@ -70,51 +71,43 @@ public class HardDiskDriveChannel(ILogger<HardDiskDriveChannel> logger) : ISourc
         foreach (var file in files)
         {
             logger.LogDebug("Обработка файла: ID={FileId}, Название='{Title}'", file.Id, file.Title);
-
-            var fullPath = Path.Combine(basePath, file.Id, file.Path);
-            var fileInfo = new FileInfo(fullPath);
-            var fileExists = fileInfo.Exists;
-
-            yield return new()
-            {
-                Id = file.Id,
-                Description = file.Description,
-                Title = file.Title,
-                // TODO: Возможно стоить вынести в отдельный метод для заполнения у уже загруженного
-                Metadata =
-                [
-                    new()
-                    {
-                        Key = "Size",
-                        DisplayName = "Размер",
-                        Value = fileExists
-                            ? fileInfo.Length.ToString()
-                            : "0",
-                        DisplayType = "ByteSize",
-                    },
-                    new()
-                    {
-                        Key = "CreationDate",
-                        DisplayName = "Дата создания",
-                        Value = fileExists
-                            ? fileInfo.CreationTime.ToString("O")
-                            : "",
-                        DisplayType = "System.DateTime",
-                    },
-                ],
-            };
+            yield return CreateMediaDto(file, basePath);
         }
 
         logger.LogInformation("Завершено получение медиа с жёсткого диска");
     }
 
-    public MediaDto GetMediaById()
+    public async Task<MediaDto?> GetMediaByIdAsync(string externalId, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
     {
-        logger.LogWarning("Метод GetMediaById не реализован");
-        throw new NotImplementedException("Метод GetMediaById не реализован");
+        var basePath = settings["path"];
+        var dbFileName = settings.GetValueOrDefault("dbFileName", "data.db");
+
+        if (!Directory.Exists(basePath))
+        {
+            return null;
+        }
+
+        var dbPath = Path.Combine(basePath, dbFileName);
+
+        if (!File.Exists(dbPath))
+        {
+            return null;
+        }
+
+        using var db = new LiteDatabase(dbPath);
+        var file = db.GetCollection<DriveMedia>("files").FindById(externalId);
+
+        if (file == null)
+        {
+            return null;
+        }
+
+        await Task.CompletedTask;
+
+        return CreateMediaDto(file, basePath);
     }
 
-    public Task<MediaDto> Download(string videoId, Dictionary<string, string> settings)
+    public Task<MediaDto> Download(string videoId, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
     {
         logger.LogInformation("Получение информации о файле с жёсткого диска. ID: {VideoId}", videoId);
 
@@ -147,7 +140,14 @@ public class HardDiskDriveChannel(ILogger<HardDiskDriveChannel> logger) : ISourc
             throw new FileNotFoundException("Физический файл не найден", fullPath);
         }
 
-        logger.LogInformation("Файл найден. ID: {VideoId}, Путь: {FilePath}", videoId, fullPath);
+        var thumbnailFullPath = !string.IsNullOrEmpty(file.PreviewPath)
+            ? Path.Combine(basePath, file.Id, file.PreviewPath)
+            : null;
+
+        var thumbnailExists = thumbnailFullPath != null && File.Exists(thumbnailFullPath);
+
+        logger.LogInformation("Файл найден. ID: {VideoId}, Путь: {FilePath}, Превью: {HasThumbnail}",
+            videoId, fullPath, thumbnailExists);
 
         return Task.FromResult(new MediaDto
         {
@@ -155,10 +155,11 @@ public class HardDiskDriveChannel(ILogger<HardDiskDriveChannel> logger) : ISourc
             Description = file.Description,
             Title = file.Title,
             TempDataPath = fullPath,
+            TempPreviewPath = thumbnailExists ? thumbnailFullPath! : null,
         });
     }
 
-    public Task<string> Upload(MediaDto media, Dictionary<string, string> settings)
+    public async Task<string> Upload(MediaDto media, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
     {
         logger.LogInformation("Начало сохранения файла на жёсткий диск. Название: '{Title}'", media.Title);
 
@@ -205,6 +206,8 @@ public class HardDiskDriveChannel(ILogger<HardDiskDriveChannel> logger) : ISourc
             throw;
         }
 
+        var thumbnailFileName = await SaveThumbnailAsync(media, path, cancellationToken);
+
         // todo дублирование
         var dbPath = Path.Combine(basePath, dbFileName);
         logger.LogDebug("Сохранение информации в базу данных: {DbPath}", dbPath);
@@ -224,6 +227,7 @@ public class HardDiskDriveChannel(ILogger<HardDiskDriveChannel> logger) : ISourc
                     Description = media.Description,
                     Title = media.Title,
                     Path = mainFileName,
+                    PreviewPath = thumbnailFileName ?? string.Empty,
                 });
             }
             else
@@ -234,6 +238,7 @@ public class HardDiskDriveChannel(ILogger<HardDiskDriveChannel> logger) : ISourc
                     Description = media.Description,
                     Title = media.Title,
                     Path = mainFileName,
+                    PreviewPath = thumbnailFileName ?? string.Empty,
                 });
             }
 
@@ -246,10 +251,10 @@ public class HardDiskDriveChannel(ILogger<HardDiskDriveChannel> logger) : ISourc
             throw;
         }
 
-        return Task.FromResult(hddId);
+        return hddId;
     }
 
-    public Task DeleteAsync(string externalId, Dictionary<string, string> settings)
+    public Task DeleteAsync(string externalId, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
     {
         logger.LogInformation("Удаление медиа из HDD. ID: {ExternalId}", externalId);
 
@@ -304,6 +309,82 @@ public class HardDiskDriveChannel(ILogger<HardDiskDriveChannel> logger) : ISourc
 
         return Task.CompletedTask;
     }
+
+    private static MediaDto CreateMediaDto(DriveMedia file, string basePath)
+    {
+        var fullPath = Path.Combine(basePath, file.Id, file.Path);
+        var fileInfo = new FileInfo(fullPath);
+        var fileExists = fileInfo.Exists;
+
+        var previewFullPath = !string.IsNullOrEmpty(file.PreviewPath)
+            ? Path.Combine(basePath, file.Id, file.PreviewPath)
+            : string.Empty;
+
+        return new()
+        {
+            Id = file.Id,
+            Description = file.Description,
+            Title = file.Title,
+            PreviewPath = previewFullPath,
+            Metadata =
+            [
+                new()
+                {
+                    Key = "Size",
+                    DisplayName = "Размер",
+                    Value = fileExists ? fileInfo.Length.ToString() : "0",
+                    DisplayType = "ByteSize",
+                },
+                new()
+                {
+                    Key = "CreationDate",
+                    DisplayName = "Дата создания",
+                    Value = fileExists ? fileInfo.CreationTime.ToString("O") : "",
+                    DisplayType = "System.DateTime",
+                },
+            ],
+        };
+    }
+
+    private async Task<string?> SaveThumbnailAsync(MediaDto media, string mediaFolder, CancellationToken cancellationToken)
+    {
+        if (!string.IsNullOrEmpty(media.TempPreviewPath) && File.Exists(media.TempPreviewPath))
+        {
+            var ext = Path.GetExtension(media.TempPreviewPath);
+            var thumbnailFileName = $"thumbnail{(string.IsNullOrEmpty(ext) ? ".jpg" : ext)}";
+            var destPath = Path.Combine(mediaFolder, thumbnailFileName);
+            File.Copy(media.TempPreviewPath, destPath, true);
+            logger.LogDebug("Превью скопировано из временного файла: {DestPath}", destPath);
+            return thumbnailFileName;
+        }
+
+        if (!string.IsNullOrEmpty(media.PreviewPath) && Uri.TryCreate(media.PreviewPath, UriKind.Absolute, out var thumbnailUri))
+        {
+            try
+            {
+                var ext = Path.GetExtension(thumbnailUri.LocalPath);
+                var thumbnailFileName = $"thumbnail{(string.IsNullOrEmpty(ext) ? ".jpg" : ext)}";
+                var destPath = Path.Combine(mediaFolder, thumbnailFileName);
+
+                using var httpClient = new HttpClient();
+                var thumbnailBytes = await httpClient.GetByteArrayAsync(thumbnailUri, cancellationToken);
+                await File.WriteAllBytesAsync(destPath, thumbnailBytes, cancellationToken);
+                logger.LogDebug("Превью загружено из URL: {ThumbnailUrl}, сохранено: {DestPath}", media.PreviewPath, destPath);
+                return thumbnailFileName;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Не удалось загрузить превью из URL: {ThumbnailUrl}", media.PreviewPath);
+            }
+        }
+
+        logger.LogDebug("Превью для медиа '{Title}' не найдено, сохраняем без превью", media.Title);
+        return null;
+    }
 }
 
 public class DriveMedia
@@ -312,4 +393,5 @@ public class DriveMedia
     public string Title { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public string Path { get; set; } = string.Empty;
+    public string PreviewPath { get; set; } = string.Empty;
 }

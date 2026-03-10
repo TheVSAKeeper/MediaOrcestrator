@@ -18,7 +18,7 @@ internal static class Json
         // To do it, we will be matching curly braces until we even out.
         foreach (var (i, ch) in source.Index())
         {
-            var prev = i > 0 ? source[i - 1] : default;
+            var prev = i > 0 ? source[i - 1] : '\0';
 
             buffer.Append(ch);
 

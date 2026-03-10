@@ -3,7 +3,7 @@
 namespace MediaOrcestrator.Domain;
 
 /// <summary>
-/// Связи синхронизациимежду хранилищами
+/// Связи синхронизации между хранилищами
 /// </summary>
 public class SourceSyncRelation
 {

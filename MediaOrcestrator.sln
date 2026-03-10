@@ -3,10 +3,6 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.12.35707.178
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MediaOrcestrator.Core", "MediaOrcestrator.Core\MediaOrcestrator.Core.csproj", "{0C4310DB-D6F7-415A-980E-DD2CC456E754}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MediaOrcestrator.Core.Tests", "MediaOrcestrator.Core.Tests\MediaOrcestrator.Core.Tests.csproj", "{CBC29A9A-C959-4C96-9825-DFDF86795095}"
-EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Other", "Other", "{BD721EFF-BD4E-4806-97EF-CEBA69870CB2}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "YoutubeExplode", "Other\YoutubeExplode-master\YoutubeExplode\YoutubeExplode.csproj", "{587551F0-2DD0-491A-BA7E-5AF5F06797A7}"
@@ -31,12 +27,6 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{0C4310DB-D6F7-415A-980E-DD2CC456E754}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{0C4310DB-D6F7-415A-980E-DD2CC456E754}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{0C4310DB-D6F7-415A-980E-DD2CC456E754}.Release|Any CPU.Build.0 = Release|Any CPU
-		{CBC29A9A-C959-4C96-9825-DFDF86795095}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{CBC29A9A-C959-4C96-9825-DFDF86795095}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{CBC29A9A-C959-4C96-9825-DFDF86795095}.Release|Any CPU.Build.0 = Release|Any CPU
 		{587551F0-2DD0-491A-BA7E-5AF5F06797A7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{587551F0-2DD0-491A-BA7E-5AF5F06797A7}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{587551F0-2DD0-491A-BA7E-5AF5F06797A7}.Release|Any CPU.ActiveCfg = Release|Any CPU

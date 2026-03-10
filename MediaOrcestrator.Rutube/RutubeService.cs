@@ -1,11 +1,12 @@
 ﻿using Microsoft.Extensions.Logging;
+using System.Net;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
 namespace MediaOrcestrator.Rutube;
 
-public sealed class RutubeService
+public sealed partial class RutubeService
 {
     private readonly HttpClient _httpClient;
     private readonly string? _userId;
@@ -24,15 +25,20 @@ public sealed class RutubeService
         _httpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36");
         _httpClient.DefaultRequestHeaders.Add("Origin", "https://studio.rutube.ru");
 
-        var visitorIdMatch = Regex.Match(cookieString, @"visitorID=([^;]+)");
+        var visitorIdMatch = VisitorIdRegex().Match(cookieString);
         if (visitorIdMatch.Success)
         {
             _userId = visitorIdMatch.Groups[1].Value;
-            //_logger.LogDebug("Получен ID посетителя: {UserId}", _userId);
         }
     }
 
-    public async Task<string> UploadVideoAsync(string filePath, string title, string description, string categoryId)
+    public async Task<string> UploadVideoAsync(
+        string filePath,
+        string title,
+        string description,
+        string categoryId,
+        string? thumbnailPath = null,
+        DateTime? publishAt = null)
     {
         _logger.LogInformation("Инициализация сессии загрузки на RuTube");
         var session = await InitUploadSessionAsync();
@@ -49,13 +55,29 @@ public sealed class RutubeService
         _logger.LogDebug("Ожидание обработки на сервере (5 секунд)");
         await Task.Delay(5000);
 
-        _logger.LogInformation("Обновление метаданных видео");
-        await UpdateMetadataAsync(session.VideoId, title, description, categoryId);
+        _logger.LogInformation("Обновление метаданных видео (черновик)");
+        await UpdateMetadataAsync(session.VideoId, title, description, categoryId, true);
         _logger.LogInformation("Метаданные обновлены");
 
-        _logger.LogInformation("Публикация видео");
-        await PublishVideoAsync(session.VideoId);
-        _logger.LogInformation("Видео успешно опубликовано");
+        if (!string.IsNullOrEmpty(thumbnailPath) && File.Exists(thumbnailPath))
+        {
+            _logger.LogInformation("Загрузка превью");
+            var thumbnailUrl = await UploadThumbnailAsync(session.VideoId, thumbnailPath);
+            _logger.LogInformation("Превью загружено: {ThumbnailUrl}", thumbnailUrl);
+        }
+
+        if (publishAt.HasValue && publishAt.Value > DateTime.Now)
+        {
+            _logger.LogInformation("Планирование публикации на {PublishAt}", publishAt.Value);
+            await PublishVideoAsync(session.VideoId, publishAt.Value);
+            _logger.LogInformation("Видео успешно запланировано");
+        }
+        else
+        {
+            _logger.LogInformation("Немедленная публикация видео");
+            await UpdateMetadataAsync(session.VideoId, title, description, categoryId, false);
+            _logger.LogInformation("Видео успешно опубликовано");
+        }
 
         return session.VideoId;
     }
@@ -88,7 +110,7 @@ public sealed class RutubeService
 
         var response = await _httpClient.DeleteAsync(url);
 
-        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+        if (response.StatusCode == HttpStatusCode.NotFound)
         {
             // TODO: Возможно не верный мув, но позволяет громоздить логику принудительного удаления
             _logger.LogWarning("Видео {VideoId} не найдено на RuTube, считаем уже удаленным", videoId);
@@ -104,6 +126,51 @@ public sealed class RutubeService
 
         _logger.LogInformation("Видео {VideoId} успешно удалено через RuTube API", videoId);
     }
+
+    public async Task<string?> UploadThumbnailAsync(string videoId, string thumbnailPath)
+    {
+        if (!File.Exists(thumbnailPath))
+        {
+            throw new FileNotFoundException($"Файл превью не найден: {thumbnailPath}");
+        }
+
+        var url = $"https://studio.rutube.ru/api/video/{videoId}/thumbnail/?client=vulp";
+        _logger.LogDebug("Загрузка превью для видео {VideoId} из {ThumbnailPath}", videoId, thumbnailPath);
+
+        using var form = new MultipartFormDataContent();
+        var fileBytes = await File.ReadAllBytesAsync(thumbnailPath);
+        var fileContent = new ByteArrayContent(fileBytes);
+
+        var extension = Path.GetExtension(thumbnailPath).ToLowerInvariant();
+        var contentType = extension switch
+        {
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".png" => "image/png",
+            ".gif" => "image/gif",
+            ".webp" => "image/webp",
+            _ => "image/jpeg",
+        };
+
+        fileContent.Headers.ContentType = new(contentType);
+        form.Add(fileContent, "file", Path.GetFileName(thumbnailPath));
+
+        var response = await _httpClient.PostAsync(url, form);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var err = await response.Content.ReadAsStringAsync();
+            _logger.LogError("Ошибка загрузки превью. Статус: {StatusCode}, Ответ: {Response}", response.StatusCode, err);
+            throw new HttpRequestException($"Не удалось загрузить превью: {response.StatusCode}. Ответ: {err}");
+        }
+
+        var body = await response.Content.ReadAsStringAsync();
+        var result = JsonSerializer.Deserialize<ThumbnailResponse>(body);
+
+        return result?.ThumbnailUrl;
+    }
+
+    [GeneratedRegex(@"visitorID=([^;]+)")]
+    private static partial Regex VisitorIdRegex();
 
     private async Task<UploadSessionResponse> InitUploadSessionAsync()
     {
@@ -250,14 +317,14 @@ public sealed class RutubeService
     //     _logger.LogInformation("Загрузка файла завершена. Всего загружено: {TotalBytes} байт", offset);
     // }
 
-    private async Task UpdateMetadataAsync(string videoId, string title, string description, string categoryId)
+    private async Task UpdateMetadataAsync(string videoId, string title, string description, string categoryId, bool isHidden)
     {
         var url = $"https://studio.rutube.ru/api/v2/video/{videoId}/?client=vulp";
         var payload = new MetadataUpdateRequest
         {
             Title = title,
             Description = string.IsNullOrWhiteSpace(description) ? " " : description,
-            IsHidden = false,
+            IsHidden = isHidden,
             IsAdult = false,
             Category = categoryId,
             Properties = new()
@@ -282,19 +349,20 @@ public sealed class RutubeService
         var videoDetails = JsonSerializer.Deserialize<VideoDetailsResponse>(body);
         if (videoDetails != null)
         {
-            _logger.LogDebug("Метаданные подтверждены. Название: '{Title}', Категория: '{Category}'",
-                videoDetails.Title, videoDetails.Category.Name);
+            _logger.LogDebug("Метаданные подтверждены. Название: '{Title}', Категория: '{Category}', Скрыто: {IsHidden}",
+                videoDetails.Title, videoDetails.Category.Name, videoDetails.IsHidden);
         }
     }
 
-    private async Task PublishVideoAsync(string videoId)
+    // TODO: Проверить и исправить часовые пояса (скорее всего Rutube принимает в МСК)
+    private async Task PublishVideoAsync(string videoId, DateTime publishAt)
     {
         var url = "https://studio.rutube.ru/api/video/publication/?client=vulp";
         var payload = new PublicationRequest
         {
             VideoId = videoId,
-            Timestamp = DateTime.Now.AddMinutes(5).ToString("yyyy-MM-ddTHH:mm:ss"), // TODO
-            HideVideo = true,
+            Timestamp = publishAt.ToString("yyyy-MM-ddTHH:mm:ss"),
+            HideVideo = false,
         };
 
         var jsonPayload = JsonSerializer.Serialize(payload);

@@ -1,5 +1,7 @@
 ﻿using MediaOrcestrator.Modules;
 using Microsoft.Extensions.Logging;
+using System.Globalization;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 
@@ -28,6 +30,13 @@ public class RutubeChannel(ILogger<RutubeChannel> logger, ILogger<RutubeService>
             Title = "идентификатор категории",
             Description = "Категория RuTube для загружаемых видео. Нажмите 'Загрузить категории' для получения списка",
             Type = SettingType.Dropdown,
+        },
+        new()
+        {
+            Key = "publish_at",
+            IsRequired = false,
+            Title = "время публикации",
+            Description = "Время отложенной публикации. Форматы: ЧЧ:ММ (например, 20:00) - публикация сегодня в это время, если оно уже прошло - завтра; +N (например, +3) - публикация через N часов от момента загрузки. Если не указано - видео публикуется немедленно",
         },
     ];
 
@@ -59,30 +68,25 @@ public class RutubeChannel(ILogger<RutubeChannel> logger, ILogger<RutubeService>
         }
     }
 
-    public MediaDto[] GetMedia()
-    {
-        throw new NotImplementedException();
-    }
-
-    public async IAsyncEnumerable<MediaDto> GetMedia(Dictionary<string, string> settings)
+    public async IAsyncEnumerable<MediaDto> GetMedia(Dictionary<string, string> settings, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         logger.LogWarning("Получение списка медиа из RuTube не реализовано");
         await Task.CompletedTask;
         yield break;
     }
 
-    public MediaDto GetMediaById()
+    public Task<MediaDto?> GetMediaByIdAsync(string externalId, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
     {
         throw new NotImplementedException();
     }
 
-    public Task<MediaDto> Download(string videoId, Dictionary<string, string> settings)
+    public Task<MediaDto> Download(string videoId, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
     {
         logger.LogWarning("Загрузка видео с RuTube не реализована. ID: {VideoId}", videoId);
         throw new NotImplementedException("Загрузка с RuTube не поддерживается");
     }
 
-    public async Task<string> Upload(MediaDto media, Dictionary<string, string> settings)
+    public async Task<string> Upload(MediaDto media, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
     {
         logger.LogInformation("Начало загрузки видео на RuTube. Название: '{Title}'", media.Title);
 
@@ -98,9 +102,30 @@ public class RutubeChannel(ILogger<RutubeChannel> logger, ILogger<RutubeService>
         var rutubeCategoryId = settings["category_id"];
         var rutubeService = await CreateRutubeServiceAsync(settings);
 
+        DateTime? publishAt = null;
+        if (settings.TryGetValue("publish_at", out var publishAtRaw) && !string.IsNullOrWhiteSpace(publishAtRaw))
+        {
+            var publishAtTrimmed = publishAtRaw.Trim();
+            if (publishAtTrimmed.StartsWith('+') && double.TryParse(publishAtTrimmed[1..], NumberStyles.Any, CultureInfo.InvariantCulture, out var relativeHours))
+            {
+                publishAt = DateTime.Now.AddHours(relativeHours);
+                logger.LogInformation("Отложенная публикация запланирована через {Hours} ч. - на {PublishAt}", relativeHours, publishAt.Value);
+            }
+            else if (TimeOnly.TryParseExact(publishAtTrimmed, "HH:mm", out var timeOnly))
+            {
+                var today = DateTime.Today.Add(timeOnly.ToTimeSpan());
+                publishAt = today > DateTime.Now ? today : today.AddDays(1);
+                logger.LogInformation("Отложенная публикация запланирована на {PublishAt}", publishAt.Value);
+            }
+            else
+            {
+                logger.LogWarning("Не удалось разобрать время публикации '{PublishAtRaw}'. Ожидается формат ЧЧ:ММ или +N (часов). Видео будет опубликовано немедленно", publishAtRaw);
+            }
+        }
+
         try
         {
-            var videoId = await rutubeService.UploadVideoAsync(filePath, media.Title, media.Description, rutubeCategoryId);
+            var videoId = await rutubeService.UploadVideoAsync(filePath, media.Title, media.Description, rutubeCategoryId, media.TempPreviewPath, publishAt);
             logger.LogInformation("Видео успешно загружено на RuTube. Video ID: {SessionId}, Название: '{Title}'", videoId, media.Title);
             return videoId;
         }
@@ -111,7 +136,7 @@ public class RutubeChannel(ILogger<RutubeChannel> logger, ILogger<RutubeService>
         }
     }
 
-    public async Task DeleteAsync(string externalId, Dictionary<string, string> settings)
+    public async Task DeleteAsync(string externalId, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
     {
         logger.LogInformation("Удаление медиа из RuTube. ID: {ExternalId}", externalId);
 
@@ -178,11 +203,3 @@ public class RutubeChannel(ILogger<RutubeChannel> logger, ILogger<RutubeService>
         return new(cookieStringBuilder.ToString(), csrfToken, serviceLogger);
     }
 }
-
-//public class RutubeMedia : Media
-//{
-//    public string Title { get; set; }
-//    public string Description { get; set; }
-
-//    public string Id => throw new NotImplementedException();
-//}
