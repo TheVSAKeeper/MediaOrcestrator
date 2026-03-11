@@ -48,6 +48,7 @@
             uiClearTypeComboBox = new ComboBox();
             uiClearDatabaseButton = new Button();
             uiForceScanButton = new Button();
+            uiSyncButton = new Button();
             uiSyncTreeTabPage = new TabPage();
             uiSyncTreeControl = new SyncTreeControl();
             uiLogsTabPage = new TabPage();
@@ -55,7 +56,9 @@
             groupBox1 = new GroupBox();
             uiRubuteAuthStatePathTextBox = new TextBox();
             uiRubuteAuthStateOpenBrowserButton = new Button();
-            uiSyncButton = new Button();
+            groupBox2 = new GroupBox();
+            uiYoutubeAuthStatePathTextBox = new TextBox();
+            uiYoutubeAuthStateOpenBrowserButton = new Button();
             uiMainTabControl.SuspendLayout();
             uiFilesTabPage.SuspendLayout();
             uiStorageTabPage.SuspendLayout();
@@ -64,6 +67,7 @@
             uiSyncTreeTabPage.SuspendLayout();
             uiToolsTabPage.SuspendLayout();
             groupBox1.SuspendLayout();
+            groupBox2.SuspendLayout();
             SuspendLayout();
             // 
             // uiMediaSourcePanel
@@ -273,6 +277,17 @@
             uiForceScanButton.UseVisualStyleBackColor = true;
             uiForceScanButton.Click += uiForceScanButton_Click;
             // 
+            // uiSyncButton
+            // 
+            uiSyncButton.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            uiSyncButton.Location = new Point(281, 238);
+            uiSyncButton.Name = "uiSyncButton";
+            uiSyncButton.Size = new Size(348, 32);
+            uiSyncButton.TabIndex = 1;
+            uiSyncButton.Text = "Синхронизировать";
+            uiSyncButton.UseVisualStyleBackColor = true;
+            uiSyncButton.Click += uiSyncButton_Click;
+            // 
             // uiSyncTreeTabPage
             // 
             uiSyncTreeTabPage.Controls.Add(uiSyncTreeControl);
@@ -303,6 +318,7 @@
             // 
             // uiToolsTabPage
             // 
+            uiToolsTabPage.Controls.Add(groupBox2);
             uiToolsTabPage.Controls.Add(groupBox1);
             uiToolsTabPage.Location = new Point(4, 24);
             uiToolsTabPage.Name = "uiToolsTabPage";
@@ -340,16 +356,34 @@
             uiRubuteAuthStateOpenBrowserButton.UseVisualStyleBackColor = true;
             uiRubuteAuthStateOpenBrowserButton.Click += uiRubuteAuthStateOpenBrowserButton_Click;
             // 
-            // uiSyncButton
+            // groupBox2
             // 
-            uiSyncButton.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            uiSyncButton.Location = new Point(281, 238);
-            uiSyncButton.Name = "uiSyncButton";
-            uiSyncButton.Size = new Size(348, 32);
-            uiSyncButton.TabIndex = 1;
-            uiSyncButton.Text = "Синхронизировать";
-            uiSyncButton.UseVisualStyleBackColor = true;
-            uiSyncButton.Click += uiSyncButton_Click;
+            groupBox2.Controls.Add(uiYoutubeAuthStatePathTextBox);
+            groupBox2.Controls.Add(uiYoutubeAuthStateOpenBrowserButton);
+            groupBox2.Location = new Point(219, 309);
+            groupBox2.Name = "groupBox2";
+            groupBox2.Size = new Size(467, 100);
+            groupBox2.TabIndex = 2;
+            groupBox2.TabStop = false;
+            groupBox2.Text = "Youtube auth_state";
+            // 
+            // textBox1
+            // 
+            uiYoutubeAuthStatePathTextBox.Location = new Point(7, 51);
+            uiYoutubeAuthStatePathTextBox.Name = "textBox1";
+            uiYoutubeAuthStatePathTextBox.Size = new Size(454, 23);
+            uiYoutubeAuthStatePathTextBox.TabIndex = 1;
+            uiYoutubeAuthStatePathTextBox.Text = "E:\\bobgroup\\projects\\mediaOrcestrator\\youtubeAuthState\\auth_state";
+            // 
+            // uiYoutubeAuthStateOpenBrowserButton
+            // 
+            uiYoutubeAuthStateOpenBrowserButton.Location = new Point(6, 22);
+            uiYoutubeAuthStateOpenBrowserButton.Name = "button1";
+            uiYoutubeAuthStateOpenBrowserButton.Size = new Size(101, 23);
+            uiYoutubeAuthStateOpenBrowserButton.TabIndex = 0;
+            uiYoutubeAuthStateOpenBrowserButton.Text = "открыть брузер";
+            uiYoutubeAuthStateOpenBrowserButton.UseVisualStyleBackColor = true;
+            uiYoutubeAuthStateOpenBrowserButton.Click += uiYoutubeAuthStateOpenBrowserButton_Click;
             // 
             // MainForm
             // 
@@ -371,6 +405,8 @@
             uiToolsTabPage.ResumeLayout(false);
             groupBox1.ResumeLayout(false);
             groupBox1.PerformLayout();
+            groupBox2.ResumeLayout(false);
+            groupBox2.PerformLayout();
             ResumeLayout(false);
         }
 
@@ -403,5 +439,8 @@
         private Button uiRubuteAuthStateOpenBrowserButton;
         private TextBox uiRubuteAuthStatePathTextBox;
         private Button uiSyncButton;
+        private GroupBox groupBox2;
+        private TextBox uiYoutubeAuthStatePathTextBox;
+        private Button uiYoutubeAuthStateOpenBrowserButton;
     }
 }

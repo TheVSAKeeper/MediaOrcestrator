@@ -200,21 +200,39 @@ public partial class MainForm : Form
 
     private void uiRubuteAuthStateOpenBrowserButton_Click(object sender, EventArgs e)
     {
+        GetCookie("https://studio.rutube.ru/", uiRubuteAuthStatePathTextBox);
+    }
+
+    private void uiYoutubeAuthStateOpenBrowserButton_Click(object sender, EventArgs e)
+    {
+        GetCookie("https://studio.youtube.com/", uiYoutubeAuthStatePathTextBox);
+    }
+
+    private void GetCookie(string openPage, TextBox pathTextbox)
+    {
         Task.Run(async () =>
         {
             using var playwright = await Playwright.CreateAsync();
             await using var browser = await playwright.Chromium.LaunchAsync(new()
             {
                 Headless = false,
+                Args = new[] { "--disable-blink-features=AutomationControlled" }
             });
 
             var contextOptions = new BrowserNewContextOptions();
 
-            if (File.Exists(uiRubuteAuthStatePathTextBox.Text))
+            if (File.Exists(pathTextbox.Text))
             {
-                contextOptions.StorageStatePath = uiRubuteAuthStatePathTextBox.Text;
+                contextOptions.StorageStatePath = pathTextbox.Text;
             }
-
+            else
+            {
+                var directory = Path.GetDirectoryName(pathTextbox.Text);
+                if (!Directory.Exists(directory))
+                {
+                    Directory.CreateDirectory(directory);
+                }
+            }
             await using var context = await browser.NewContextAsync(contextOptions);
             var page = await context.NewPageAsync();
 
@@ -232,10 +250,13 @@ public partial class MainForm : Form
                     request.PostData,
                 };
 
-                lock (captureLog)
+                if (false)
                 {
-                    captureLog.Add(reqData);
-                    _logger.LogInformation($"[REQ] {request.Method} {request.Url}");
+                    lock (captureLog)
+                    {
+                        captureLog.Add(reqData);
+                        _logger.LogInformation($"[REQ] {request.Method} {request.Url}");
+                    }
                 }
             };
 
@@ -263,35 +284,39 @@ public partial class MainForm : Form
                     Body = body,
                 };
 
-                lock (captureLog)
+                if (false)
                 {
-                    captureLog.Add(resData);
-                    _logger.LogInformation($"[RES] {response.Status} {response.Url}");
+                    lock (captureLog)
+                    {
+                        captureLog.Add(resData);
+                        _logger.LogInformation($"[RES] {response.Status} {response.Url}");
+                    }
                 }
             };
 
-            _logger.LogInformation("Navigating to Rutube...");
-            await page.GotoAsync("https://studio.rutube.ru/", new()
+            _logger.LogInformation("Navigating to " + openPage + "...");
+            await page.GotoAsync(openPage, new()
             {
                 Timeout = 0,
             });
 
-            var msg = "Зайдите в свой рутуб студия и нажмие OK, или отмена, если передумали";
-            if (MessageBox.Show(msg, "Rutube auth state", MessageBoxButtons.OKCancel) == DialogResult.OK)
+            var msg = "Зайдите в свой профиль и нажмие OK, или отмена, если передумали";
+            if (MessageBox.Show(msg, "Сохранить куку в фаил?", MessageBoxButtons.OKCancel) == DialogResult.OK)
             {
                 _logger.LogInformation("Browser is open.");
                 _logger.LogInformation("Press any key to save log and exit...");
 
                 await context.StorageStateAsync(new()
                 {
-                    Path = uiRubuteAuthStatePathTextBox.Text,
+                    Path = pathTextbox.Text,
                 });
 
-                _logger.LogInformation("Log saved to capture_log.json");
+                //_logger.LogInformation("Log saved to capture_log.json");
                 _logger.LogInformation("Auth state saved to auth_state.json");
             }
         });
     }
+
 
     private void DrawSources()
     {

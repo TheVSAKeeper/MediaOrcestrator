@@ -71,6 +71,13 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger) : ISourceType
             ],
             Description = "JavaScript runtime для YouTube extraction (требуется для yt-dlp)",
         },
+        new()
+        {
+            Key = "auth_state_path",
+            IsRequired = true,
+            Title = "путь до фаила куки",
+            Description = "JSON файл с cookies и CSRF токеном для авторизации на Youtube (для 18+ видео)",
+        },
     ];
 
     public async IAsyncEnumerable<MediaDto> GetMedia(Dictionary<string, string> settings, [EnumeratorCancellation] CancellationToken cancellationToken = default)
@@ -163,7 +170,8 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger) : ISourceType
         var ytDlpPath = settings["yt_dlp_path"];
         var ffmpegPath = settings["ffmpeg_path"];
         var jsRuntime = settings.GetValueOrDefault("js_runtime", "none");
-        var ytDlp = new YtDlp(ytDlpPath, ffmpegPath, jsRuntime);
+        var cookiePath = settings["auth_state_path"];
+        var ytDlp = new YtDlp(ytDlpPath, ffmpegPath, jsRuntime, cookiePath);
 
         object progressLock = new();
         double oldPercent = -1;

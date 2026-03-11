@@ -1,4 +1,4 @@
-using CliWrap;
+﻿using CliWrap;
 using CliWrap.Exceptions;
 using System.Globalization;
 using System.Text;
@@ -8,7 +8,7 @@ namespace MediaOrcestrator.Youtube;
 
 public sealed record YtDlpProgress(int PartNumber, double Progress);
 
-public sealed partial class YtDlp(string path, string ffmpegPath, string jsRuntime = "none")
+public sealed partial class YtDlp(string path, string ffmpegPath, string jsRuntime = "none", string cookiePath = "")
 {
     public async Task DownloadAsync(
         string url,
@@ -25,6 +25,12 @@ public sealed partial class YtDlp(string path, string ffmpegPath, string jsRunti
             "--ffmpeg-location", ffmpegPath,
             "-o", outputPath,
         };
+
+        if (!string.IsNullOrEmpty(cookiePath))
+        {
+            arguments.Add("--cookies");
+            arguments.Add(cookiePath);
+        }
 
         if (!string.Equals(jsRuntime, "none", StringComparison.OrdinalIgnoreCase))
         {
