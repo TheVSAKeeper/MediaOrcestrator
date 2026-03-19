@@ -83,6 +83,10 @@ public sealed partial class YtDlp(string path, string ffmpegPath, string jsRunti
         Action<string>? outputCallback = null,
         CancellationToken cancellationToken = default)
     {
+        var argumentsList = arguments.ToList();
+        string commandString = $"{path} {string.Join(" ", argumentsList.Select(a => a.Contains(' ') ? $"\"{a}\"" : a))}";
+
+
         StringBuilder stdErrBuffer = new();
 
         var stdOutPipe = PipeTarget.Merge(progress?.Pipe(CreateProgressRouter) ?? PipeTarget.Null,
@@ -103,6 +107,9 @@ public sealed partial class YtDlp(string path, string ffmpegPath, string jsRunti
         {
             var message = $"""
                            Ошибка выполнения yt-dlp.
+
+                           Команда:
+                           {commandString}
 
                            Вывод ошибок:
                            {stdErrBuffer}

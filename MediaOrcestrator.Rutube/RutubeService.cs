@@ -65,10 +65,12 @@ public sealed partial class RutubeService
         await UpdateMetadataAsync(session.VideoId, title, description, categoryId, true);
         _logger.LogInformation("Метаданные обновлены");
 
+        string errorMessage = "";
         if (!string.IsNullOrEmpty(thumbnailPath) && File.Exists(thumbnailPath))
         {
             try
             {
+                throw new Exception("blable");
                 _logger.LogInformation("Загрузка превью");
                 var thumbnailUrl = await UploadThumbnailAsync(session.VideoId, thumbnailPath);
                 _logger.LogInformation("Превью загружено: {ThumbnailUrl}", thumbnailUrl);
@@ -76,12 +78,7 @@ public sealed partial class RutubeService
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка загрузки превьюшки");
-                return new UploadResult
-                {
-                    Status = MediaStatusHelper.GetById(MediaStatus.PartialOk),
-                    Id = session.VideoId,
-                    Message = "Ошибка загрузки превьюшки",
-                };
+                errorMessage += "Ошибка загрузки превьюшки";
             }
         }
         try
@@ -102,18 +99,26 @@ public sealed partial class RutubeService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Ошибка публикации");
+            if (errorMessage != null)
+            {
+                errorMessage += "\r\n";
+            }
+            errorMessage += "Ошибка публикации";
+        }
+        if (errorMessage == null)
+        {
             return new UploadResult
             {
-                Status = MediaStatusHelper.GetById(MediaStatus.PartialOk),
+                Status = MediaStatusHelper.Ok(),
                 Id = session.VideoId,
-                Message = "Ошибка публикации",
             };
         }
 
         return new UploadResult
         {
-            Status = MediaStatusHelper.Ok(),
+            Status = MediaStatusHelper.GetById(MediaStatus.PartialOk),
             Id = session.VideoId,
+            Message = errorMessage,
         };
     }
 
