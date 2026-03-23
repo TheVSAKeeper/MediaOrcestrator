@@ -80,7 +80,7 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger) : ISourceType
         },
     ];
 
-    public async IAsyncEnumerable<MediaDto> GetMedia(Dictionary<string, string> settings, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    public async IAsyncEnumerable<MediaDto> GetMedia(Dictionary<string, string> settings, bool isFull, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         //var channelUrl = "https://www.youtube.com/@bobito217";
 
@@ -104,9 +104,44 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger) : ISourceType
         {
             logger.LogDebug("Обработка видео: '{VideoTitle}' (ID: {VideoId})", video.Title, video.Id);
 
-            // TODO: Долго. Возможно стоить вынести заполнение метаданных в отдельный метод
-            var fullVideo = await youtubeClient.Videos.GetAsync(video.Id, cancellationToken);
-            yield return CreateMediaDto(fullVideo);
+            if (isFull)
+            {
+                var fullVideo = await youtubeClient.Videos.GetAsync(video.Id, cancellationToken);
+                yield return CreateMediaDto(fullVideo);
+            }
+            else
+            {
+                // todo есть некоторое дублирование
+                var thumbnail = video.Thumbnails.TryGetWithHighestResolution();
+                var previewPath = thumbnail?.Url ?? string.Empty;
+
+                var metadata = new List<MetadataItem>
+                {
+                    new()
+                    {
+                        Key = "Duration",
+                        DisplayName = "Длительность",
+                        Value = video.Duration?.ToString() ?? "",
+                        DisplayType = "System.TimeSpan",
+                    },
+                    new()
+                    {
+                        Key = "Author",
+                        DisplayName = "Автор",
+                        Value = video.Author.ChannelTitle,
+                        DisplayType = "System.String",
+                    },
+                 };
+
+                yield return new MediaDto()
+                {
+                    Id = video.Id.Value,
+                    Title = video.Title,
+                    DataPath = video.Url,
+                    PreviewPath = previewPath,
+                    Metadata = metadata,
+                };
+            }
         }
 
         logger.LogInformation("Завершено получение медиа для канала: {ChannelUrl}", channelUrl);

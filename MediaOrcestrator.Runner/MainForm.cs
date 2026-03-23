@@ -41,11 +41,34 @@ public partial class MainForm : Form
 
     private async void uiSyncButton_Click(object sender, EventArgs e)
     {
-        _logger.LogInformation("Пользователь нажал кнопку синхронизации.");
+        _logger.LogInformation("Пользователь нажал кнопку синхронизации полной.");
         uiSyncButton.Enabled = false;
         try
         {
-            await _orcestrator.GetStorageFullInfo();
+            await _orcestrator.GetStorageFullInfo(true);
+            _logger.LogInformation("Синхронизация через UI завершена.");
+            DrawSources();
+            uiMediaMatrixGridControl.RefreshData();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Ошибка при синхронизации через UI.");
+            MessageBox.Show($"Ошибка при синхронизации: {ex.Message}");
+        }
+        finally
+        {
+            uiSyncButton.Enabled = true;
+        }
+    }
+
+    private async void button1_Click(object sender, EventArgs e)
+    {
+        // todo дубрирование ебейшее
+        _logger.LogInformation("Пользователь нажал кнопку синхронизации быстрой.");
+        uiSyncButton.Enabled = false;
+        try
+        {
+            await _orcestrator.GetStorageFullInfo(false);
             _logger.LogInformation("Синхронизация через UI завершена.");
             DrawSources();
             uiMediaMatrixGridControl.RefreshData();
@@ -109,6 +132,9 @@ public partial class MainForm : Form
 
     private void uiForceScanButton_Click(object sender, EventArgs e)
     {
+        MessageBox.Show("отладочное");
+        return;
+
         Task.Run(async () =>
         {
             try

@@ -17,7 +17,7 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
         var sources = GetSourceTypes();
     }
 
-    public async Task GetStorageFullInfo()
+    public async Task GetStorageFullInfo(bool isFull)
     {
         logger.LogInformation("Запуск процесса синхронизации...");
 
@@ -55,7 +55,7 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
                 return;
             }
 
-            var syncMedia = plugin.GetMedia(mediaSource.Settings);
+            var syncMedia = plugin.GetMedia(mediaSource.Settings, isFull);
             var mediaList = new List<MediaDto>();
             var foundIds = new List<string>();
             await foreach (var s in syncMedia)
@@ -70,7 +70,8 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
                         foreach (var item in s.Metadata)
                         {
                             providedKeys.Add(item.Key);
-                            var existing = foundMediaSource.Media.Metadata.FirstOrDefault(m => m.Key == item.Key && m.SourceId == mediaSource.Id);
+                            var existing = foundMediaSource.Media.Metadata
+                                .FirstOrDefault(m => m.Key == item.Key && m.SourceId == mediaSource.Id);
                             if (existing != null)
                             {
                                 existing.Value = item.Value;
@@ -84,7 +85,8 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
                             }
                         }
 
-                        foundMediaSource.Media.Metadata.RemoveAll(m => m.SourceId == mediaSource.Id && !providedKeys.Contains(m.Key));
+                        foundMediaSource.Media.Metadata
+                            .RemoveAll(m => m.SourceId == mediaSource.Id && !providedKeys.Contains(m.Key));
                         mediaCol.Update(foundMediaSource.Media);
                     }
 

@@ -129,20 +129,17 @@ public sealed partial class RutubeService
             // todo код с душком
             try
             {
-                if (videoId == null)
+                if (publishAt.HasValue && publishAt.Value > DateTime.Now)
                 {
-                    if (publishAt.HasValue && publishAt.Value > DateTime.Now)
-                    {
-                        _logger.LogInformation("Планирование публикации на {PublishAt}", publishAt.Value);
-                        await PublishVideoAsync(videoId, publishAt.Value);
-                        _logger.LogInformation("Видео успешно запланировано");
-                    }
-                    else
-                    {
-                        _logger.LogInformation("Немедленная публикация видео");
-                        await UpdateMetadataAsync(videoId, title, description, categoryId, false);
-                        _logger.LogInformation("Видео успешно опубликовано");
-                    }
+                    _logger.LogInformation("Планирование публикации на {PublishAt}", publishAt.Value);
+                    await PublishVideoAsync(videoId, publishAt.Value);
+                    _logger.LogInformation("Видео успешно запланировано");
+                }
+                else
+                {
+                    _logger.LogInformation("Немедленная публикация видео");
+                    await UpdateMetadataAsync(videoId, title, description, categoryId, false);
+                    _logger.LogInformation("Видео успешно опубликовано");
                 }
             }
             catch (Exception ex)

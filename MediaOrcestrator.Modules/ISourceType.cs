@@ -17,7 +17,7 @@ public interface ISourceType
     /// </summary>
     /// <param name="settings"></param>
     /// <returns></returns>
-    IAsyncEnumerable<MediaDto> GetMedia(Dictionary<string, string> settings, CancellationToken cancellationToken = default);
+    IAsyncEnumerable<MediaDto> GetMedia(Dictionary<string, string> settings, bool isFull, CancellationToken cancellationToken = default);
 
     Task<MediaDto?> GetMediaByIdAsync(string externalId, Dictionary<string, string> settings, CancellationToken cancellationToken = default);
     Task<UploadResult> Upload(MediaDto media, Dictionary<string, string> settings, CancellationToken cancellationToken = default);
