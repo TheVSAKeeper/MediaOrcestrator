@@ -234,6 +234,17 @@ file static class Program
 
         services.AddSingleton<LiteDatabase>(_ => new(databasePath));
         services.AddSingleton<PluginManager>();
+        services.AddHttpClient("GitHub", client =>
+        {
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("MediaOrcestrator/1.0");
+            client.Timeout = TimeSpan.FromSeconds(30);
+        });
+
+        services.AddSingleton<GitHubReleaseProvider>();
+        services.AddSingleton<ToolManager>(sp =>
+            new(Path.Combine(AppContext.BaseDirectory, "tools"),
+                sp.GetRequiredService<GitHubReleaseProvider>(),
+                sp.GetRequiredService<ILogger<ToolManager>>()));
         services.AddSingleton<Orcestrator>();
         services.AddSingleton<SyncPlanner>();
         services.AddTransient<MainForm>();

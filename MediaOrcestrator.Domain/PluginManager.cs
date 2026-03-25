@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging;
 
 namespace MediaOrcestrator.Domain;
 
-public class PluginManager(IServiceProvider serviceProvider, ILogger<PluginManager> logger)
+public class PluginManager(IServiceProvider serviceProvider, ToolManager toolManager, ILogger<PluginManager> logger)
 {
     public Dictionary<string, ISourceType> MediaSources { get; private set; } = new();
 
@@ -37,5 +37,15 @@ public class PluginManager(IServiceProvider serviceProvider, ILogger<PluginManag
                 logger.LogError("Не удалось добавить плагин '{PluginId}'. Плагин с таким ID уже зарегистрирован", id);
             }
         }
+
+        var toolConsumers = MediaSources.Values.OfType<IToolConsumer>().ToList();
+
+        if (toolConsumers.Count <= 0)
+        {
+            return;
+        }
+
+        toolManager.RegisterTools(toolConsumers);
+        toolManager.ResolveAll();
     }
 }
