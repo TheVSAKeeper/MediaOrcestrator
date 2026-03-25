@@ -82,13 +82,13 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger) : ISourceType
 
     public async IAsyncEnumerable<MediaDto> GetMedia(Dictionary<string, string> settings, bool isFull, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        //var channelUrl = "https://www.youtube.com/@bobito217";
-
         var channelUrl = settings["channel_id"];
         logger.LogInformation("Получение списка медиа для канала: {ChannelUrl}", channelUrl);
 
         using var youtubeClient = new YoutubeClient();
-        var channel = await GetChannel(youtubeClient, channelUrl);
+
+        // Retry для получения канала
+        var channel = await RetryAsync(async () => await GetChannel(youtubeClient, channelUrl), 5, 500, cancellationToken);
 
         if (channel == null)
         {
@@ -106,7 +106,8 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger) : ISourceType
 
             if (isFull)
             {
-                var fullVideo = await youtubeClient.Videos.GetAsync(video.Id, cancellationToken);
+                // Retry для получения полной информации о видео
+                var fullVideo = await RetryAsync(async () => await youtubeClient.Videos.GetAsync(video.Id, cancellationToken), 5, 500, cancellationToken);
                 yield return CreateMediaDto(fullVideo);
             }
             else
@@ -116,22 +117,22 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger) : ISourceType
                 var previewPath = thumbnail?.Url ?? string.Empty;
 
                 var metadata = new List<MetadataItem>
+            {
+                new()
                 {
-                    new()
-                    {
-                        Key = "Duration",
-                        DisplayName = "Длительность",
-                        Value = video.Duration?.ToString() ?? "",
-                        DisplayType = "System.TimeSpan",
-                    },
-                    new()
-                    {
-                        Key = "Author",
-                        DisplayName = "Автор",
-                        Value = video.Author.ChannelTitle,
-                        DisplayType = "System.String",
-                    },
-                 };
+                    Key = "Duration",
+                    DisplayName = "Длительность",
+                    Value = video.Duration?.ToString() ?? "",
+                    DisplayType = "System.TimeSpan",
+                },
+                new()
+                {
+                    Key = "Author",
+                    DisplayName = "Автор",
+                    Value = video.Author.ChannelTitle,
+                    DisplayType = "System.String",
+                },
+            };
 
                 yield return new MediaDto()
                 {
@@ -145,6 +146,33 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger) : ISourceType
         }
 
         logger.LogInformation("Завершено получение медиа для канала: {ChannelUrl}", channelUrl);
+    }
+
+    // Вспомогательный метод для retry логики
+    private async Task<T> RetryAsync<T>(Func<Task<T>> action, int maxRetries, int delayMs, CancellationToken cancellationToken)
+    {
+        int retryCount = 0;
+
+        while (retryCount < maxRetries)
+        {
+            try
+            {
+                return await action();
+            }
+            catch (Exception ex) when (retryCount < maxRetries - 1)
+            {
+                retryCount++;
+                logger.LogWarning(ex, "Попытка {RetryCount}/{MaxRetries} не удалась. Повтор через {DelayMs}мс", retryCount, maxRetries, delayMs);
+
+                if (delayMs > 0)
+                {
+                    await Task.Delay(delayMs, cancellationToken);
+                }
+            }
+        }
+
+        // Последняя попытка (если все предыдущие провалились)
+        return await action();
     }
 
     public async Task<Channel?> GetChannel(YoutubeClient client, string channelUrl)
@@ -205,7 +233,7 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger) : ISourceType
         var ytDlpPath = settings["yt_dlp_path"];
         var ffmpegPath = settings["ffmpeg_path"];
         var jsRuntime = settings.GetValueOrDefault("js_runtime", "none");
-        var cookiePath = settings.GetValueOrDefault("auth_state_path","");
+        var cookiePath = settings.GetValueOrDefault("auth_state_path", "");
         var ytDlp = new YtDlp(ytDlpPath, ffmpegPath, jsRuntime, cookiePath);
 
         object progressLock = new();
