@@ -243,6 +243,9 @@ public class ToolManager(string toolsRoot, GitHubReleaseProvider releaseProvider
                 consumer.SetToolPath(toolName, resolvedPath);
             }
 
+            _cachedStatuses.Remove(toolName);
+            _lastChecked.Remove(toolName);
+
             logger.LogInformation("Инструмент '{Name}' успешно обновлён. Путь: {Path}", toolName, resolvedPath);
         }
         catch

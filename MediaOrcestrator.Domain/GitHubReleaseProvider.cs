@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace MediaOrcestrator.Domain;
 
@@ -20,13 +21,18 @@ public class GitHubReleaseProvider(IHttpClientFactory httpClientFactory, ILogger
         {
             var release = await TryGetReleaseAsync(client, $"https://api.github.com/repos/{repo}/releases/latest", cancellationToken);
 
+            if (release is not null && !release.Assets.Any(a => GlobMatcher.IsMatch(a.Name, assetPattern)))
+            {
+                release = null;
+            }
+
             if (release is null)
             {
                 var releases = await client.GetFromJsonAsync<List<GitHubRelease>>($"https://api.github.com/repos/{repo}/releases",
                     JsonOptions,
                     cancellationToken);
 
-                release = releases?.FirstOrDefault(r => !r.Prerelease);
+                release = releases?.FirstOrDefault(r => !r.Prerelease && r.Assets.Any(a => GlobMatcher.IsMatch(a.Name, assetPattern)));
             }
 
             if (release is null)
@@ -98,18 +104,30 @@ public class GitHubReleaseProvider(IHttpClientFactory httpClientFactory, ILogger
         return await response.Content.ReadFromJsonAsync<GitHubRelease>(JsonOptions, cancellationToken);
     }
 
-    private record GitHubRelease
+    private sealed record GitHubRelease
     {
-        public string TagName { get; init; } = "";
+        [JsonPropertyName("tag_name")]
+        public string TagName { get; init; } = string.Empty;
+
+        [JsonPropertyName("prerelease")]
         public bool Prerelease { get; init; }
-        public DateTimeOffset PublishedAt { get; init; }
-        public List<GitHubAsset> Assets { get; init; } = [];
+
+        [JsonPropertyName("published_at")]
+        public DateTime PublishedAt { get; init; }
+
+        [JsonPropertyName("assets")]
+        public List<GithubAsset> Assets { get; init; } = [];
     }
 
-    private record GitHubAsset
+    private sealed record GithubAsset
     {
-        public string Name { get; } = "";
-        public string BrowserDownloadUrl { get; } = "";
-        public long Size { get; init; }
+        [JsonPropertyName("name")]
+        public string Name { get; init; } = string.Empty;
+
+        [JsonPropertyName("size")]
+        public int Size { get; init; }
+
+        [JsonPropertyName("browser_download_url")]
+        public string BrowserDownloadUrl { get; init; } = string.Empty;
     }
 }

@@ -19,12 +19,7 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
 
     public async Task GetStorageFullInfo(bool isFull, Source? filterSource = null)
     {
-        string additional = "";
-        if (filterSource != null)
-        {
-            additional = " " + filterSource.TitleFull;
-        }
-        logger.LogInformation($"Запуск процесса синхронизации{additional}...");
+        logger.LogInformation("Запуск процесса синхронизации {Source}...", filterSource?.TitleFull);
 
         var mediaCol = db.GetCollection<Media>("medias");
         //mediaCol.DeleteAll();
@@ -43,6 +38,7 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
                         continue;
                     }
                 }
+
                 source.Media = media;
                 cache.GetMedia(source.SourceId).Add(source);
             }
@@ -68,7 +64,7 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
                 return;
             }
 
-            var syncMedia = plugin.GetMedia(mediaSource.Settings, isFull);
+            var syncMedia = plugin.GetMedia(mediaSource.Settings, isFull, cancellationToken);
             var mediaList = new List<MediaDto>();
             var foundIds = new List<string>();
             await foreach (var s in syncMedia)
@@ -85,6 +81,7 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
                             providedKeys.Add(item.Key);
                             var existing = foundMediaSource.Media.Metadata
                                 .FirstOrDefault(m => m.Key == item.Key && m.SourceId == mediaSource.Id);
+
                             if (existing != null)
                             {
                                 existing.Value = item.Value;
@@ -100,6 +97,7 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
 
                         foundMediaSource.Media.Metadata
                             .RemoveAll(m => m.SourceId == mediaSource.Id && !providedKeys.Contains(m.Key));
+
                         mediaCol.Update(foundMediaSource.Media);
                     }
 
@@ -184,22 +182,22 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
         //    //}
         //}
         //medias = db.GetCollection<Media>("medias").FindAll().ToList();
-       // foreach (var media in medias) // времяночка для очистки
-       // {
-       //     foreach (var source in media.Sources)
-         //   {
-           //     if (source.Status == MediaStatus.Missing)
-             //   {
-               //     source.Status = MediaStatus.Ok;
-               // }
-//
-  //              db.GetCollection<Media>("medias").Update(media);
-    //        }
-            //if (media.Sources.Any(x => x.ExternalId == null))
-            //{
-            //    db.GetCollection<Media>("medias").Delete(media.Id);
-            //}
-        }
+        // foreach (var media in medias) // времяночка для очистки
+        // {
+        //     foreach (var source in media.Sources)
+        //   {
+        //     if (source.Status == MediaStatus.Missing)
+        //   {
+        //     source.Status = MediaStatus.Ok;
+        // }
+        //
+        //              db.GetCollection<Media>("medias").Update(media);
+        //        }
+        //if (media.Sources.Any(x => x.ExternalId == null))
+        //{
+        //    db.GetCollection<Media>("medias").Delete(media.Id);
+        //}
+        //}
         return medias;
     }
 
@@ -403,6 +401,7 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
         {
             throw new($"MediaSourceLink не найден для {rel.From.Id}");
         }
+
         if (fromMediaSource.Status != MediaStatus.Ok)
         {
             throw new($"MediaSourceLink для {rel.From.Id} в плохом статусе " + fromMediaSource.Status);
@@ -427,7 +426,7 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
                 throw new("ошибка");
             }
 
-            uploadResult = new UploadResult
+            uploadResult = new()
             {
                 Status = MediaStatusHelper.Ok(),
                 Id = Guid.NewGuid().ToString(),
@@ -470,7 +469,7 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
         }
         else
         {
-            throw new Exception("Провал синхронизации: " + uploadResult.Status.Text + " " + uploadResult.Message);
+            throw new("Провал синхронизации: " + uploadResult.Status.Text + " " + uploadResult.Message);
         }
     }
 
