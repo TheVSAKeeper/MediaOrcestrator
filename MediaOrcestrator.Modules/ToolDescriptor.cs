@@ -10,4 +10,5 @@ public record ToolDescriptor
     public string? VersionTagPattern { get; init; }
     public string? ArchiveExecutablePath { get; init; }
     public ArchiveType ArchiveType { get; init; } = ArchiveType.None;
+    public IReadOnlyList<string>? CompanionExecutables { get; init; }
 }

@@ -1,4 +1,4 @@
-﻿using MediaOrcestrator.Modules;
+using MediaOrcestrator.Modules;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -20,6 +20,10 @@ public class PluginManager(IServiceProvider serviceProvider, ToolManager toolMan
             var id = type.FullName ?? "UnknownType";
 
             var instance = (ISourceType)ActivatorUtilities.CreateInstance(serviceProvider, type);
+
+            /*var instance = typeof(IToolConsumer).IsAssignableFrom(type)
+                ? (ISourceType)ActivatorUtilities.CreateInstance(serviceProvider, type, (IToolPathProvider)toolManager)
+                : (ISourceType)ActivatorUtilities.CreateInstance(serviceProvider, type);*/
 
             if (instance.SettingsKeys != null
                 && instance.SettingsKeys.Any(x => x.Key.StartsWith("_system", StringComparison.Ordinal)))

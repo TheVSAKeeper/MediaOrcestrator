@@ -1,17 +1,29 @@
 using MediaOrcestrator.Modules;
 using Microsoft.Extensions.Logging;
-using System.Diagnostics;
-using System.Text.RegularExpressions;
+using System.Collections.Concurrent;
+using System.Runtime.InteropServices;
 
 namespace MediaOrcestrator.Domain;
 
-public class ToolManager(string toolsRoot, GitHubReleaseProvider releaseProvider, ILogger<ToolManager> logger)
+public class ToolManager(
+    string toolsRoot,
+    IReleaseProvider releaseProvider,
+    ToolVersionDetector versionDetector,
+    ToolInstaller installer,
+    ILogger<ToolManager> logger) : IToolPathProvider
 {
-    private readonly Dictionary<string, ToolDescriptor> _registry = new();
-    private readonly Dictionary<string, List<IToolConsumer>> _consumers = new();
-    private readonly Dictionary<string, string?> _resolvedPaths = new();
-    private readonly Dictionary<string, DateTimeOffset> _lastChecked = new();
-    private readonly Dictionary<string, ToolStatus> _cachedStatuses = new();
+    private readonly ConcurrentDictionary<string, ToolDescriptor> _registry = new();
+    private readonly ConcurrentDictionary<string, List<IToolConsumer>> _consumers = new();
+    private readonly ConcurrentDictionary<string, string?> _resolvedPaths = new();
+    private readonly ConcurrentDictionary<string, string?> _companionPaths = new();
+    private readonly ConcurrentDictionary<string, DateTimeOffset> _lastChecked = new();
+    private readonly ConcurrentDictionary<string, ToolStatus> _cachedStatuses = new();
+
+    public string? GetToolPath(string toolName)
+        => _resolvedPaths.GetValueOrDefault(toolName);
+
+    public string? GetCompanionPath(string toolName, string companionName)
+        => _companionPaths.GetValueOrDefault($"{toolName}:{companionName}");
 
     public void RegisterTools(IEnumerable<IToolConsumer> consumers)
     {
@@ -25,7 +37,23 @@ public class ToolManager(string toolsRoot, GitHubReleaseProvider releaseProvider
                 {
                     if (existing.GitHubRepo != tool.GitHubRepo)
                     {
-                        throw new InvalidOperationException($"Конфликт регистрации инструмента '{tool.Name}': '{existing.GitHubRepo}' vs '{tool.GitHubRepo}'");
+                        throw new InvalidOperationException(
+                            $"Конфликт регистрации инструмента '{tool.Name}': '{existing.GitHubRepo}' vs '{tool.GitHubRepo}'");
+                    }
+
+                    if (tool.CompanionExecutables is not null)
+                    {
+                        var merged = existing.CompanionExecutables?.ToList() ?? [];
+
+                        foreach (var companion in tool.CompanionExecutables)
+                        {
+                            if (!merged.Contains(companion))
+                            {
+                                merged.Add(companion);
+                            }
+                        }
+
+                        _registry[tool.Name] = existing with { CompanionExecutables = merged };
                     }
                 }
                 else
@@ -38,7 +66,8 @@ public class ToolManager(string toolsRoot, GitHubReleaseProvider releaseProvider
             }
         }
 
-        logger.LogInformation("Зарегистрировано {Count} инструментов: {Names}", _registry.Count, string.Join(", ", _registry.Keys));
+        logger.LogInformation("Зарегистрировано {Count} инструментов: {Names}",
+            _registry.Count, string.Join(", ", _registry.Keys));
     }
 
     public void ResolveAll()
@@ -48,15 +77,11 @@ public class ToolManager(string toolsRoot, GitHubReleaseProvider releaseProvider
         foreach (var (name, descriptor) in _registry)
         {
             var toolDir = Path.Combine(toolsRoot, name);
-            var resolvedPath = FindExecutableInToolDir(toolDir, descriptor)
+            var resolvedPath = ToolInstaller.FindExecutableInToolDir(toolDir, descriptor)
                                ?? TryMigrateFromLegacy(name, descriptor);
 
             _resolvedPaths[name] = resolvedPath;
-
-            foreach (var consumer in _consumers[name])
-            {
-                consumer.SetToolPath(name, resolvedPath);
-            }
+            ResolveCompanions(name, descriptor, resolvedPath);
 
             if (resolvedPath is not null)
             {
@@ -71,31 +96,27 @@ public class ToolManager(string toolsRoot, GitHubReleaseProvider releaseProvider
 
     public async Task<List<ToolStatus>> CheckForUpdatesAsync(CancellationToken cancellationToken = default)
     {
-        var results = new List<ToolStatus>();
-
-        foreach (var (name, descriptor) in _registry)
+        var tasks = _registry.Select(async kv =>
         {
-            var installedVersion = GetInstalledVersion(name, descriptor);
+            var (name, descriptor) = kv;
+            var path = _resolvedPaths.GetValueOrDefault(name);
+            var installedVersion = await versionDetector.GetInstalledVersionAsync(path, descriptor, cancellationToken);
 
             if (_lastChecked.TryGetValue(name, out var lastCheck)
                 && DateTimeOffset.Now - lastCheck < TimeSpan.FromHours(1)
                 && _cachedStatuses.TryGetValue(name, out var cached))
             {
-                results.Add(cached with { InstalledVersion = installedVersion });
-                continue;
+                return cached with { InstalledVersion = installedVersion };
             }
 
-            var release = await releaseProvider.GetLatestReleaseAsync(descriptor.GitHubRepo, descriptor.AssetPattern, cancellationToken);
+            var release = await releaseProvider.GetLatestReleaseAsync(
+                descriptor.GitHubRepo, descriptor.AssetPattern, cancellationToken);
 
             var latestVersion = release is not null
-                ? NormalizeTagVersion(release.TagName, descriptor.VersionTagPattern)
+                ? ToolVersionDetector.NormalizeTagVersion(release.TagName, descriptor.VersionTagPattern)
                 : null;
 
-            var updateAvailable = installedVersion is not null
-                                  && latestVersion is not null
-                                  && NormalizeForComparison(installedVersion) != NormalizeForComparison(latestVersion)
-                                  || installedVersion is null
-                                  && latestVersion is not null;
+            var updateAvailable = ToolVersionDetector.IsUpdateAvailable(installedVersion, latestVersion);
 
             _lastChecked[name] = DateTimeOffset.Now;
 
@@ -110,10 +131,11 @@ public class ToolManager(string toolsRoot, GitHubReleaseProvider releaseProvider
             };
 
             _cachedStatuses[name] = status;
-            results.Add(status);
-        }
+            return status;
+        });
 
-        return results;
+        var results = await Task.WhenAll(tasks);
+        return [.. results];
     }
 
     public async Task UpdateToolAsync(string toolName, IProgress<double>? progress = null, CancellationToken cancellationToken = default)
@@ -123,198 +145,69 @@ public class ToolManager(string toolsRoot, GitHubReleaseProvider releaseProvider
             throw new ArgumentException($"Неизвестный инструмент: {toolName}");
         }
 
-        var toolDir = Path.Combine(toolsRoot, toolName);
-        var backupDir = toolDir + ".old";
-
         var currentPath = _resolvedPaths.GetValueOrDefault(toolName);
 
-        if (currentPath is not null && File.Exists(currentPath))
-        {
-            var exeName = Path.GetFileNameWithoutExtension(currentPath);
-            var processes = Process.GetProcessesByName(exeName);
+        var resolvedPath = await installer.InstallAsync(
+            toolName, descriptor, toolsRoot, currentPath, progress, cancellationToken);
 
-            foreach (var process in processes)
-            {
-                try
-                {
-                    if (process.MainModule?.FileName?.StartsWith(toolDir, StringComparison.OrdinalIgnoreCase) == true)
-                    {
-                        throw new InvalidOperationException($"Инструмент '{toolName}' сейчас используется (PID {process.Id}). Дождитесь завершения операции перед обновлением.");
-                    }
-                }
-                catch (InvalidOperationException)
-                {
-                    throw;
-                }
-                catch
-                {
-                }
-                finally
-                {
-                    process.Dispose();
-                }
-            }
-        }
+        _resolvedPaths[toolName] = resolvedPath;
+        ResolveCompanions(toolName, descriptor, resolvedPath);
 
-        var release = await releaseProvider.GetLatestReleaseAsync(descriptor.GitHubRepo, descriptor.AssetPattern, cancellationToken);
+        _cachedStatuses.TryRemove(toolName, out _);
+        _lastChecked.TryRemove(toolName, out _);
 
-        if (release?.AssetUrl is null)
-        {
-            throw new InvalidOperationException($"Не найден файл для скачивания инструмента '{toolName}'");
-        }
-
-        var tempDir = Path.Combine(toolsRoot, ".temp", toolName);
-
-        try
-        {
-            if (Directory.Exists(tempDir))
-            {
-                Directory.Delete(tempDir, true);
-            }
-
-            Directory.CreateDirectory(tempDir);
-
-            var downloadPath = Path.Combine(tempDir, release.AssetName ?? $"{toolName}.download");
-
-            logger.LogInformation("Скачивание {Tool} из {Url}...", toolName, release.AssetUrl);
-
-            await releaseProvider.DownloadAssetAsync(release.AssetUrl, downloadPath, progress, cancellationToken);
-
-            if (descriptor.ArchiveType != ArchiveType.None)
-            {
-                var extractDir = Path.Combine(tempDir, "extracted");
-                ArchiveExtractor.Extract(downloadPath, extractDir, descriptor.ArchiveType);
-                File.Delete(downloadPath);
-
-                if (Directory.Exists(backupDir))
-                {
-                    Directory.Delete(backupDir, true);
-                }
-
-                if (Directory.Exists(toolDir))
-                {
-                    Directory.Move(toolDir, backupDir);
-                }
-
-                if (descriptor.ArchiveExecutablePath is not null)
-                {
-                    var exePath = ArchiveExtractor.FindExecutable(extractDir, descriptor.ArchiveExecutablePath);
-
-                    if (exePath is null)
-                    {
-                        throw new FileNotFoundException($"Исполняемый файл не найден в архиве по паттерну '{descriptor.ArchiveExecutablePath}'");
-                    }
-
-                    var exeDir = Path.GetDirectoryName(exePath)!;
-                    Directory.Move(exeDir, toolDir);
-                }
-                else
-                {
-                    Directory.Move(extractDir, toolDir);
-                }
-            }
-            else
-            {
-                if (Directory.Exists(backupDir))
-                {
-                    Directory.Delete(backupDir, true);
-                }
-
-                if (Directory.Exists(toolDir))
-                {
-                    Directory.Move(toolDir, backupDir);
-                }
-
-                Directory.CreateDirectory(toolDir);
-                var destFile = Path.Combine(toolDir, Path.GetFileName(downloadPath));
-                File.Move(downloadPath, destFile);
-            }
-
-            if (Directory.Exists(backupDir))
-            {
-                Directory.Delete(backupDir, true);
-            }
-
-            var resolvedPath = FindExecutableInToolDir(toolDir, descriptor);
-            _resolvedPaths[toolName] = resolvedPath;
-
-            foreach (var consumer in _consumers[toolName])
-            {
-                consumer.SetToolPath(toolName, resolvedPath);
-            }
-
-            _cachedStatuses.Remove(toolName);
-            _lastChecked.Remove(toolName);
-
-            logger.LogInformation("Инструмент '{Name}' успешно обновлён. Путь: {Path}", toolName, resolvedPath);
-        }
-        catch
-        {
-            if (Directory.Exists(backupDir) && !Directory.Exists(toolDir))
-            {
-                Directory.Move(backupDir, toolDir);
-                logger.LogWarning("Откат '{Name}' к предыдущей версии", toolName);
-            }
-
-            throw;
-        }
-        finally
-        {
-            if (Directory.Exists(tempDir))
-            {
-                try
-                {
-                    Directory.Delete(tempDir, true);
-                }
-                catch
-                {
-                }
-            }
-        }
-    }
-
-    public string? GetToolPath(string toolName)
-    {
-        return _resolvedPaths.GetValueOrDefault(toolName);
+        logger.LogInformation("Инструмент '{Name}' успешно обновлён. Путь: {Path}", toolName, resolvedPath);
     }
 
     public IReadOnlyDictionary<string, ToolDescriptor> GetRegistry()
+        => _registry;
+
+    private void ResolveCompanions(string toolName, ToolDescriptor descriptor, string? mainPath)
     {
-        return _registry;
-    }
-
-    private string? FindExecutableInToolDir(string toolDir, ToolDescriptor descriptor)
-    {
-        if (!Directory.Exists(toolDir))
+        if (descriptor.CompanionExecutables is null || mainPath is null)
         {
-            return null;
+            return;
         }
 
-        if (descriptor.ArchiveExecutablePath is not null)
+        var dir = Path.GetDirectoryName(mainPath)!;
+
+        foreach (var companion in descriptor.CompanionExecutables)
         {
-            return ArchiveExtractor.FindExecutable(toolDir, descriptor.ArchiveExecutablePath)
-                   ?? ArchiveExtractor.FindExecutable(toolDir, Path.GetFileName(descriptor.ArchiveExecutablePath));
+            var companionFileName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+                ? $"{companion}.exe"
+                : companion;
+            var companionPath = Path.Combine(dir, companionFileName);
+            var key = $"{toolName}:{companion}";
+            _companionPaths[key] = File.Exists(companionPath) ? companionPath : null;
+
+            if (File.Exists(companionPath))
+            {
+                logger.LogInformation("Companion '{Companion}' для '{Tool}' найден: {Path}",
+                    companion, toolName, companionPath);
+            }
+            else
+            {
+                logger.LogWarning("Companion '{Companion}' для '{Tool}' не найден в {Dir}",
+                    companion, toolName, dir);
+            }
         }
-
-        var exeName = descriptor.AssetPattern.Contains('*')
-            ? null
-            : descriptor.AssetPattern;
-
-        if (exeName is null)
-        {
-            var exeFiles = Directory.GetFiles(toolDir, "*.exe");
-            return exeFiles.Length == 1 ? exeFiles[0] : null;
-        }
-
-        var path = Path.Combine(toolDir, exeName);
-        return File.Exists(path) ? path : null;
     }
 
     private string? TryMigrateFromLegacy(string toolName, ToolDescriptor descriptor)
     {
-        foreach (var consumer in _consumers[toolName])
+        if (!_consumers.TryGetValue(toolName, out var consumers))
         {
-            var legacyPath = consumer.GetLegacyToolPath(toolName);
+            return null;
+        }
+
+        foreach (var consumer in consumers)
+        {
+            if (consumer is not ILegacyToolPathProvider legacyProvider)
+            {
+                continue;
+            }
+
+            var legacyPath = legacyProvider.GetLegacyToolPath(toolName);
 
             if (legacyPath is null || !File.Exists(legacyPath))
             {
@@ -329,81 +222,10 @@ public class ToolManager(string toolsRoot, GitHubReleaseProvider releaseProvider
             var destFile = Path.Combine(toolDir, Path.GetFileName(legacyPath));
             File.Copy(legacyPath, destFile, true);
 
-            return FindExecutableInToolDir(toolDir, descriptor) ?? destFile;
+            return ToolInstaller.FindExecutableInToolDir(toolDir, descriptor) ?? destFile;
         }
 
         return null;
-    }
-
-    private string? GetInstalledVersion(string toolName, ToolDescriptor descriptor)
-    {
-        var path = _resolvedPaths.GetValueOrDefault(toolName);
-
-        if (path is null || !File.Exists(path))
-        {
-            return null;
-        }
-
-        try
-        {
-            var psi = new ProcessStartInfo
-            {
-                FileName = path,
-                Arguments = descriptor.VersionCommand,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
-
-            using var process = Process.Start(psi);
-
-            if (process is null)
-            {
-                return "unknown";
-            }
-
-            var outputTask = process.StandardOutput.ReadToEndAsync();
-            var errorTask = process.StandardError.ReadToEndAsync();
-            process.WaitForExit(10_000);
-
-            var output = outputTask.GetAwaiter().GetResult();
-            var errorOutput = errorTask.GetAwaiter().GetResult();
-
-            var fullOutput = string.IsNullOrWhiteSpace(output) ? errorOutput : output;
-            fullOutput = fullOutput.Trim();
-
-            if (descriptor.VersionPattern is null)
-            {
-                return fullOutput.Split('\n')[0].Trim();
-            }
-
-            var match = Regex.Match(fullOutput, descriptor.VersionPattern);
-            return match.Success ? match.Groups[1].Value : "unknown";
-
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Не удалось получить версию '{Name}'", toolName);
-            return "unknown";
-        }
-    }
-
-    private static string NormalizeForComparison(string version)
-    {
-        return version.Replace("-", "").Replace(".", "");
-    }
-
-    private static string NormalizeTagVersion(string tag, string? versionTagPattern)
-    {
-        if (versionTagPattern is null)
-        {
-            return tag.StartsWith('v') ? tag[1..] : tag;
-        }
-
-        var match = Regex.Match(tag, versionTagPattern);
-        return match.Success ? match.Groups[1].Value : tag;
-
     }
 
     private static void ValidateDescriptor(ToolDescriptor tool)

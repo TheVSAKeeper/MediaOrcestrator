@@ -1,4 +1,4 @@
-﻿using MediaOrcestrator.Modules;
+using MediaOrcestrator.Modules;
 using Microsoft.Extensions.Logging;
 using System.Runtime.CompilerServices;
 using YoutubeExplode;
@@ -8,7 +8,7 @@ using YoutubeExplode.Videos;
 
 namespace MediaOrcestrator.Youtube;
 
-public class YoutubeChannel(ILogger<YoutubeChannel> logger) : ISourceType, IToolConsumer
+public class YoutubeChannel(ILogger<YoutubeChannel> logger, IToolPathProvider toolPathProvider) : ISourceType, IToolConsumer, ILegacyToolPathProvider
 {
     private readonly Func<YoutubeClient, string, Task<Channel?>>[] _parsers =
     [
@@ -18,14 +18,17 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger) : ISourceType, ITool
         async (youtubeClient, url) => UserName.TryParse(url) is { } userName ? await youtubeClient.Channels.GetByUserAsync(userName) : null,
     ];
 
-    private string? _ytDlpPath;
-    private string? _ffmpegPath;
+    private static readonly Dictionary<string, string> LegacySettingDefaults = new()
+    {
+        ["yt_dlp_path"] = @"c:\Services\utils\yt-dlp.exe",
+        ["ffmpeg_path"] = @"c:\Services\utils\ffmpeg\ffmpeg.exe",
+    };
 
     public IReadOnlyList<ToolDescriptor> RequiredTools =>
     [
         new()
         {
-            Name = "yt-dlp",
+            Name = WellKnownTools.YtDlp,
             GitHubRepo = "yt-dlp/yt-dlp",
             AssetPattern = "yt-dlp.exe",
             VersionCommand = "--version",
@@ -33,7 +36,7 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger) : ISourceType, ITool
         },
         new()
         {
-            Name = "ffmpeg",
+            Name = WellKnownTools.FFmpeg,
             GitHubRepo = "BtbN/FFmpeg-Builds",
             AssetPattern = "ffmpeg-N-*-win64-gpl.zip",
             VersionCommand = "-version",
@@ -44,26 +47,12 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger) : ISourceType, ITool
         },
     ];
 
-    public void SetToolPath(string toolName, string? resolvedPath)
-    {
-        switch (toolName)
-        {
-            case "yt-dlp":
-                _ytDlpPath = resolvedPath;
-                break;
-
-            case "ffmpeg":
-                _ffmpegPath = resolvedPath;
-                break;
-        }
-    }
-
     public string? GetLegacyToolPath(string toolName)
     {
         var key = toolName switch
         {
-            "yt-dlp" => "yt_dlp_path",
-            "ffmpeg" => "ffmpeg_path",
+            WellKnownTools.YtDlp => "yt_dlp_path",
+            WellKnownTools.FFmpeg => "ffmpeg_path",
             _ => null,
         };
 
@@ -75,12 +64,6 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger) : ISourceType, ITool
         var legacyDefault = LegacySettingDefaults.GetValueOrDefault(key);
         return legacyDefault is not null && File.Exists(legacyDefault) ? legacyDefault : null;
     }
-
-    private static readonly Dictionary<string, string> LegacySettingDefaults = new()
-    {
-        ["yt_dlp_path"] = @"c:\Services\utils\yt-dlp.exe",
-        ["ffmpeg_path"] = @"c:\Services\utils\ffmpeg\ffmpeg.exe",
-    };
 
     public SyncDirection ChannelType => SyncDirection.OnlyUpload;
 
@@ -278,19 +261,15 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger) : ISourceType, ITool
         Directory.CreateDirectory(Path.GetDirectoryName(finalPath)!);
         logger.LogDebug("Создана временная директория: {TempPath}", Path.GetDirectoryName(finalPath));
 
-        if (_ytDlpPath is null)
-        {
-            throw new InvalidOperationException("yt-dlp не установлен. Установите через панель управления инструментами.");
-        }
+        var ytDlpPath = toolPathProvider.GetToolPath(WellKnownTools.YtDlp)
+            ?? throw new InvalidOperationException("yt-dlp не установлен. Установите через панель управления инструментами.");
 
-        if (_ffmpegPath is null)
-        {
-            throw new InvalidOperationException("ffmpeg не установлен. Установите через панель управления инструментами.");
-        }
+        var ffmpegPath = toolPathProvider.GetToolPath(WellKnownTools.FFmpeg)
+            ?? throw new InvalidOperationException("ffmpeg не установлен. Установите через панель управления инструментами.");
 
         var jsRuntime = settings.GetValueOrDefault("js_runtime", "none");
         var cookiePath = settings.GetValueOrDefault("auth_state_path","");
-        var ytDlp = new YtDlp(_ytDlpPath, _ffmpegPath, jsRuntime, cookiePath);
+        var ytDlp = new YtDlp(ytDlpPath, ffmpegPath, jsRuntime, cookiePath);
 
         object progressLock = new();
         double oldPercent = -1;

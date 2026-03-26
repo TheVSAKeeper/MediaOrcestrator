@@ -6,7 +6,7 @@ using System.Text.Json.Serialization;
 
 namespace MediaOrcestrator.Domain;
 
-public class GitHubReleaseProvider(IHttpClientFactory httpClientFactory, ILogger<GitHubReleaseProvider> logger)
+public class GitHubReleaseProvider(IHttpClientFactory httpClientFactory, ILogger<GitHubReleaseProvider> logger) : IReleaseProvider
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {

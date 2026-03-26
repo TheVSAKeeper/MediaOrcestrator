@@ -2,16 +2,15 @@ using LiteDB;
 using MediaOrcestrator.Modules;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 
 namespace MediaOrcestrator.HardDiskDrive;
 
 // todo разделить ответственность между ISourceDefinition and ISourceManager (а у SourceManager внутри будет Definition св-во)
-public class HardDiskDriveChannel(ILogger<HardDiskDriveChannel> logger) : ISourceType, IToolConsumer
+public class HardDiskDriveChannel(ILogger<HardDiskDriveChannel> logger, IToolPathProvider toolPathProvider) : ISourceType, IToolConsumer
 {
-    private string? _ffprobePath;
-
     public SyncDirection ChannelType => SyncDirection.OnlyUpload;
 
     public string Name => "HardDiskDrive";
@@ -47,7 +46,7 @@ public class HardDiskDriveChannel(ILogger<HardDiskDriveChannel> logger) : ISourc
     [
         new()
         {
-            Name = "ffmpeg",
+            Name = WellKnownTools.FFmpeg,
             GitHubRepo = "BtbN/FFmpeg-Builds",
             AssetPattern = "ffmpeg-N-*-win64-gpl.zip",
             VersionCommand = "-version",
@@ -55,34 +54,9 @@ public class HardDiskDriveChannel(ILogger<HardDiskDriveChannel> logger) : ISourc
             VersionTagPattern = @"autobuild-(\d{4}-\d{2}-\d{2})",
             ArchiveType = ArchiveType.Zip,
             ArchiveExecutablePath = "ffmpeg-*/bin/ffmpeg.exe",
+            CompanionExecutables = ["ffprobe"],
         },
     ];
-
-    public void SetToolPath(string toolName, string? resolvedPath)
-    {
-        if (toolName != "ffmpeg" || resolvedPath is null)
-        {
-            return;
-        }
-
-        var dir = Path.GetDirectoryName(resolvedPath)!;
-        var probePath = Path.Combine(dir, "ffprobe.exe");
-        _ffprobePath = File.Exists(probePath) ? probePath : null;
-
-        if (_ffprobePath is not null)
-        {
-            logger.LogInformation("ffprobe найден: {Path}", _ffprobePath);
-        }
-        else
-        {
-            logger.LogWarning("ffprobe не найден рядом с ffmpeg: {Dir}", dir);
-        }
-    }
-
-    public string? GetLegacyToolPath(string toolName)
-    {
-        return null;
-    }
 
     public async IAsyncEnumerable<MediaDto> GetMedia(Dictionary<string, string> settings, bool isFull, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
@@ -360,6 +334,23 @@ public class HardDiskDriveChannel(ILogger<HardDiskDriveChannel> logger) : ISourc
         return Task.CompletedTask;
     }
 
+    private static bool TryParseFraction(string value, out double result)
+    {
+        result = 0;
+        var parts = value.Split('/');
+
+        if (parts.Length == 2
+            && double.TryParse(parts[0], CultureInfo.InvariantCulture, out var numerator)
+            && double.TryParse(parts[1], CultureInfo.InvariantCulture, out var denominator)
+            && denominator != 0)
+        {
+            result = numerator / denominator;
+            return true;
+        }
+
+        return double.TryParse(value, CultureInfo.InvariantCulture, out result);
+    }
+
     private async Task<MediaDto> CreateMediaDtoAsync(DriveMedia file, string basePath, CancellationToken cancellationToken)
     {
         var fullPath = Path.Combine(basePath, file.Id, file.Path);
@@ -410,7 +401,9 @@ public class HardDiskDriveChannel(ILogger<HardDiskDriveChannel> logger) : ISourc
 
     private async Task<List<MetadataItem>?> GetVideoInfoAsync(string filePath, CancellationToken cancellationToken)
     {
-        if (_ffprobePath is null)
+        var ffprobePath = toolPathProvider.GetCompanionPath(WellKnownTools.FFmpeg, "ffprobe");
+
+        if (ffprobePath is null)
         {
             return null;
         }
@@ -419,7 +412,7 @@ public class HardDiskDriveChannel(ILogger<HardDiskDriveChannel> logger) : ISourc
         {
             var psi = new ProcessStartInfo
             {
-                FileName = _ffprobePath,
+                FileName = ffprobePath,
                 Arguments = $"-v quiet -print_format json -show_format -show_streams \"{filePath}\"",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
@@ -463,6 +456,32 @@ public class HardDiskDriveChannel(ILogger<HardDiskDriveChannel> logger) : ISourc
 
         var result = new List<MetadataItem>();
 
+        if (root.TryGetProperty("format", out var format))
+        {
+            if (format.TryGetProperty("duration", out var duration)
+                && double.TryParse(duration.GetString(), CultureInfo.InvariantCulture, out var seconds))
+            {
+                result.Add(new()
+                {
+                    Key = "Duration",
+                    DisplayName = "Длительность",
+                    Value = TimeSpan.FromSeconds(seconds).ToString(@"hh\:mm\:ss"),
+                    DisplayType = "System.TimeSpan",
+                });
+            }
+
+            if (format.TryGetProperty("bit_rate", out var bitRate))
+            {
+                result.Add(new()
+                {
+                    Key = "Bitrate",
+                    DisplayName = "Битрейт",
+                    Value = bitRate.GetString() ?? "",
+                    DisplayType = "Bitrate",
+                });
+            }
+        }
+
         if (!root.TryGetProperty("streams", out var streams))
         {
             return result.Count > 0 ? result : null;
@@ -477,6 +496,16 @@ public class HardDiskDriveChannel(ILogger<HardDiskDriveChannel> logger) : ISourc
                 continue;
             }
 
+            if (stream.TryGetProperty("width", out var w) && stream.TryGetProperty("height", out var h))
+            {
+                result.Add(new()
+                {
+                    Key = "Resolution",
+                    DisplayName = "Разрешение",
+                    Value = $"{w.GetInt32()}x{h.GetInt32()}",
+                });
+            }
+
             if (stream.TryGetProperty("codec_name", out var videoCodec))
             {
                 result.Add(new()
@@ -487,7 +516,53 @@ public class HardDiskDriveChannel(ILogger<HardDiskDriveChannel> logger) : ISourc
                 });
             }
 
+            if (stream.TryGetProperty("r_frame_rate", out var frameRate))
+            {
+                var fpsStr = frameRate.GetString();
+                if (fpsStr is not null && TryParseFraction(fpsStr, out var fps))
+                {
+                    result.Add(new()
+                    {
+                        Key = "FrameRate",
+                        DisplayName = "Частота кадров",
+                        Value = fps.ToString("F2", CultureInfo.InvariantCulture),
+                        DisplayType = "FPS",
+                    });
+                }
+            }
+
             break;
+        }
+
+        foreach (var stream in streams.EnumerateArray())
+        {
+            var codecType = stream.TryGetProperty("codec_type", out var ct) ? ct.GetString() : null;
+
+            if (codecType == "audio")
+            {
+                if (stream.TryGetProperty("codec_name", out var audioCodec))
+                {
+                    result.Add(new()
+                    {
+                        Key = "AudioCodec",
+                        DisplayName = "Аудиокодек",
+                        Value = audioCodec.GetString() ?? "",
+                    });
+                }
+
+                if (stream.TryGetProperty("sample_rate", out var sampleRate))
+                {
+                    result.Add(new()
+                    {
+                        Key = "SampleRate",
+                        DisplayName = "Частота дискретизации",
+                        Value = sampleRate.GetString() ?? "",
+                        DisplayType = "Hz",
+                    });
+                }
+
+                break;
+            }
         }
 
         return result.Count > 0 ? result : null;
