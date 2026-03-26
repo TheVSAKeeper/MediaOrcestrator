@@ -3,6 +3,7 @@
 public interface ISourceType
 {
     string Name { get; }
+
     SyncDirection ChannelType { get; }
 
     IEnumerable<SourceSettings> SettingsKeys { get; }
@@ -21,9 +22,19 @@ public interface ISourceType
 
     Task<MediaDto?> GetMediaByIdAsync(string externalId, Dictionary<string, string> settings, CancellationToken cancellationToken = default);
     Task<UploadResult> Upload(MediaDto media, Dictionary<string, string> settings, CancellationToken cancellationToken = default);
+    // todo name postfix Async
     Task<MediaDto> Download(string videoId, Dictionary<string, string> settings, CancellationToken cancellationToken = default);
     Task DeleteAsync(string externalId, Dictionary<string, string> settings, CancellationToken cancellationToken = default);
     Task<UploadResult> Update(string externalId, MediaDto tempMedia, Dictionary<string, string> settings, CancellationToken cancellationToken);
+
+    ConvertType[] GetAvailabelConvertTypes();
+    Task ConvertAsync(ConvertType type);
+}
+
+public class ConvertType
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
 }
 
 public enum SettingType

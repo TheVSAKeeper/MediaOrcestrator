@@ -1,4 +1,4 @@
-using LiteDB;
+﻿using LiteDB;
 using MediaOrcestrator.Modules;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
@@ -606,6 +606,16 @@ public class HardDiskDriveChannel(ILogger<HardDiskDriveChannel> logger, IToolPat
 
         logger.LogDebug("Превью для медиа '{Title}' не найдено, сохраняем без превью", media.Title);
         return null;
+    }
+
+    public ConvertType[] GetAvailabelConvertTypes()
+    {
+        return [new ConvertType { Id = 1, Name = "h264", Action = { "process C:\\Services\\utils\\ffmpeg\\ffmpeg -i \"E:\\bobgroup\\projects\\mediaOrcestrator\\Dev\\hdd1\\d415fc2e-3191-447b-8270-099ef2ed9787\\main.mp4\" -c:v h264_nvenc -preset slow -c:a copy \"E:\\bobgroup\\projects\\mediaOrcestrator\\Dev\\hdd1\\d415fc2e-3191-447b-8270-099ef2ed9787\\output_3.mp4\"" } }];
+    }
+
+    public Task ConvertAsync(int typeId)
+    {
+        return await GetAvailabelConvertTypes().First(x => x.Id == typeId).Action();
     }
 }
 

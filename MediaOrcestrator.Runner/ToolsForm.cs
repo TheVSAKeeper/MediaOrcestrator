@@ -1,4 +1,4 @@
-using MediaOrcestrator.Domain;
+﻿using MediaOrcestrator.Domain;
 using MediaOrcestrator.Modules;
 
 namespace MediaOrcestrator.Runner;
@@ -12,8 +12,6 @@ public partial class ToolsForm : Form
     {
         _toolManager = toolManager;
         InitializeComponent();
-        checkUpdatesButton.Click += CheckUpdatesButton_Click;
-        toolsDataGridView.CellClick += ToolsDataGridView_CellClick;
         LoadCurrentState();
     }
 

@@ -1,4 +1,4 @@
-using MediaOrcestrator.Modules;
+﻿using MediaOrcestrator.Modules;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 using System.Text.RegularExpressions;
@@ -19,6 +19,7 @@ public class ToolVersionDetector(ILogger<ToolVersionDetector> logger)
 
         try
         {
+            // todo ну чёт хуйня какая то, проще запоминать версию с гитхаба, или откуда там, без вызова процесса, возможно какие то тулзы даже не умееют свою версию говорить, гипотетически
             var psi = new ProcessStartInfo
             {
                 FileName = toolPath,
