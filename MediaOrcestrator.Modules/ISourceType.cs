@@ -24,6 +24,8 @@ public interface ISourceType
     Task<MediaDto> Download(string videoId, Dictionary<string, string> settings, CancellationToken cancellationToken = default);
     Task DeleteAsync(string externalId, Dictionary<string, string> settings, CancellationToken cancellationToken = default);
     Task<UploadResult> Update(string externalId, MediaDto tempMedia, Dictionary<string, string> settings, CancellationToken cancellationToken);
+
+    Uri? GetExternalUri(string externalId, Dictionary<string, string> settings) => null;
 }
 
 public enum SettingType

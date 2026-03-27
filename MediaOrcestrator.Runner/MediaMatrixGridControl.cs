@@ -622,22 +622,25 @@ public partial class MediaMatrixGridControl : UserControl
         var allSources = _orcestrator.GetSources();
         foreach (var mediaSource in media.Sources)
         {
-            var source = allSources.First(x => x.Id == mediaSource.SourceId);
-            // todo костыль для удобства (можно вынести ответственность получения полного пути в плагин)
-            // что бы ютуб давал ссылку на видос, а хдд путь до фаила, но эт потом как нить
-            // можно даже экшоний реализовывать наверное. что бы урл открывал
-            if (source.TypeId == "HardDiskDrive")
+            var source = allSources.FirstOrDefault(x => x.Id == mediaSource.SourceId);
+            if (source == null)
             {
-                var openDirectory = new ToolStripMenuItem("Открыть папку " + source.TitleFull, GetCopyIcon());
-                openDirectory.Click += (_, _) =>
-                {
-                    // я думал он сам эксплорер запустит)
-                    var folderPath = source.Settings["path"] + "\\" + mediaSource.ExternalId;
-                    Process.Start("explorer.exe", folderPath);
-                };
-
-                _contextMenu.Items.Add(openDirectory);
+                continue;
             }
+
+            var uri = source.Type.GetExternalUri(mediaSource.ExternalId, source.Settings);
+            if (uri == null)
+            {
+                continue;
+            }
+
+            var openItem = new ToolStripMenuItem("Открыть: " + source.TitleFull, GetCopyIcon());
+            openItem.Click += (_, _) =>
+            {
+                Process.Start(new ProcessStartInfo(uri.ToString()) { UseShellExecute = true });
+            };
+
+            _contextMenu.Items.Add(openItem);
         }
 
         if (_contextMenu.Items.Count > 0)

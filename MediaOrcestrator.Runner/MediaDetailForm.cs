@@ -1,7 +1,10 @@
 using MediaOrcestrator.Domain;
 using MediaOrcestrator.Modules;
 using Microsoft.Extensions.Logging;
+using SixLabors.ImageSharp.Formats.Bmp;
 using System.ComponentModel;
+using System.Diagnostics;
+using Image = SixLabors.ImageSharp.Image;
 
 namespace MediaOrcestrator.Runner;
 
@@ -39,6 +42,70 @@ public partial class MediaDetailForm : Form
         PopulateSources(media, sourceDict);
     }
 
+    private void uiHeaderPanel_Resize(object? sender, EventArgs e)
+    {
+        var textLeft = uiPreviewBox.Right + 12;
+        var textWidth = Math.Max(100, uiHeaderPanel.ClientSize.Width - textLeft - 12);
+        uiTitleLabel.Location = new(textLeft, uiPreviewBox.Top);
+        uiTitleLabel.Size = new(textWidth, uiHeaderPanel.Height / 3);
+        uiDescriptionLabel.Location = new(textLeft, uiTitleLabel.Bottom + 4);
+        uiDescriptionLabel.Size = new(textWidth, uiHeaderPanel.Height - uiTitleLabel.Bottom - 4 - uiHeaderPanel.Padding.Bottom);
+    }
+
+    private static Label CreateLabel(string text, Font font, Color? foreColor = null)
+    {
+        var label = new Label
+        {
+            Text = text,
+            Font = font,
+            AutoSize = true,
+            Padding = new(2),
+        };
+
+        if (foreColor.HasValue)
+        {
+            label.ForeColor = foreColor.Value;
+        }
+
+        return label;
+    }
+
+    private static string FormatMetadataValue(MetadataItem meta)
+    {
+        if (string.IsNullOrEmpty(meta.Value) || string.IsNullOrEmpty(meta.DisplayType))
+        {
+            return meta.Value ?? "";
+        }
+
+        if (meta.DisplayType == "ByteSize" && long.TryParse(meta.Value, out var bytes))
+        {
+            return OptimizedMediaGridView.FormatFileSize(bytes);
+        }
+
+        var targetType = Type.GetType(meta.DisplayType);
+        if (targetType == null)
+        {
+            return meta.Value;
+        }
+
+        try
+        {
+            var converted = TypeDescriptor.GetConverter(targetType).ConvertFromInvariantString(meta.Value);
+            return converted switch
+            {
+                DateTime dt => dt.ToString("g"),
+                int n => n.ToString("N0"),
+                long l => l.ToString("N0"),
+                double d => d.ToString("N0"),
+                _ => converted?.ToString() ?? meta.Value,
+            };
+        }
+        catch (Exception)
+        {
+            return meta.Value;
+        }
+    }
+
     private void TryLoadPreview(Media media, Dictionary<string, Source> sourceDict)
     {
         foreach (var sourceLink in media.Sources)
@@ -67,9 +134,9 @@ public partial class MediaDetailForm : Form
 
             try
             {
-                using var image = SixLabors.ImageSharp.Image.Load(thumbnailPath);
+                using var image = Image.Load(thumbnailPath);
                 using var ms = new MemoryStream();
-                image.Save(ms, new SixLabors.ImageSharp.Formats.Bmp.BmpEncoder());
+                image.Save(ms, new BmpEncoder());
                 ms.Position = 0;
                 uiPreviewBox.Image = new Bitmap(ms);
                 _logger?.LogDebug("Превью загружено: {Path}", thumbnailPath);
@@ -113,6 +180,7 @@ public partial class MediaDetailForm : Form
             {
                 child.Width = Math.Max(100, width);
             }
+
             flow.ResumeLayout();
         };
 
@@ -141,13 +209,11 @@ public partial class MediaDetailForm : Form
                 AutoSizeMode = AutoSizeMode.GrowOnly,
             };
 
-            innerFlow.Controls.Add(CreateLabel(
-                $"{status.IconText} {status.Text}",
+            innerFlow.Controls.Add(CreateLabel($"{status.IconText} {status.Text}",
                 _boldFont,
                 status.IconColor));
 
-            innerFlow.Controls.Add(CreateLabel(
-                $"ID: {sourceLink.ExternalId}",
+            innerFlow.Controls.Add(CreateLabel($"ID: {sourceLink.ExternalId}",
                 _regularFont,
                 Color.FromArgb(100, 100, 100)));
 
@@ -158,8 +224,7 @@ public partial class MediaDetailForm : Form
 
             if (sourceMetadata.Count == 0)
             {
-                innerFlow.Controls.Add(CreateLabel(
-                    "(нет метаданных)",
+                innerFlow.Controls.Add(CreateLabel("(нет метаданных)",
                     _regularFont,
                     Color.Gray));
             }
@@ -170,9 +235,33 @@ public partial class MediaDetailForm : Form
                     var displayName = meta.DisplayName ?? meta.Key;
                     var displayValue = FormatMetadataValue(meta);
 
-                    innerFlow.Controls.Add(CreateLabel(
-                        $"{displayName}: {displayValue}",
+                    innerFlow.Controls.Add(CreateLabel($"{displayName}: {displayValue}",
                         _regularFont));
+                }
+            }
+
+            if (source?.Type != null)
+            {
+                var uri = source.Type.GetExternalUri(sourceLink.ExternalId, source.Settings);
+                if (uri != null)
+                {
+                    var linkLabel = new LinkLabel
+                    {
+                        Text = "Открыть",
+                        Font = _regularFont,
+                        AutoSize = true,
+                        Padding = new(2),
+                    };
+
+                    linkLabel.LinkClicked += (_, _) =>
+                    {
+                        Process.Start(new ProcessStartInfo(uri.ToString())
+                        {
+                            UseShellExecute = true,
+                        });
+                    };
+
+                    innerFlow.Controls.Add(linkLabel);
                 }
             }
 
@@ -184,69 +273,5 @@ public partial class MediaDetailForm : Form
         }
 
         uiContentPanel.Controls.Add(flow);
-    }
-
-    private static Label CreateLabel(string text, Font font, Color? foreColor = null)
-    {
-        var label = new Label
-        {
-            Text = text,
-            Font = font,
-            AutoSize = true,
-            Padding = new(2),
-        };
-
-        if (foreColor.HasValue)
-        {
-            label.ForeColor = foreColor.Value;
-        }
-
-        return label;
-    }
-
-    private void uiHeaderPanel_Resize(object? sender, EventArgs e)
-    {
-        var textLeft = uiPreviewBox.Right + 12;
-        var textWidth = Math.Max(100, uiHeaderPanel.ClientSize.Width - textLeft - 12);
-        uiTitleLabel.Location = new(textLeft, uiPreviewBox.Top);
-        uiTitleLabel.Size = new(textWidth, uiHeaderPanel.Height / 3);
-        uiDescriptionLabel.Location = new(textLeft, uiTitleLabel.Bottom + 4);
-        uiDescriptionLabel.Size = new(textWidth, uiHeaderPanel.Height - uiTitleLabel.Bottom - 4 - uiHeaderPanel.Padding.Bottom);
-    }
-
-    private static string FormatMetadataValue(MetadataItem meta)
-    {
-        if (string.IsNullOrEmpty(meta.Value) || string.IsNullOrEmpty(meta.DisplayType))
-        {
-            return meta.Value ?? "";
-        }
-
-        if (meta.DisplayType == "ByteSize" && long.TryParse(meta.Value, out var bytes))
-        {
-            return OptimizedMediaGridView.FormatFileSize(bytes);
-        }
-
-        var targetType = Type.GetType(meta.DisplayType);
-        if (targetType == null)
-        {
-            return meta.Value;
-        }
-
-        try
-        {
-            var converted = TypeDescriptor.GetConverter(targetType).ConvertFromInvariantString(meta.Value);
-            return converted switch
-            {
-                DateTime dt => dt.ToString("g"),
-                int n => n.ToString("N0"),
-                long l => l.ToString("N0"),
-                double d => d.ToString("N0"),
-                _ => converted?.ToString() ?? meta.Value,
-            };
-        }
-        catch (Exception)
-        {
-            return meta.Value;
-        }
     }
 }
