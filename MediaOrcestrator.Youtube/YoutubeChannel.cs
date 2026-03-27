@@ -45,6 +45,16 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger, IToolPathProvider to
             ArchiveType = ArchiveType.Zip,
             ArchiveExecutablePath = "ffmpeg-*/bin/ffmpeg.exe",
         },
+        new()
+        {
+            Name = WellKnownTools.Deno,
+            GitHubRepo = "denoland/deno",
+            AssetPattern = "deno-x86_64-pc-windows-msvc.zip",
+            VersionCommand = "--version",
+            VersionPattern = @"deno (\S+)",
+            ArchiveType = ArchiveType.Zip,
+            ArchiveExecutablePath = "deno.exe",
+        },
     ];
 
     public SyncDirection ChannelType => SyncDirection.OnlyUpload;
@@ -82,7 +92,7 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger, IToolPathProvider to
                 new() { Value = "node", Label = "node" },
                 new() { Value = "quickjs", Label = "quickjs" },
             ],
-            Description = "JavaScript runtime для YouTube extraction (требуется для yt-dlp)",
+            Description = "JavaScript runtime для YouTube extraction (требуется для yt-dlp). Deno устанавливается и обновляется автоматически через панель инструментов",
         },
         new()
         {
@@ -245,9 +255,11 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger, IToolPathProvider to
         var ffmpegPath = toolPathProvider.GetToolPath(WellKnownTools.FFmpeg)
                          ?? throw new InvalidOperationException("ffmpeg не установлен. Установите через панель управления инструментами.");
 
-        var jsRuntime = settings.GetValueOrDefault("js_runtime", "none");
+        var denoPath = toolPathProvider.GetToolPath(WellKnownTools.Deno);
+        var jsRuntimeDir = denoPath is not null ? Path.GetDirectoryName(denoPath) : null;
+        var jsRuntime = denoPath is not null ? "deno" : settings.GetValueOrDefault("js_runtime", "none");
         var cookiePath = settings.GetValueOrDefault("auth_state_path", "");
-        var ytDlp = new YtDlp(ytDlpPath, ffmpegPath, jsRuntime, cookiePath);
+        var ytDlp = new YtDlp(ytDlpPath, ffmpegPath, jsRuntime, jsRuntimeDir, cookiePath);
 
         object progressLock = new();
         double oldPercent = -1;
