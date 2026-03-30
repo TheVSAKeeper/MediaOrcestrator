@@ -31,6 +31,7 @@ public class OptimizedMediaGridView : DataGridView
         AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
 
         CellFormatting += OnCellFormatting;
+        SortCompare += OnSortCompare;
     }
 
     [Browsable(false)]
@@ -342,6 +343,17 @@ public class OptimizedMediaGridView : DataGridView
         }
 
         base.Dispose(disposing);
+    }
+
+    private static void OnSortCompare(object? sender, DataGridViewSortCompareEventArgs e)
+    {
+        if (e.Column.Index != TitleColumnIndex)
+        {
+            return;
+        }
+
+        e.SortResult = NaturalStringComparer.Instance.Compare(e.CellValue1?.ToString(), e.CellValue2?.ToString());
+        e.Handled = true;
     }
 
     private void OnCellFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
