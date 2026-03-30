@@ -631,7 +631,7 @@ public class HardDiskDriveChannel(ILogger<HardDiskDriveChannel> logger, IToolPat
         logger.LogInformation("Конвертация медиа из HDD. ID: {ExternalId}", externalId);
 
         var m = await GetMediaByIdAsync(externalId, settings, cancellationToken);
-        if (m.Metadata.First(x => x.Key == "codek") != "vp9")
+        if (m.Metadata?.FirstOrDefault(x => x.Key == "codek")?.Value != "vp9")
         {
             return;
         }
