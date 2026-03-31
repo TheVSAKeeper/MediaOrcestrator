@@ -23,6 +23,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MediaOrcestrator.HardDiskDr
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MediaOrcestrator.VkVideo", "MediaOrcestrator.VkVideo\MediaOrcestrator.VkVideo.csproj", "{871A1C3F-2FEE-4CB0-8005-8B6C64A6805D}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MediaOrcestrator.Telegram", "MediaOrcestrator.Telegram\MediaOrcestrator.Telegram.csproj", "{EAFD83BC-EF56-477C-9D51-7662FAE6BA0D}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -129,6 +131,18 @@ Global
 		{871A1C3F-2FEE-4CB0-8005-8B6C64A6805D}.Release|x64.Build.0 = Release|Any CPU
 		{871A1C3F-2FEE-4CB0-8005-8B6C64A6805D}.Release|x86.ActiveCfg = Release|Any CPU
 		{871A1C3F-2FEE-4CB0-8005-8B6C64A6805D}.Release|x86.Build.0 = Release|Any CPU
+		{EAFD83BC-EF56-477C-9D51-7662FAE6BA0D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EAFD83BC-EF56-477C-9D51-7662FAE6BA0D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EAFD83BC-EF56-477C-9D51-7662FAE6BA0D}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{EAFD83BC-EF56-477C-9D51-7662FAE6BA0D}.Debug|x64.Build.0 = Debug|Any CPU
+		{EAFD83BC-EF56-477C-9D51-7662FAE6BA0D}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{EAFD83BC-EF56-477C-9D51-7662FAE6BA0D}.Debug|x86.Build.0 = Debug|Any CPU
+		{EAFD83BC-EF56-477C-9D51-7662FAE6BA0D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EAFD83BC-EF56-477C-9D51-7662FAE6BA0D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EAFD83BC-EF56-477C-9D51-7662FAE6BA0D}.Release|x64.ActiveCfg = Release|Any CPU
+		{EAFD83BC-EF56-477C-9D51-7662FAE6BA0D}.Release|x64.Build.0 = Release|Any CPU
+		{EAFD83BC-EF56-477C-9D51-7662FAE6BA0D}.Release|x86.ActiveCfg = Release|Any CPU
+		{EAFD83BC-EF56-477C-9D51-7662FAE6BA0D}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -139,5 +153,6 @@ Global
 		{7BE000EA-B3B1-4F77-9D48-4904F5BFBAF6} = {D0C87031-8A91-4DB6-B2FE-F53372E6553E}
 		{AE03626B-2579-4558-B5C2-D8FF1B5E8681} = {D0C87031-8A91-4DB6-B2FE-F53372E6553E}
 		{871A1C3F-2FEE-4CB0-8005-8B6C64A6805D} = {D0C87031-8A91-4DB6-B2FE-F53372E6553E}
+		{EAFD83BC-EF56-477C-9D51-7662FAE6BA0D} = {D0C87031-8A91-4DB6-B2FE-F53372E6553E}
 	EndGlobalSection
 EndGlobal

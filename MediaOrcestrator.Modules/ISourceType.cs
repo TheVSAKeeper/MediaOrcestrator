@@ -12,6 +12,11 @@ public interface ISourceType
         return Task.FromResult(new List<SettingOption>());
     }
 
+    Uri? GetExternalUri(string externalId, Dictionary<string, string> settings)
+    {
+        return null;
+    }
+
     /// <summary>
     /// Самые свежие в самом начале.
     /// </summary>
@@ -24,8 +29,19 @@ public interface ISourceType
     Task<MediaDto> Download(string videoId, Dictionary<string, string> settings, CancellationToken cancellationToken = default);
     Task DeleteAsync(string externalId, Dictionary<string, string> settings, CancellationToken cancellationToken = default);
     Task<UploadResult> Update(string externalId, MediaDto tempMedia, Dictionary<string, string> settings, CancellationToken cancellationToken);
+}
 
-    Uri? GetExternalUri(string externalId, Dictionary<string, string> settings) => null;
+public interface IAuthUI
+{
+    Task<string?> PromptInputAsync(string prompt, bool isPassword = false);
+    Task<string?> OpenBrowserAsync(string url, string? existingStatePath = null);
+    Task ShowMessageAsync(string message);
+}
+
+public interface IAuthenticatable
+{
+    bool IsAuthenticated(Dictionary<string, string> settings);
+    Task AuthenticateAsync(Dictionary<string, string> settings, IAuthUI ui, CancellationToken ct);
 }
 
 public enum SettingType
@@ -34,7 +50,6 @@ public enum SettingType
     Text = 1,
     Dropdown = 2,
 }
-
 
 /// <summary>
 /// Результат загрузки.

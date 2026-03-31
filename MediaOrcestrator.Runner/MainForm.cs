@@ -109,7 +109,7 @@ public partial class MainForm : Form
         }
 
         using var settingsForm = new SourceSettingsForm();
-        settingsForm.SetSettings(selectedPlugin.SettingsKeys, selectedPlugin);
+        settingsForm.SetSettings(selectedPlugin.SettingsKeys, selectedPlugin, _logger);
         if (settingsForm.ShowDialog() != DialogResult.OK || settingsForm.Settings == null)
         {
             return;

@@ -442,9 +442,9 @@
             uiRubuteAuthStateOpenBrowserButton.Text = "открыть брузер";
             uiRubuteAuthStateOpenBrowserButton.UseVisualStyleBackColor = true;
             uiRubuteAuthStateOpenBrowserButton.Click += uiRubuteAuthStateOpenBrowserButton_Click;
-            // 
+            //
             // comboBox1
-            // 
+            //
             comboBox1.DropDownStyle = ComboBoxStyle.DropDownList;
             comboBox1.FormattingEnabled = true;
             comboBox1.Items.AddRange(new object[] { "medias", "sources", "source_relations" });
