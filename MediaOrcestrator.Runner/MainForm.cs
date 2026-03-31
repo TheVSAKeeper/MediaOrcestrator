@@ -29,7 +29,8 @@ public partial class MainForm : Form
         // TODO: SetZalupaV2
         uiMediaMatrixGridControl.Initialize(_orcestrator,
             _serviceProvider.GetRequiredService<ILogger<MediaMatrixGridControl>>(),
-            _serviceProvider.GetRequiredService<SettingsManager>());
+            _serviceProvider.GetRequiredService<SettingsManager>(),
+            _serviceProvider.GetRequiredService<BatchRenameService>());
 
         uiMediaMatrixGridControl.RefreshData();
 

@@ -10,6 +10,7 @@ public partial class MediaMatrixGridControl : UserControl
 {
     private Orcestrator? _orcestrator;
     private ILogger<MediaMatrixGridControl>? _logger;
+    private BatchRenameService? _batchRenameService;
     private CancellationTokenSource? _convertCts;
 
     public MediaMatrixGridControl()
@@ -19,10 +20,11 @@ public partial class MediaMatrixGridControl : UserControl
         uiCancelConvertItem.Click += (_, _) => _convertCts?.Cancel();
     }
 
-    public void Initialize(Orcestrator orcestrator, ILogger<MediaMatrixGridControl> logger, SettingsManager settingsManager)
+    public void Initialize(Orcestrator orcestrator, ILogger<MediaMatrixGridControl> logger, SettingsManager settingsManager, BatchRenameService batchRenameService)
     {
         _orcestrator = orcestrator;
         _logger = logger;
+        _batchRenameService = batchRenameService;
         uiFilterControl.SetSettingsManager(settingsManager);
         uiFilterControl.PopulateRelationsFilter(orcestrator);
     }
@@ -623,7 +625,7 @@ public partial class MediaMatrixGridControl : UserControl
 
     private void HandleBatchRename(List<Media> selectedMedia)
     {
-        using var form = new BatchRenameForm(selectedMedia, _orcestrator!);
+        using var form = new BatchRenameForm(selectedMedia, _batchRenameService!);
         var result = form.ShowDialog(this);
 
         if (result == DialogResult.OK)
