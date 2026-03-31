@@ -460,13 +460,14 @@ public partial class MediaMatrixGridControl : UserControl
                             var media = deletableMedia[i];
                             var i1 = i;
                             var progress = new Progress<ConvertProgress>(p =>
-                                ShowConvertProgress(p.Percent, $"Конвертация {i1 + 1}/{total}: {p.FileName} — {p.Percent:F0}%"));
+                                ShowConvertProgress(p.Percent, $"{t.Name} [{i1 + 1}/{total}]: {media.Title} — {p.Percent:F0}%"));
 
-                            ShowConvertProgress(0, $"Конвертация {i + 1}/{total}: {media.Title}...");
+                            ShowConvertProgress(0, $"{t.Name} [{i + 1}/{total}]: {media.Title}...");
 
                             try
                             {
                                 await source.Type.ConvertAsync(t.Id, media.Id, source.Settings, progress, _convertCts.Token);
+                                await _orcestrator.ForceUpdateMetadataAsync(media, source.Id);
                             }
                             catch (OperationCanceledException)
                             {
@@ -795,12 +796,14 @@ public partial class MediaMatrixGridControl : UserControl
                     _convertCts = new();
                     try
                     {
+                        var title = media.Title;
                         var progress = new Progress<ConvertProgress>(p =>
-                            ShowConvertProgress(p.Percent, $"Конвертация {p.FileName} — {p.Percent:F0}%"));
+                            ShowConvertProgress(p.Percent, $"{t.Name}: {title} — {p.Percent:F0}%"));
 
-                        ShowConvertProgress(0, "Конвертация...");
+                        ShowConvertProgress(0, $"{t.Name}: {title}...");
                         await source.Type.ConvertAsync(t.Id, mediaSource.ExternalId, source.Settings, progress, _convertCts.Token);
                         _logger?.LogInformation("Конвертация {Name} завершена: {ExternalId}", t.Name, mediaSource.ExternalId);
+                        await _orcestrator.ForceUpdateMetadataAsync(media, source.Id);
                         RefreshData();
                     }
                     catch (OperationCanceledException)
