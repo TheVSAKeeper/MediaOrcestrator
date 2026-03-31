@@ -217,45 +217,62 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
     public async Task ForceUpdateMetadataAsync(Media media, CancellationToken ct = default)
     {
         logger.LogInformation("Начато принудительное обновление метаданных для {MediaTitle}", media.Title);
-        var sourceTypes = GetSourceTypes();
-        var sources = GetSources();
 
         media.Metadata.Clear();
 
         foreach (var sourceLink in media.Sources)
         {
-            var source = sources.FirstOrDefault(s => s.Id == sourceLink.SourceId);
-            if (source == null || source.IsDisable)
-            {
-                continue;
-            }
-
-            var plugin = sourceTypes.Values.FirstOrDefault(x => x.Name == source.TypeId);
-            if (plugin == null)
-            {
-                continue;
-            }
-
-            try
-            {
-                var dto = await plugin.GetMediaByIdAsync(sourceLink.ExternalId, source.Settings, ct);
-                if (dto is { Metadata.Count: > 0 })
-                {
-                    foreach (var item in dto.Metadata)
-                    {
-                        item.SourceId = source.Id;
-                        media.Metadata.Add(item);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Ошибка при обновлении метаданных из источника {SourceTitle}", source.TitleFull);
-            }
+            await UpdateSourceMetadataAsync(media, sourceLink.SourceId, ct);
         }
 
         UpdateMedia(media);
         logger.LogInformation("Завершено принудительное обновление метаданных для {MediaTitle}", media.Title);
+    }
+
+    public async Task ForceUpdateMetadataAsync(Media media, string sourceId, CancellationToken ct = default)
+    {
+        media.Metadata.RemoveAll(m => m.SourceId == sourceId);
+        await UpdateSourceMetadataAsync(media, sourceId, ct);
+        UpdateMedia(media);
+        logger.LogInformation("Обновлены метаданные источника {SourceId} для {MediaTitle}", sourceId, media.Title);
+    }
+
+    private async Task UpdateSourceMetadataAsync(Media media, string sourceId, CancellationToken ct)
+    {
+        var source = GetSources().FirstOrDefault(s => s.Id == sourceId);
+        if (source == null || source.IsDisable)
+        {
+            return;
+        }
+
+        var plugin = GetSourceTypes().Values.FirstOrDefault(x => x.Name == source.TypeId);
+        if (plugin == null)
+        {
+            return;
+        }
+
+        var sourceLink = media.Sources.FirstOrDefault(s => s.SourceId == sourceId);
+        if (sourceLink == null)
+        {
+            return;
+        }
+
+        try
+        {
+            var dto = await plugin.GetMediaByIdAsync(sourceLink.ExternalId, source.Settings, ct);
+            if (dto is { Metadata.Count: > 0 })
+            {
+                foreach (var item in dto.Metadata)
+                {
+                    item.SourceId = source.Id;
+                    media.Metadata.Add(item);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Ошибка при обновлении метаданных из источника {SourceTitle}", source.TitleFull);
+        }
     }
 
     public void ClearSourceMetadata(Media media, string sourceId)

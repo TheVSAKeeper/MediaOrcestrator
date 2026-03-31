@@ -10,11 +10,13 @@ public partial class MediaMatrixGridControl : UserControl
 {
     private Orcestrator? _orcestrator;
     private ILogger<MediaMatrixGridControl>? _logger;
+    private CancellationTokenSource? _convertCts;
 
     public MediaMatrixGridControl()
     {
         InitializeComponent();
         uiFilterControl.FilterChanged += (_, _) => RefreshData();
+        uiCancelConvertItem.Click += (_, _) => _convertCts?.Cancel();
     }
 
     public void Initialize(Orcestrator orcestrator, ILogger<MediaMatrixGridControl> logger, SettingsManager settingsManager)
@@ -322,6 +324,34 @@ public partial class MediaMatrixGridControl : UserControl
         }
     }
 
+    private void ShowConvertProgress(double percent, string text)
+    {
+        if (uiStatusStrip.InvokeRequired)
+        {
+            uiStatusStrip.Invoke(() => ShowConvertProgress(percent, text));
+            return;
+        }
+
+        uiConvertProgressBar.Value = (int)Math.Min(percent, 100);
+        uiConvertStatusLabel.Text = text;
+        uiConvertProgressBar.Visible = true;
+        uiConvertStatusLabel.Visible = true;
+    }
+
+    private void HideConvertProgress()
+    {
+        if (uiStatusStrip.InvokeRequired)
+        {
+            uiStatusStrip.Invoke(HideConvertProgress);
+            return;
+        }
+
+        uiConvertProgressBar.Visible = false;
+        uiConvertStatusLabel.Visible = false;
+        uiConvertProgressBar.Value = 0;
+        uiConvertStatusLabel.Text = "";
+    }
+
     private void UpdateLoadingIndicator(bool isLoading)
     {
         if (uiLoadingLabel.InvokeRequired)
@@ -414,18 +444,71 @@ public partial class MediaMatrixGridControl : UserControl
             deleteItem.Click += async (_, _) => await HandleBatchDeleteAsync(deletableMedia, capturedSource);
             _contextMenu.Items.Add(deleteItem);
 
-
             foreach (var t in source.Type.GetAvailabelConvertTypes())
             {
-                var bbbbb = new ToolStripMenuItem($"Конвертировать " + t.Name, GetDeleteIcon());
-                bbbbb.Click += async (_, _) =>
+                var convertItem = new ToolStripMenuItem($"Конвертировать {t.Name} ({deletableMedia.Count})");
+                convertItem.Click += async (_, _) =>
                 {
-                    foreach (var media in deletableMedia)
+                    _convertCts = new();
+                    var errors = new List<(Media media, Exception ex)>();
+                    var total = deletableMedia.Count;
+
+                    try
                     {
-                        await source.Type.ConvertAsync(t.Id, media.Id, source.Settings);
+                        for (var i = 0; i < total; i++)
+                        {
+                            var media = deletableMedia[i];
+                            var i1 = i;
+                            var progress = new Progress<ConvertProgress>(p =>
+                                ShowConvertProgress(p.Percent, $"{t.Name} [{i1 + 1}/{total}]: {media.Title} — {p.Percent:F0}%"));
+
+                            ShowConvertProgress(0, $"{t.Name} [{i + 1}/{total}]: {media.Title}...");
+
+                            try
+                            {
+                                await source.Type.ConvertAsync(t.Id, media.Id, source.Settings, progress, _convertCts.Token);
+                                await _orcestrator.ForceUpdateMetadataAsync(media, source.Id);
+                            }
+                            catch (OperationCanceledException)
+                            {
+                                throw;
+                            }
+                            catch (Exception ex)
+                            {
+                                // TODO: Отдаём наружу кишки
+                                errors.Add((media, ex));
+                            }
+                        }
+
+                        if (errors.Count <= 0)
+                        {
+                            return;
+                        }
+
+                        var errorDetails = string.Join("\n", errors.Select(e => $"- {e.media.Title}: {e.ex.Message}"));
+                        MessageBox.Show($"""
+                                         Завершено: {total - errors.Count} из {total}
+
+                                         Ошибки:
+                                         {errorDetails}
+                                         """,
+                            "Конвертация завершена с ошибками",
+                            MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        MessageBox.Show("Конвертация отменена", "Отмена", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    }
+                    finally
+                    {
+                        HideConvertProgress();
+                        RefreshData();
+                        _convertCts?.Dispose();
+                        _convertCts = null;
                     }
                 };
-                _contextMenu.Items.Add(bbbbb);
+
+                _contextMenu.Items.Add(convertItem);
             }
         }
 
@@ -572,7 +655,7 @@ public partial class MediaMatrixGridControl : UserControl
         }
     }
 
-    private void ShowContextMenu(Media media, Point location, Source? specificSource = null)
+    private async void ShowContextMenu(Media media, Point location, Source? specificSource = null)
     {
         _contextMenu?.Dispose();
         _contextMenu = new();
@@ -634,10 +717,14 @@ public partial class MediaMatrixGridControl : UserControl
         _contextMenu.Items.Add(copyItem);
 
         var allSources = _orcestrator.GetSources();
-        foreach (var mediaSource in media.Sources)
+        var relevantSourceLinks = specificSource != null
+            ? media.Sources.Where(s => s.SourceId == specificSource.Id).ToList()
+            : media.Sources;
+
+        foreach (var mediaSource in relevantSourceLinks)
         {
             var source = allSources.FirstOrDefault(x => x.Id == mediaSource.SourceId);
-            if (source == null)
+            if (source?.Type == null)
             {
                 continue;
             }
@@ -655,6 +742,90 @@ public partial class MediaMatrixGridControl : UserControl
             };
 
             _contextMenu.Items.Add(openItem);
+        }
+
+        foreach (var mediaSource in relevantSourceLinks)
+        {
+            var source = allSources.FirstOrDefault(x => x.Id == mediaSource.SourceId);
+            if (source?.Type == null)
+            {
+                continue;
+            }
+
+            var convertTypes = source.Type.GetAvailabelConvertTypes();
+            if (convertTypes.Length == 0)
+            {
+                continue;
+            }
+
+            _logger?.LogDebug("Загрузка метаданных для проверки конвертации: {Source}, ExternalId={ExternalId}",
+                source.TitleFull, mediaSource.ExternalId);
+
+            MediaDto? mediaDto = null;
+            try
+            {
+                mediaDto = await source.Type.GetMediaByIdAsync(mediaSource.ExternalId, source.Settings);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Не удалось загрузить метаданные для {Source}: {ExternalId}",
+                    source.TitleFull, mediaSource.ExternalId);
+            }
+
+            foreach (var t in convertTypes)
+            {
+                var availability = mediaDto != null
+                    ? source.Type.CheckConvertAvailability(t.Id, mediaDto)
+                    : new(false, "Не удалось получить метаданные");
+
+                _logger?.LogDebug("Конвертация {Name} ({Source}): доступна={Available}, причина={Reason}",
+                    t.Name, source.TitleFull, availability.IsAvailable, availability.Reason);
+
+                var convertItem = new ToolStripMenuItem($"Конвертировать {t.Name} ({source.TitleFull})");
+                convertItem.Enabled = availability.IsAvailable;
+                if (!availability.IsAvailable)
+                {
+                    convertItem.ToolTipText = availability.Reason;
+                }
+
+                convertItem.Click += async (_, _) =>
+                {
+                    _logger?.LogInformation("Запуск конвертации {Name} для {ExternalId} ({Source})",
+                        t.Name, mediaSource.ExternalId, source.TitleFull);
+
+                    _convertCts = new();
+                    try
+                    {
+                        var title = media.Title;
+                        var progress = new Progress<ConvertProgress>(p =>
+                            ShowConvertProgress(p.Percent, $"{t.Name}: {title} — {p.Percent:F0}%"));
+
+                        ShowConvertProgress(0, $"{t.Name}: {title}...");
+                        await source.Type.ConvertAsync(t.Id, mediaSource.ExternalId, source.Settings, progress, _convertCts.Token);
+                        _logger?.LogInformation("Конвертация {Name} завершена: {ExternalId}", t.Name, mediaSource.ExternalId);
+                        await _orcestrator.ForceUpdateMetadataAsync(media, source.Id);
+                        RefreshData();
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        _logger?.LogInformation("Конвертация отменена пользователем: {ExternalId}", mediaSource.ExternalId);
+                        MessageBox.Show("Конвертация отменена", "Отмена", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger?.LogError(ex, "Ошибка конвертации {Name}: {ExternalId}", t.Name, mediaSource.ExternalId);
+                        MessageBox.Show(ex.Message, "Ошибка конвертации", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                    finally
+                    {
+                        HideConvertProgress();
+                        _convertCts?.Dispose();
+                        _convertCts = null;
+                    }
+                };
+
+                _contextMenu.Items.Add(convertItem);
+            }
         }
 
         if (_contextMenu.Items.Count > 0)
