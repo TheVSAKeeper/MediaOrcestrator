@@ -298,7 +298,7 @@ public class OptimizedMediaGridView : DataGridView
     public List<Media> GetSelectedMedia()
     {
         var result = new List<Media>();
-        foreach (DataGridViewRow row in SelectedRows)
+        foreach (var row in SelectedRows.Cast<DataGridViewRow>().OrderBy(r => r.Index))
         {
             if (row.Tag is Media media)
             {
