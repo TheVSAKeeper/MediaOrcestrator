@@ -8,7 +8,7 @@ using System.Text.Json;
 namespace MediaOrcestrator.Rutube;
 
 // TODO: Костыль с ILogger<RutubeService>. Желательно сделать полноценную регистрацию модулей в DI.
-public class RutubeChannel(ILogger<RutubeChannel> logger, ILogger<RutubeService> serviceLogger) : ISourceType
+public class RutubeChannel(ILogger<RutubeChannel> logger, ILogger<RutubeService> serviceLogger) : ISourceType, IAuthenticatable
 {
     public SyncDirection ChannelType => SyncDirection.OnlyUpload;
 
@@ -37,6 +37,13 @@ public class RutubeChannel(ILogger<RutubeChannel> logger, ILogger<RutubeService>
             IsRequired = false,
             Title = "время публикации",
             Description = "Время отложенной публикации. Форматы: ЧЧ:ММ (например, 20:00) - публикация сегодня в это время, если оно уже прошло - завтра; +N (например, +3) - публикация через N часов от момента загрузки. Если не указано - видео публикуется немедленно",
+        },
+        new()
+        {
+            Key = "upload_speed_limit",
+            IsRequired = false,
+            Title = "ограничение скорости выгрузки (Мбит/с)",
+            Description = "Максимальная скорость выгрузки видео. Пустое значение — без ограничений",
         },
     ];
 
@@ -180,7 +187,8 @@ public class RutubeChannel(ILogger<RutubeChannel> logger, ILogger<RutubeService>
 
         try
         {
-            var result = await rutubeService.UploadVideoAsync(null, filePath, media.Title, media.Description, rutubeCategoryId, media.TempPreviewPath, publishAt);
+            var uploadBytesPerSecond = SpeedLimitHelper.ParseUploadBytesPerSecond(settings);
+            var result = await rutubeService.UploadVideoAsync(null, filePath, media.Title, media.Description, rutubeCategoryId, media.TempPreviewPath, publishAt, uploadBytesPerSecond);
             logger.LogInformation("Видео загружено на RuTube. Status: {Status}. Video ID: {SessionId}, Название: '{Title}'", result.Status.Id, result.Id, media.Title);
 
             return result;
@@ -229,6 +237,30 @@ public class RutubeChannel(ILogger<RutubeChannel> logger, ILogger<RutubeService>
         {
             logger.LogError(ex, "Ошибка HTTP при удалении из RuTube: {ExternalId}", externalId);
             throw new IOException($"Ошибка сети при удалении из RuTube: {ex.Message}", ex);
+        }
+    }
+
+    // TODO: Придумать более умный механизм
+    public bool IsAuthenticated(Dictionary<string, string> settings)
+    {
+        var authStatePath = settings.GetValueOrDefault("auth_state_path");
+        return !string.IsNullOrEmpty(authStatePath) && File.Exists(authStatePath);
+    }
+
+    public async Task AuthenticateAsync(Dictionary<string, string> settings, IAuthUI ui, CancellationToken ct)
+    {
+        var authStatePath = settings.GetValueOrDefault("auth_state_path");
+        if (string.IsNullOrEmpty(authStatePath))
+        {
+            await ui.ShowMessageAsync("Укажите путь к файлу куки в настройках.");
+            return;
+        }
+
+        var result = await ui.OpenBrowserAsync("https://studio.rutube.ru/", authStatePath);
+        if (result != null)
+        {
+            logger.LogInformation("RuTube: авторизация сохранена в {Path}", result);
+            await ui.ShowMessageAsync("Авторизация RuTube сохранена!");
         }
     }
 

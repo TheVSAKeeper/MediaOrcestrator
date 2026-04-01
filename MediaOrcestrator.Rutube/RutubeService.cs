@@ -1,5 +1,7 @@
 ﻿using MediaOrcestrator.Modules;
 using Microsoft.Extensions.Logging;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Formats.Jpeg;
 using System.Net;
 using System.Text;
 using System.Text.Json;
@@ -40,7 +42,8 @@ public sealed partial class RutubeService
         string description,
         string categoryId,
         string? thumbnailPath = null,
-        DateTime? publishAt = null)
+        DateTime? publishAt = null,
+        long? uploadBytesPerSecond = null)
     {
         var isNewVideo = false;
         if (videoId == null)
@@ -55,7 +58,7 @@ public sealed partial class RutubeService
             _logger.LogDebug("URL загрузки получен: {UploadUrl}", uploadUrl);
 
             _logger.LogInformation("Начало загрузки видео данных");
-            await PerformTusUploadAsync(uploadUrl, filePath);
+            await PerformTusUploadAsync(uploadUrl, filePath, uploadBytesPerSecond);
             _logger.LogInformation("Загрузка данных завершена");
 
             _logger.LogDebug("Ожидание обработки на сервере (5 секунд)");
@@ -84,9 +87,9 @@ public sealed partial class RutubeService
 
                         string tempJpgPath = thumbnailPath + ".jpg";
 
-                        using (var image = SixLabors.ImageSharp.Image.Load(thumbnailPath))
+                        using (var image = Image.Load(thumbnailPath))
                         {
-                            var encoder = new SixLabors.ImageSharp.Formats.Jpeg.JpegEncoder
+                            var encoder = new JpegEncoder
                             {
                                 Quality = 90
                             };
@@ -332,9 +335,10 @@ public sealed partial class RutubeService
     }
 
     // TODO: Костыль
-    private async Task PerformTusUploadAsync(string uploadUrl, string filePath)
+    private async Task PerformTusUploadAsync(string uploadUrl, string filePath, long? uploadBytesPerSecond = null)
     {
         await using var fileStream = File.OpenRead(filePath);
+        await using var stream = new ThrottledStream(fileStream, uploadBytesPerSecond);
         var fileSize = fileStream.Length;
 
         _logger.LogDebug("Начало загрузки файла. Размер: {FileSize} байт", fileSize);
@@ -342,7 +346,7 @@ public sealed partial class RutubeService
         var request = new HttpRequestMessage(HttpMethod.Patch, uploadUrl);
         request.Headers.Add("Tus-Resumable", "1.0.0");
         request.Headers.Add("Upload-Offset", "0");
-        request.Content = new StreamContent(fileStream);
+        request.Content = new StreamContent(stream);
         request.Content.Headers.ContentType = new("application/offset+octet-stream");
         request.Content.Headers.ContentLength = fileSize;
 

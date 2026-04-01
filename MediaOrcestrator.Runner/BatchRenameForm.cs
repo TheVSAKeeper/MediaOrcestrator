@@ -6,7 +6,7 @@ namespace MediaOrcestrator.Runner;
 public class BatchRenameForm : Form
 {
     private readonly List<Media> _medias;
-    private readonly Orcestrator _orcestrator;
+    private readonly BatchRenameService _service;
 
     private readonly TextBox _uiFindTextBox;
     private readonly TextBox _uiReplaceTextBox;
@@ -16,10 +16,10 @@ public class BatchRenameForm : Form
     private readonly Button _uiCancelButton;
     private readonly Label _uiStatusLabel;
 
-    public BatchRenameForm(List<Media> medias, Orcestrator orcestrator)
+    public BatchRenameForm(List<Media> medias, BatchRenameService service)
     {
         _medias = medias;
-        _orcestrator = orcestrator;
+        _service = service;
 
         Text = $"Пакетное переименование ({medias.Count} видео)";
         Size = new(700, 500);
@@ -163,21 +163,19 @@ public class BatchRenameForm : Form
             return;
         }
 
+        var previews = _service.Preview(_medias, find, _uiReplaceTextBox.Text);
         var hasChanges = false;
 
-        foreach (var media in _medias)
+        foreach (var preview in previews)
         {
-            var oldTitle = media.Title;
-            var newTitle = oldTitle.Replace(find, _uiReplaceTextBox.Text);
-
-            if (oldTitle == newTitle)
+            if (!preview.HasChanges)
             {
-                var row = _uiPreviewGrid.Rows.Add(oldTitle, oldTitle, "(без изменений)");
+                var row = _uiPreviewGrid.Rows.Add(preview.OldTitle, preview.OldTitle, "(без изменений)");
                 _uiPreviewGrid.Rows[row].DefaultCellStyle.ForeColor = Color.Gray;
             }
             else
             {
-                _uiPreviewGrid.Rows.Add(oldTitle, newTitle, "");
+                _uiPreviewGrid.Rows.Add(preview.OldTitle, preview.NewTitle, "");
                 hasChanges = true;
             }
         }
@@ -199,7 +197,7 @@ public class BatchRenameForm : Form
         try
         {
             var results = await Task.Run(() =>
-                _orcestrator.BatchRenameAsync(_medias, find, replace, CancellationToken.None));
+                _service.ApplyAsync(_medias, find, replace, CancellationToken.None));
 
             _uiPreviewGrid.Rows.Clear();
 

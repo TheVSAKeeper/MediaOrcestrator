@@ -1,3 +1,4 @@
+using MediaOrcestrator.Modules;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
@@ -255,6 +256,7 @@ public sealed class VkVideoService : IDisposable
         string description,
         string fileExtension,
         long? publishAt = null,
+        long? uploadBytesPerSecond = null,
         CancellationToken cancellationToken = default)
     {
         var fileInfo = new FileInfo(filePath);
@@ -279,7 +281,7 @@ public sealed class VkVideoService : IDisposable
 
         _logger.LogInformation("Шаг 2/3: Загрузка файла ({Size} байт)", fileInfo.Length);
 
-        var uploadResponse = await UploadFileAsync(saveResponse.UploadUrl, filePath, fileInfo, cancellationToken);
+        var uploadResponse = await UploadFileAsync(saveResponse.UploadUrl, filePath, fileInfo, uploadBytesPerSecond, cancellationToken);
 
         _logger.LogInformation("Файл загружен. Hash: {Hash}", uploadResponse.VideoHash);
 
@@ -488,10 +490,11 @@ public sealed class VkVideoService : IDisposable
         return true;
     }
 
-    private async Task<FileUploadResponse> UploadFileAsync(string uploadUrl, string filePath, FileInfo fileInfo, CancellationToken cancellationToken)
+    private async Task<FileUploadResponse> UploadFileAsync(string uploadUrl, string filePath, FileInfo fileInfo, long? uploadBytesPerSecond, CancellationToken cancellationToken)
     {
         await using var fileStream = File.OpenRead(filePath);
-        var content = new StreamContent(fileStream);
+        await using var stream = new ThrottledStream(fileStream, uploadBytesPerSecond);
+        var content = new StreamContent(stream);
 
         var mimeType = Path.GetExtension(filePath).ToLowerInvariant() switch
         {

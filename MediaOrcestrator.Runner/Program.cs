@@ -263,6 +263,7 @@ file static class Program
                 sp.GetRequiredService<ILogger<ToolManager>>()));
         services.AddSingleton<IToolPathProvider>(sp => sp.GetRequiredService<ToolManager>());
         services.AddSingleton<Orcestrator>();
+        services.AddSingleton<BatchRenameService>();
         services.AddSingleton<SyncPlanner>();
         services.AddTransient<MainForm>();
 
