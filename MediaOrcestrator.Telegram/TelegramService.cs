@@ -1,3 +1,4 @@
+using MediaOrcestrator.Modules;
 using Microsoft.Extensions.Logging;
 using System.Runtime.CompilerServices;
 using TL;
@@ -116,13 +117,14 @@ public sealed class TelegramService : IDisposable
         return message;
     }
 
-    public async Task DownloadFileAsync(Document document, string outputPath, CancellationToken cancellationToken = default)
+    public async Task DownloadFileAsync(Document document, string outputPath, long? bytesPerSecond = null, CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Скачивание файла {Id} ({Size} байт)", document.id, document.size);
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
 
         await using var fileStream = File.Create(outputPath);
-        await _client.DownloadFileAsync(document, fileStream);
+        await using var throttled = new ThrottledStream(fileStream, bytesPerSecond);
+        await _client.DownloadFileAsync(document, throttled);
 
         _logger.LogInformation("Файл сохранён: {Path}", outputPath);
     }
@@ -132,11 +134,22 @@ public sealed class TelegramService : IDisposable
         await _client.DownloadFileAsync(document, outputStream, thumbSize);
     }
 
-    public async Task<Message> UploadVideoAsync(InputPeer peer, string filePath, string caption, VideoInfo videoInfo, CancellationToken cancellationToken = default)
+    public async Task<Message> UploadVideoAsync(InputPeer peer, string filePath, string caption, VideoInfo videoInfo, long? bytesPerSecond = null, CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Загрузка видео в Telegram: {Path} ({W}x{H}, {Duration:F1}с)", filePath, videoInfo.Width, videoInfo.Height, videoInfo.Duration);
 
-        var inputFile = await _client.UploadFileAsync(filePath);
+        InputFileBase inputFile;
+
+        if (bytesPerSecond.HasValue)
+        {
+            await using var fileStream = File.OpenRead(filePath);
+            await using var throttled = new ThrottledStream(fileStream, bytesPerSecond);
+            inputFile = await _client.UploadFileAsync(throttled, Path.GetFileName(filePath));
+        }
+        else
+        {
+            inputFile = await _client.UploadFileAsync(filePath);
+        }
 
         var mimeType = Path.GetExtension(filePath).ToLowerInvariant() switch
         {

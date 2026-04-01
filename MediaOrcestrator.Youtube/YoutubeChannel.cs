@@ -101,6 +101,13 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger, IToolPathProvider to
             Title = "путь до фаила куки",
             Description = "JSON файл с cookies и CSRF токеном для авторизации на Youtube (для 18+ видео)",
         },
+        new()
+        {
+            Key = "speed_limit",
+            IsRequired = false,
+            Title = "ограничение скорости скачивания (Мбит/с)",
+            Description = "Максимальная скорость скачивания видео. Пустое значение — без ограничений",
+        },
     ];
 
     public string? GetLegacyToolPath(string toolName)
@@ -305,7 +312,8 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger, IToolPathProvider to
 
         try
         {
-            await ytDlp.DownloadAsync($"https://www.youtube.com/watch?v={videoId}", finalPath, progress, cancellationToken);
+            var rateLimitBytes = SpeedLimitHelper.ParseDownloadBytesPerSecond(settings);
+            await ytDlp.DownloadAsync($"https://www.youtube.com/watch?v={videoId}", finalPath, progress, rateLimitBytes, cancellationToken);
             logger.LogInformation("Видео успешно загружено. ID: {VideoId}, Путь: {FilePath}", videoId, finalPath);
         }
         catch (OperationCanceledException)

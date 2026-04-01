@@ -39,6 +39,20 @@ public sealed class VkVideoChannel(ILogger<VkVideoChannel> logger, ILogger<VkVid
             Title = "время публикации",
             Description = "Отложенная публикация: +N (часы) или ЧЧ:ММ. Если не указано — немедленно",
         },
+        new()
+        {
+            Key = "speed_limit",
+            IsRequired = false,
+            Title = "ограничение скорости скачивания (Мбит/с)",
+            Description = "Максимальная скорость скачивания видео. Пустое значение — без ограничений",
+        },
+        new()
+        {
+            Key = "upload_speed_limit",
+            IsRequired = false,
+            Title = "ограничение скорости выгрузки (Мбит/с)",
+            Description = "Максимальная скорость выгрузки видео. Пустое значение — без ограничений",
+        },
     ];
 
     public Task<List<SettingOption>> GetSettingOptionsAsync(string settingKey, Dictionary<string, string> currentSettings)
@@ -109,11 +123,16 @@ public sealed class VkVideoChannel(ILogger<VkVideoChannel> logger, ILogger<VkVid
 
         //logger.LogInformation("Скачивание видео из {Url}", downloadUrl[..Math.Min(80, downloadUrl.Length)] + "...");
         logger.LogInformation("Скачивание видео из {Url}", downloadUrl);
+        var downloadBytesPerSecond = SpeedLimitHelper.ParseDownloadBytesPerSecond(settings);
+
         await using (var videoStream = await service.HttpClient.GetStreamAsync(downloadUrl, cancellationToken))
         {
-            await using (var fileStream = File.Create(tempVideoPath))
+            await using (var throttled = new ThrottledStream(videoStream, downloadBytesPerSecond))
             {
-                await videoStream.CopyToAsync(fileStream, cancellationToken);
+                await using (var fileStream = File.Create(tempVideoPath))
+                {
+                    await throttled.CopyToAsync(fileStream, cancellationToken);
+                }
             }
         }
 
@@ -194,8 +213,9 @@ public sealed class VkVideoChannel(ILogger<VkVideoChannel> logger, ILogger<VkVid
 
         try
         {
+            var uploadBytesPerSecond = SpeedLimitHelper.ParseUploadBytesPerSecond(settings);
             var result = await service.UploadVideoAsync(groupId, filePath, media.Title, media.Description,
-                fileExt, publishAtUnix, cancellationToken);
+                fileExt, publishAtUnix, uploadBytesPerSecond, cancellationToken);
 
             var externalId = $"{result.OwnerId}_{result.Id}";
             logger.LogInformation("Видео загружено на VK Video. ID: {ExternalId}", externalId);

@@ -14,6 +14,7 @@ public sealed partial class YtDlp(string path, string ffmpegPath, string jsRunti
         string url,
         string outputPath,
         IProgress<YtDlpProgress>? progress = null,
+        long? rateLimitBytes = null,
         CancellationToken cancellationToken = default)
     {
         var arguments = new List<string>
@@ -25,6 +26,12 @@ public sealed partial class YtDlp(string path, string ffmpegPath, string jsRunti
             "--ffmpeg-location", ffmpegPath,
             "-o", outputPath,
         };
+
+        if (rateLimitBytes.HasValue)
+        {
+            arguments.Add("--limit-rate");
+            arguments.Add(rateLimitBytes.Value.ToString());
+        }
 
         if (!string.IsNullOrEmpty(cookiePath))
         {

@@ -38,6 +38,13 @@ public class RutubeChannel(ILogger<RutubeChannel> logger, ILogger<RutubeService>
             Title = "время публикации",
             Description = "Время отложенной публикации. Форматы: ЧЧ:ММ (например, 20:00) - публикация сегодня в это время, если оно уже прошло - завтра; +N (например, +3) - публикация через N часов от момента загрузки. Если не указано - видео публикуется немедленно",
         },
+        new()
+        {
+            Key = "upload_speed_limit",
+            IsRequired = false,
+            Title = "ограничение скорости выгрузки (Мбит/с)",
+            Description = "Максимальная скорость выгрузки видео. Пустое значение — без ограничений",
+        },
     ];
 
     public Uri? GetExternalUri(string externalId, Dictionary<string, string> settings)
@@ -180,7 +187,8 @@ public class RutubeChannel(ILogger<RutubeChannel> logger, ILogger<RutubeService>
 
         try
         {
-            var result = await rutubeService.UploadVideoAsync(null, filePath, media.Title, media.Description, rutubeCategoryId, media.TempPreviewPath, publishAt);
+            var uploadBytesPerSecond = SpeedLimitHelper.ParseUploadBytesPerSecond(settings);
+            var result = await rutubeService.UploadVideoAsync(null, filePath, media.Title, media.Description, rutubeCategoryId, media.TempPreviewPath, publishAt, uploadBytesPerSecond);
             logger.LogInformation("Видео загружено на RuTube. Status: {Status}. Video ID: {SessionId}, Название: '{Title}'", result.Status.Id, result.Id, media.Title);
 
             return result;

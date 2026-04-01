@@ -64,6 +64,20 @@ public sealed class TelegramChannel(ILogger<TelegramChannel> logger, ILogger<Tel
             Title = "путь для временных файлов",
             Description = "Директория для скачанных видео и превью",
         },
+        new()
+        {
+            Key = "speed_limit",
+            IsRequired = false,
+            Title = "ограничение скорости скачивания (Мбит/с)",
+            Description = "Максимальная скорость скачивания видео. Пустое значение — без ограничений",
+        },
+        new()
+        {
+            Key = "upload_speed_limit",
+            IsRequired = false,
+            Title = "ограничение скорости выгрузки (Мбит/с)",
+            Description = "Максимальная скорость выгрузки видео. Пустое значение — без ограничений",
+        },
     ];
 
     public IReadOnlyList<ToolDescriptor> RequiredTools =>
@@ -126,7 +140,8 @@ public sealed class TelegramChannel(ILogger<TelegramChannel> logger, ILogger<Tel
         var tempVideoPath = Path.Combine(tempPath, guid, "media.mp4");
         var tempPreviewPath = Path.Combine(tempPath, guid, "preview.jpg");
 
-        await service.DownloadFileAsync(doc, tempVideoPath, cancellationToken);
+        var downloadBytesPerSecond = SpeedLimitHelper.ParseDownloadBytesPerSecond(settings);
+        await service.DownloadFileAsync(doc, tempVideoPath, downloadBytesPerSecond, cancellationToken);
         logger.LogInformation("Видео сохранено: {Path} ({Size} байт)", tempVideoPath, new FileInfo(tempVideoPath).Length);
 
         if (doc.thumbs?.Length > 0)
@@ -171,7 +186,8 @@ public sealed class TelegramChannel(ILogger<TelegramChannel> logger, ILogger<Tel
         try
         {
             var videoInfo = await ProbeVideoInfoAsync(filePath, cancellationToken);
-            var message = await service.UploadVideoAsync(peer, filePath, caption, videoInfo, cancellationToken);
+            var uploadBytesPerSecond = SpeedLimitHelper.ParseUploadBytesPerSecond(settings);
+            var message = await service.UploadVideoAsync(peer, filePath, caption, videoInfo, uploadBytesPerSecond, cancellationToken);
 
             var externalId = message.id.ToString();
             logger.LogInformation("Видео загружено в Telegram. Message ID: {ExternalId}", externalId);
