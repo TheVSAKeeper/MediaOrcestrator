@@ -26,37 +26,11 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger, IToolPathProvider to
         async (youtubeClient, url) => UserName.TryParse(url) is { } userName ? await youtubeClient.Channels.GetByUserAsync(userName) : null,
     ];
 
-    public IReadOnlyList<ToolDescriptor> RequiredTools =>
+    public IReadOnlyList<ToolDescriptor> RequiredTools { get; } =
     [
-        new()
-        {
-            Name = WellKnownTools.YtDlp,
-            GitHubRepo = "yt-dlp/yt-dlp",
-            AssetPattern = "yt-dlp.exe",
-            VersionCommand = "--version",
-            ArchiveType = ArchiveType.None,
-        },
-        new()
-        {
-            Name = WellKnownTools.FFmpeg,
-            GitHubRepo = "BtbN/FFmpeg-Builds",
-            AssetPattern = "ffmpeg-N-*-win64-gpl.zip",
-            VersionCommand = "-version",
-            VersionPattern = @"ffmpeg version N-\d+-\w+-(\d{8})",
-            VersionTagPattern = @"autobuild-(\d{4}-\d{2}-\d{2})",
-            ArchiveType = ArchiveType.Zip,
-            ArchiveExecutablePath = "ffmpeg-*/bin/ffmpeg.exe",
-        },
-        new()
-        {
-            Name = WellKnownTools.Deno,
-            GitHubRepo = "denoland/deno",
-            AssetPattern = "deno-x86_64-pc-windows-msvc.zip",
-            VersionCommand = "--version",
-            VersionPattern = @"deno (\S+)",
-            ArchiveType = ArchiveType.Zip,
-            ArchiveExecutablePath = "deno.exe",
-        },
+        WellKnownTools.YtDlpDescriptor,
+        WellKnownTools.FFmpegDescriptor,
+        WellKnownTools.DenoDescriptor,
     ];
 
     public SyncDirection ChannelType => SyncDirection.OnlyUpload;
@@ -269,9 +243,12 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger, IToolPathProvider to
         var ffmpegPath = toolPathProvider.GetToolPath(WellKnownTools.FFmpeg)
                          ?? throw new InvalidOperationException("ffmpeg не установлен. Установите через панель управления инструментами.");
 
+        var jsRuntime = settings.GetValueOrDefault("js_runtime", "none");
         var denoPath = toolPathProvider.GetToolPath(WellKnownTools.Deno);
-        var jsRuntimeDir = denoPath is not null ? Path.GetDirectoryName(denoPath) : null;
-        var jsRuntime = denoPath is not null ? "deno" : settings.GetValueOrDefault("js_runtime", "none");
+        var jsRuntimeDir = jsRuntime is "deno" && denoPath is not null
+            ? Path.GetDirectoryName(denoPath)
+            : null;
+
         var cookiePath = settings.GetValueOrDefault("auth_state_path", "");
         var ytDlp = new YtDlp(ytDlpPath, ffmpegPath, jsRuntime, jsRuntimeDir, cookiePath);
 

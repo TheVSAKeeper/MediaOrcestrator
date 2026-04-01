@@ -80,20 +80,9 @@ public sealed class TelegramChannel(ILogger<TelegramChannel> logger, ILogger<Tel
         },
     ];
 
-    public IReadOnlyList<ToolDescriptor> RequiredTools =>
+    public IReadOnlyList<ToolDescriptor> RequiredTools { get; } =
     [
-        new()
-        {
-            Name = WellKnownTools.FFmpeg,
-            GitHubRepo = "BtbN/FFmpeg-Builds",
-            AssetPattern = "ffmpeg-N-*-win64-gpl.zip",
-            VersionCommand = "-version",
-            VersionPattern = @"ffmpeg version N-\d+-\w+-(\d{8})",
-            VersionTagPattern = @"autobuild-(\d{4}-\d{2}-\d{2})",
-            ArchiveType = ArchiveType.Zip,
-            ArchiveExecutablePath = "ffmpeg-*/bin/ffmpeg.exe",
-            CompanionExecutables = ["ffprobe"],
-        },
+        WellKnownTools.FFmpegWithProbeDescriptor,
     ];
 
     public Task<List<SettingOption>> GetSettingOptionsAsync(string settingKey, Dictionary<string, string> currentSettings)

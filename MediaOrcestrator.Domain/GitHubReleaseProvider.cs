@@ -55,7 +55,7 @@ public class GitHubReleaseProvider(IHttpClientFactory httpClientFactory, ILogger
         }
         catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.Forbidden)
         {
-            logger.LogWarning("Превышен лимит запросов GitHub API для {Repo}", repo);
+            logger.LogWarning(ex, "Превышен лимит запросов GitHub API для {Repo}", repo);
             return null;
         }
         catch (HttpRequestException ex)
@@ -93,9 +93,9 @@ public class GitHubReleaseProvider(IHttpClientFactory httpClientFactory, ILogger
         }
     }
 
-    private async Task<GitHubRelease?> TryGetReleaseAsync(HttpClient client, string url, CancellationToken cancellationToken)
+    private static async Task<GitHubRelease?> TryGetReleaseAsync(HttpClient client, string url, CancellationToken cancellationToken)
     {
-        var response = await client.GetAsync(url, cancellationToken);
+        using var response = await client.GetAsync(url, cancellationToken);
 
         if (!response.IsSuccessStatusCode)
         {
@@ -129,7 +129,7 @@ public class GitHubReleaseProvider(IHttpClientFactory httpClientFactory, ILogger
         public string Name { get; init; } = string.Empty;
 
         [JsonPropertyName("size")]
-        public int Size { get; init; }
+        public long Size { get; init; }
 
         [JsonPropertyName("browser_download_url")]
         public string BrowserDownloadUrl { get; init; } = string.Empty;
