@@ -148,8 +148,20 @@ public partial class SyncTreeControl : UserControl
         }
 
         ClearSelection(_rootIntents);
+        var allIntents = new List<SyncIntent>();
+        UpdateIntentsFromTree(uiTreeView.Nodes, allIntents);
+
         var filteredRootIntents = new List<SyncIntent>();
-        UpdateIntentsFromTree(uiTreeView.Nodes, filteredRootIntents);
+        foreach (TreeNode mediaNode in uiTreeView.Nodes)
+        {
+            foreach (TreeNode intentNode in mediaNode.Nodes)
+            {
+                if (intentNode.Tag is SyncIntent { IsSelected: true } intent)
+                {
+                    filteredRootIntents.Add(intent);
+                }
+            }
+        }
 
         if (filteredRootIntents.Count == 0)
         {
@@ -163,50 +175,53 @@ public partial class SyncTreeControl : UserControl
 
         _cts = new();
 
-        LogToUi($"Запуск синхронизации для {filteredRootIntents.Where(x => x.IsSelected).Count()} цепочек...", Color.Yellow);
+        LogToUi($"Запуск синхронизации для {filteredRootIntents.Count} цепочек...", Color.Yellow);
 
         try
         {
-            foreach (var intent in filteredRootIntents.TakeWhile(_ => !_cts.IsCancellationRequested))
+            var relations = _orcestrator.GetRelations();
+            var executor = new ParallelSyncExecutor(filteredRootIntents, relations);
+
+            await executor.ExecuteAsync(async intent =>
             {
+                var node = _intentNodeMap.GetValueOrDefault(intent);
                 UpdateStatusLabel($"Обработка: {intent.Media.Title}");
 
-                try
-                {
-                    await ExecuteIntent(intent, _intentNodeMap.GetValueOrDefault(intent), _cts.Token);
-                }
-                catch (OperationCanceledException)
-                {
-                    LogToUi("Синхронизация прервана пользователем.", Color.Orange);
-                    break;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Ошибка при выполнении синхронизации для {Intent}", intent);
-                    LogToUi($"Ошибка для {intent.Media.Title}: {ex.Message}", Color.Red);
+                UpdateNodeState(node, IconWorking, Color.Orange,
+                    $"[В работе] {intent.From.TitleFull} -> {intent.To.TitleFull}");
 
-                    if (uiStopIfErrorCheckBox.Checked)
-                    {
-                        LogToUi("Синхронизация прервана в результате ошибки.", Color.Orange);
-                        break;
-                    }
-                }
-            }
+                LogToUi($"Выполнение: {intent.Media.Title} ({intent.From.TypeId} -> {intent.To.TypeId})");
 
-            if (_cts.IsCancellationRequested)
+                await TransferWithRetryAsync(intent, node, _cts!.Token);
+            }, _cts.Token, (intent, ex) =>
             {
-                UpdateStatusLabel("Остановлено");
-                LogToUi("Процесс был остановлен.", Color.Orange);
-            }
-            else
-            {
-                UpdateStatusLabel("Завершено");
-                LogToUi("Процесс синхронизации полностью завершен.", Color.LightGreen);
-            }
+                var node = _intentNodeMap.GetValueOrDefault(intent);
+                UpdateNodeState(node, IconError, Color.Red,
+                    $"[Ошибка] {intent.From.TitleFull} -> {intent.To.TitleFull}");
+
+                _logger!.LogError(ex, "Ошибка при выполнении синхронизации для {Intent}", intent);
+                LogToUi($"Ошибка для {intent.Media.Title}: {ex.Message}", Color.Red);
+
+                if (!uiStopIfErrorCheckBox.Checked)
+                {
+                    return;
+                }
+
+                LogToUi("Синхронизация прервана в результате ошибки.", Color.Orange);
+                _cts?.Cancel();
+            });
+
+            UpdateStatusLabel("Завершено");
+            LogToUi("Процесс синхронизации полностью завершен.", Color.LightGreen);
+        }
+        catch (OperationCanceledException)
+        {
+            UpdateStatusLabel("Остановлено");
+            LogToUi("Процесс был остановлен.", Color.Orange);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Критическая ошибка при выполнении синхронизации.");
+            _logger!.LogError(ex, "Критическая ошибка при выполнении синхронизации.");
             LogToUi($"Критическая ошибка: {ex.Message}", Color.Red);
         }
         finally
@@ -330,41 +345,6 @@ public partial class SyncTreeControl : UserControl
         else
         {
             uiStatusLabel.Text = text;
-        }
-    }
-
-    private async Task ExecuteIntent(SyncIntent intent, TreeNode? node, CancellationToken ct)
-    {
-        if (_orcestrator == null || _logger == null || !intent.IsSelected)
-        {
-            return;
-        }
-
-        ct.ThrowIfCancellationRequested();
-
-        UpdateNodeState(node, IconWorking, Color.Orange, $"[В работе] {intent.From.TitleFull} -> {intent.To.TitleFull}");
-        LogToUi($"Выполнение: {intent.Media.Title} ({intent.From.TypeId} -> {intent.To.TypeId})");
-
-        var isCurrentIntentCompleted = false;
-
-        try
-        {
-            await TransferWithRetryAsync(intent, node, ct);
-            isCurrentIntentCompleted = true;
-
-            foreach (var nextIntent in intent.NextIntents)
-            {
-                await ExecuteIntent(nextIntent, _intentNodeMap.GetValueOrDefault(nextIntent), ct);
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            if (!isCurrentIntentCompleted)
-            {
-                UpdateNodeState(node, IconPending, Color.Gray, $"[Отменено] {intent.From.TitleFull} -> {intent.To.TitleFull}");
-            }
-
-            throw;
         }
     }
 
