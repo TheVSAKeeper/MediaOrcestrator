@@ -37,8 +37,7 @@ public class ToolManager(
                 {
                     if (existing.GitHubRepo != tool.GitHubRepo)
                     {
-                        throw new InvalidOperationException(
-                            $"Конфликт регистрации инструмента '{tool.Name}': '{existing.GitHubRepo}' vs '{tool.GitHubRepo}'");
+                        throw new InvalidOperationException($"Конфликт регистрации инструмента '{tool.Name}': '{existing.GitHubRepo}' vs '{tool.GitHubRepo}'");
                     }
 
                     if (tool.CompanionExecutables is not null)
@@ -109,8 +108,7 @@ public class ToolManager(
                 return cached with { InstalledVersion = installedVersion };
             }
 
-            var release = await releaseProvider.GetLatestReleaseAsync(
-                descriptor.GitHubRepo, descriptor.AssetPattern, cancellationToken);
+            var release = await releaseProvider.GetLatestReleaseAsync(descriptor.GitHubRepo, descriptor.AssetPattern, cancellationToken);
 
             var latestVersion = release is not null
                 ? ToolVersionDetector.NormalizeTagVersion(release.TagName, descriptor.VersionTagPattern)
@@ -147,8 +145,7 @@ public class ToolManager(
 
         var currentPath = _resolvedPaths.GetValueOrDefault(toolName);
 
-        var resolvedPath = await installer.InstallAsync(
-            toolName, descriptor, toolsRoot, currentPath, progress, cancellationToken);
+        var resolvedPath = await installer.InstallAsync(toolName, descriptor, toolsRoot, currentPath, progress, cancellationToken);
 
         _resolvedPaths[toolName] = resolvedPath;
         ResolveCompanions(toolName, descriptor, resolvedPath);
@@ -176,6 +173,7 @@ public class ToolManager(
             var companionFileName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
                 ? $"{companion}.exe"
                 : companion;
+
             var companionPath = Path.Combine(dir, companionFileName);
             var key = $"{toolName}:{companion}";
             _companionPaths[key] = File.Exists(companionPath) ? companionPath : null;
@@ -200,6 +198,13 @@ public class ToolManager(
             return null;
         }
 
+        var toolDir = Path.Combine(toolsRoot, toolName);
+
+        if (Directory.Exists(toolDir) && Directory.EnumerateFileSystemEntries(toolDir).Any())
+        {
+            return null;
+        }
+
         foreach (var consumer in consumers)
         {
             if (consumer is not ILegacyToolPathProvider legacyProvider)
@@ -216,7 +221,6 @@ public class ToolManager(
 
             logger.LogInformation("Миграция '{Name}' из старого пути: {Path}", toolName, legacyPath);
 
-            var toolDir = Path.Combine(toolsRoot, toolName);
             Directory.CreateDirectory(toolDir);
 
             var destFile = Path.Combine(toolDir, Path.GetFileName(legacyPath));

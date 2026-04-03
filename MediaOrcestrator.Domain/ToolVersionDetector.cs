@@ -1,4 +1,4 @@
-﻿using MediaOrcestrator.Modules;
+using MediaOrcestrator.Modules;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 using System.Text.RegularExpressions;
@@ -34,7 +34,7 @@ public class ToolVersionDetector(ILogger<ToolVersionDetector> logger)
 
             if (process is null)
             {
-                return "unknown";
+                return null;
             }
 
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -42,21 +42,41 @@ public class ToolVersionDetector(ILogger<ToolVersionDetector> logger)
 
             var token = timeoutCts.Token;
 
-            var output = await process.StandardOutput.ReadToEndAsync(token);
-            var errorOutput = await process.StandardError.ReadToEndAsync(token);
-
-            await process.WaitForExitAsync(token);
-
-            var fullOutput = string.IsNullOrWhiteSpace(output) ? errorOutput : output;
-            fullOutput = fullOutput.Trim();
-
-            if (descriptor.VersionPattern is null)
+            try
             {
-                return fullOutput.Split('\n')[0].Trim();
-            }
+                var outputTask = process.StandardOutput.ReadToEndAsync(token);
+                var errorTask = process.StandardError.ReadToEndAsync(token);
 
-            var match = Regex.Match(fullOutput, descriptor.VersionPattern);
-            return match.Success ? match.Groups[1].Value : "unknown";
+                await Task.WhenAll(outputTask, errorTask);
+                await process.WaitForExitAsync(token);
+
+                var output = outputTask.Result;
+                var errorOutput = errorTask.Result;
+
+                var fullOutput = (string.IsNullOrWhiteSpace(output) ? errorOutput : output).Trim();
+
+                if (string.IsNullOrEmpty(fullOutput))
+                {
+                    return null;
+                }
+
+                if (descriptor.VersionPattern is null)
+                {
+                    return fullOutput.Split('\n')[0].Trim();
+                }
+
+                var match = Regex.Match(fullOutput, descriptor.VersionPattern);
+                return match.Success ? match.Groups[1].Value : null;
+            }
+            catch
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+
+                throw;
+            }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -65,7 +85,7 @@ public class ToolVersionDetector(ILogger<ToolVersionDetector> logger)
         catch (Exception ex)
         {
             logger.LogWarning(ex, "Не удалось получить версию '{Name}'", descriptor.Name);
-            return "unknown";
+            return null;
         }
     }
 

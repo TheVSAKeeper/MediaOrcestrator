@@ -1,131 +1,95 @@
-﻿using MediaOrcestrator.Domain;
+using MediaOrcestrator.Domain;
 using MediaOrcestrator.Modules;
 
 namespace MediaOrcestrator.Runner;
 
 public partial class ToolsForm : Form
 {
+    private static readonly Color ColorNotInstalled = Color.FromArgb(255, 235, 235);
+    private static readonly Color ColorUpdateAvailable = Color.FromArgb(255, 250, 220);
+    private static readonly Color ColorUpToDate = Color.FromArgb(230, 255, 230);
+
     private readonly ToolManager _toolManager;
-    private List<ToolStatus> _statuses = [];
+    private CancellationTokenSource? _cts;
 
     public ToolsForm(ToolManager toolManager)
     {
         _toolManager = toolManager;
         InitializeComponent();
         LoadCurrentState();
+        Shown += async (_, _) => await CheckUpdatesAsync();
     }
 
-    private void LoadCurrentState()
+    protected override void OnFormClosing(FormClosingEventArgs e)
     {
-        toolsDataGridView.Rows.Clear();
-
-        foreach (var (name, _) in _toolManager.GetRegistry())
-        {
-            var path = _toolManager.GetToolPath(name);
-            toolsDataGridView.Rows.Add(name,
-                path is not null ? "..." : "Не установлен",
-                "—",
-                path is not null ? "Проверьте обновления" : "Не установлен",
-                path is not null ? "Проверить" : "Установить");
-        }
+        _cts?.Cancel();
+        _cts?.Dispose();
+        base.OnFormClosing(e);
     }
 
     private async void CheckUpdatesButton_Click(object? sender, EventArgs e)
     {
-        checkUpdatesButton.Enabled = false;
-        statusLabel.Text = "Проверка обновлений...";
-
-        try
-        {
-            _statuses = await Task.Run(() => _toolManager.CheckForUpdatesAsync());
-            RefreshGrid();
-            statusLabel.Text = $"Проверено: {DateTime.Now:HH:mm:ss}";
-        }
-        catch (Exception ex)
-        {
-            statusLabel.Text = $"Ошибка: {ex.Message}";
-        }
-        finally
-        {
-            checkUpdatesButton.Enabled = true;
-        }
-    }
-
-    private void RefreshGrid()
-    {
-        toolsDataGridView.Rows.Clear();
-
-        foreach (var status in _statuses)
-        {
-            string statusText;
-            string actionText;
-
-            if (status.InstalledVersion is null)
-            {
-                statusText = "Не установлен";
-                actionText = "Установить";
-            }
-            else if (status.UpdateAvailable)
-            {
-                statusText = "Есть обновление";
-                actionText = "Обновить";
-            }
-            else
-            {
-                statusText = "Актуально";
-                actionText = "";
-            }
-
-            toolsDataGridView.Rows.Add(status.Name,
-                status.InstalledVersion ?? "—",
-                status.LatestVersion ?? "—",
-                statusText,
-                actionText);
-        }
+        await CheckUpdatesAsync();
     }
 
     private async void ToolsDataGridView_CellClick(object? sender, DataGridViewCellEventArgs e)
     {
-        if (e.ColumnIndex != colAction.Index || e.RowIndex < 0)
+        if (e.ColumnIndex != uiColAction.Index || e.RowIndex < 0)
         {
             return;
         }
 
-        var toolName = toolsDataGridView.Rows[e.RowIndex].Cells[colName.Index].Value?.ToString();
+        var toolName = uiToolsGrid.Rows[e.RowIndex].Cells[uiColName.Index].Value?.ToString();
 
         if (string.IsNullOrEmpty(toolName))
         {
             return;
         }
 
-        var buttonCell = toolsDataGridView.Rows[e.RowIndex].Cells[colAction.Index];
+        var buttonCell = uiToolsGrid.Rows[e.RowIndex].Cells[uiColAction.Index];
 
         if (string.IsNullOrEmpty(buttonCell.Value?.ToString()))
         {
             return;
         }
 
-        checkUpdatesButton.Enabled = false;
-        toolsDataGridView.Enabled = false;
-        progressBar.Visible = true;
-        progressBar.Value = 0;
-        statusLabel.Text = $"Обновление {toolName}...";
+        if (_cts is not null)
+        {
+            await _cts.CancelAsync();
+        }
+
+        _cts?.Dispose();
+        _cts = new();
+        var token = _cts.Token;
+
+        uiCheckUpdatesButton.Enabled = false;
+        uiToolsGrid.Enabled = false;
+        uiProgressBar.Visible = true;
+        uiProgressBar.Value = 0;
+        uiStatusLabel.Text = $"Обновление {toolName}... 0%";
 
         var progress = new Progress<double>(p =>
         {
-            progressBar.Value = (int)(p * 100);
+            var percent = (int)(p * 100);
+            uiProgressBar.Value = percent;
+            uiStatusLabel.Text = $"Обновление {toolName}... {percent}%";
         });
 
         try
         {
-            await Task.Run(() => _toolManager.UpdateToolAsync(toolName, progress));
-            statusLabel.Text = $"{toolName} успешно обновлён!";
-            _statuses = await Task.Run(() => _toolManager.CheckForUpdatesAsync());
-            RefreshGrid();
+            await Task.Run(() => _toolManager.UpdateToolAsync(toolName, progress, token), token);
+            uiStatusLabel.Text = $"{toolName} успешно обновлён!";
+
+            var statuses = await Task.Run(() => _toolManager.CheckForUpdatesAsync(token), token);
+            RefreshGrid(statuses);
+        }
+        catch (OperationCanceledException)
+        {
+            uiStatusLabel.Text = $"Обновление {toolName} отменено";
         }
         catch (Exception ex)
         {
-            statusLabel.Text = $"Ошибка обновления {toolName}: {ex.Message}";
+            uiStatusLabel.Text = $"Ошибка обновления {toolName}: {ex.Message}";
             MessageBox.Show($"Не удалось обновить {toolName}:\n\n{ex.Message}",
                 "Ошибка",
                 MessageBoxButtons.OK,
@@ -133,9 +97,105 @@ public partial class ToolsForm : Form
         }
         finally
         {
-            progressBar.Visible = false;
-            checkUpdatesButton.Enabled = true;
-            toolsDataGridView.Enabled = true;
+            uiProgressBar.Visible = false;
+            uiCheckUpdatesButton.Enabled = true;
+            uiToolsGrid.Enabled = true;
+        }
+    }
+
+    private static void ApplyRowColor(DataGridViewRow row, Color color)
+    {
+        foreach (DataGridViewCell cell in row.Cells)
+        {
+            cell.Style.BackColor = color;
+        }
+    }
+
+    private void LoadCurrentState()
+    {
+        uiToolsGrid.Rows.Clear();
+
+        foreach (var (name, _) in _toolManager.GetRegistry())
+        {
+            var path = _toolManager.GetToolPath(name);
+            var row = uiToolsGrid.Rows.Add(name,
+                path is not null ? "..." : "—",
+                "—",
+                path is not null ? "Ожидание проверки" : "Не установлен",
+                path is not null ? "Проверить" : "Установить");
+
+            var gridRow = uiToolsGrid.Rows[row];
+            var backColor = path is not null ? Color.White : ColorNotInstalled;
+            ApplyRowColor(gridRow, backColor);
+
+            if (path is not null)
+            {
+                gridRow.Cells[uiColName.Index].ToolTipText = path;
+            }
+        }
+    }
+
+    private async Task CheckUpdatesAsync()
+    {
+        uiCheckUpdatesButton.Enabled = false;
+        uiStatusLabel.Text = "Проверка обновлений...";
+
+        if (_cts is not null)
+        {
+            await _cts.CancelAsync();
+        }
+
+        _cts?.Dispose();
+        _cts = new();
+        var token = _cts.Token;
+
+        try
+        {
+            var statuses = await Task.Run(() => _toolManager.CheckForUpdatesAsync(token), token);
+            token.ThrowIfCancellationRequested();
+            RefreshGrid(statuses);
+            uiStatusLabel.Text = $"Проверено: {DateTime.Now:HH:mm:ss}";
+        }
+        catch (OperationCanceledException)
+        {
+            uiStatusLabel.Text = "Проверка отменена";
+        }
+        catch (Exception ex)
+        {
+            uiStatusLabel.Text = $"Ошибка: {ex.Message}";
+        }
+        finally
+        {
+            uiCheckUpdatesButton.Enabled = true;
+        }
+    }
+
+    private void RefreshGrid(List<ToolStatus> statuses)
+    {
+        uiToolsGrid.Rows.Clear();
+
+        foreach (var status in statuses)
+        {
+            var (statusText, actionText, backColor) = status switch
+            {
+                { InstalledVersion: null } => ("Не установлен", "Установить", ColorNotInstalled),
+                { UpdateAvailable: true } => ("Есть обновление", "Обновить", ColorUpdateAvailable),
+                _ => ("Актуально", "", ColorUpToDate),
+            };
+
+            var row = uiToolsGrid.Rows.Add(status.Name,
+                status.InstalledVersion ?? "—",
+                status.LatestVersion ?? "—",
+                statusText,
+                actionText);
+
+            var gridRow = uiToolsGrid.Rows[row];
+            ApplyRowColor(gridRow, backColor);
+
+            if (status.ResolvedPath is not null)
+            {
+                gridRow.Cells[uiColName.Index].ToolTipText = status.ResolvedPath;
+            }
         }
     }
 }

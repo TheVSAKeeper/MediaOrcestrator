@@ -1,6 +1,8 @@
 ﻿using MediaOrcestrator.Modules;
 using Microsoft.Extensions.Logging;
 using System.Runtime.CompilerServices;
+using System.Text;
+using System.Text.Json;
 using YoutubeExplode;
 using YoutubeExplode.Channels;
 using YoutubeExplode.Common;
@@ -24,37 +26,11 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger, IToolPathProvider to
         async (youtubeClient, url) => UserName.TryParse(url) is { } userName ? await youtubeClient.Channels.GetByUserAsync(userName) : null,
     ];
 
-    public IReadOnlyList<ToolDescriptor> RequiredTools =>
+    public IReadOnlyList<ToolDescriptor> RequiredTools { get; } =
     [
-        new()
-        {
-            Name = WellKnownTools.YtDlp,
-            GitHubRepo = "yt-dlp/yt-dlp",
-            AssetPattern = "yt-dlp.exe",
-            VersionCommand = "--version",
-            ArchiveType = ArchiveType.None,
-        },
-        new()
-        {
-            Name = WellKnownTools.FFmpeg,
-            GitHubRepo = "BtbN/FFmpeg-Builds",
-            AssetPattern = "ffmpeg-N-*-win64-gpl.zip",
-            VersionCommand = "-version",
-            VersionPattern = @"ffmpeg version N-\d+-\w+-(\d{8})",
-            VersionTagPattern = @"autobuild-(\d{4}-\d{2}-\d{2})",
-            ArchiveType = ArchiveType.Zip,
-            ArchiveExecutablePath = "ffmpeg-*/bin/ffmpeg.exe",
-        },
-        new()
-        {
-            Name = WellKnownTools.Deno,
-            GitHubRepo = "denoland/deno",
-            AssetPattern = "deno-x86_64-pc-windows-msvc.zip",
-            VersionCommand = "--version",
-            VersionPattern = @"deno (\S+)",
-            ArchiveType = ArchiveType.Zip,
-            ArchiveExecutablePath = "deno.exe",
-        },
+        WellKnownTools.YtDlpDescriptor,
+        WellKnownTools.FFmpegDescriptor,
+        WellKnownTools.DenoDescriptor,
     ];
 
     public SyncDirection ChannelType => SyncDirection.OnlyUpload;
@@ -267,9 +243,12 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger, IToolPathProvider to
         var ffmpegPath = toolPathProvider.GetToolPath(WellKnownTools.FFmpeg)
                          ?? throw new InvalidOperationException("ffmpeg не установлен. Установите через панель управления инструментами.");
 
+        var jsRuntime = settings.GetValueOrDefault("js_runtime", "none");
         var denoPath = toolPathProvider.GetToolPath(WellKnownTools.Deno);
-        var jsRuntimeDir = denoPath is not null ? Path.GetDirectoryName(denoPath) : null;
-        var jsRuntime = denoPath is not null ? "deno" : settings.GetValueOrDefault("js_runtime", "none");
+        var jsRuntimeDir = jsRuntime is "deno" && denoPath is not null
+            ? Path.GetDirectoryName(denoPath)
+            : null;
+
         var cookiePath = settings.GetValueOrDefault("auth_state_path", "");
         var ytDlp = new YtDlp(ytDlpPath, ffmpegPath, jsRuntime, jsRuntimeDir, cookiePath);
 
@@ -408,7 +387,20 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger, IToolPathProvider to
     public bool IsAuthenticated(Dictionary<string, string> settings)
     {
         var authStatePath = settings.GetValueOrDefault("auth_state_path");
-        return !string.IsNullOrEmpty(authStatePath) && File.Exists(authStatePath);
+        if (string.IsNullOrEmpty(authStatePath) || !File.Exists(authStatePath))
+        {
+            return false;
+        }
+
+        try
+        {
+            var lines = File.ReadLines(authStatePath);
+            return lines.Any(line => !string.IsNullOrWhiteSpace(line) && !line.StartsWith('#'));
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     public async Task AuthenticateAsync(Dictionary<string, string> settings, IAuthUI ui, CancellationToken ct)
@@ -420,11 +412,60 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger, IToolPathProvider to
             return;
         }
 
-        var result = await ui.OpenBrowserAsync("https://www.youtube.com/", authStatePath);
-        if (result != null)
+        var tempJsonPath = authStatePath + ".tmp.json";
+
+        try
         {
-            logger.LogInformation("YouTube: авторизация сохранена в {Path}", result);
+            var result = await ui.OpenBrowserAsync("https://studio.youtube.com/", tempJsonPath);
+            if (result == null)
+            {
+                return;
+            }
+
+            ConvertPlaywrightToNetscape(tempJsonPath, authStatePath);
+            logger.LogInformation("YouTube: авторизация сохранена в {Path}", authStatePath);
             await ui.ShowMessageAsync("Авторизация YouTube сохранена!");
+        }
+        finally
+        {
+            if (File.Exists(tempJsonPath))
+            {
+                File.Delete(tempJsonPath);
+            }
+        }
+    }
+
+    private static void ConvertPlaywrightToNetscape(string playwrightJsonPath, string netscapePath)
+    {
+        var json = File.ReadAllText(playwrightJsonPath);
+        using var doc = JsonDocument.Parse(json);
+        var cookies = doc.RootElement.GetProperty("cookies");
+
+        using var writer = new StreamWriter(netscapePath, false, new UTF8Encoding(false));
+        writer.WriteLine("# Netscape HTTP Cookie File");
+
+        foreach (var cookie in cookies.EnumerateArray())
+        {
+            var domain = cookie.GetProperty("domain").GetString() ?? "";
+            if (string.IsNullOrEmpty(domain))
+            {
+                continue;
+            }
+
+            if (!domain.StartsWith('.'))
+            {
+                domain = "." + domain;
+            }
+
+            var flag = domain.StartsWith('.') ? "TRUE" : "FALSE";
+            var path = cookie.GetProperty("path").GetString() ?? "/";
+            var secure = cookie.GetProperty("secure").GetBoolean() ? "TRUE" : "FALSE";
+            var expires = cookie.GetProperty("expires").GetDouble();
+            var expiry = expires > 0 ? (long)expires : 0;
+            var name = cookie.GetProperty("name").GetString() ?? "";
+            var value = cookie.GetProperty("value").GetString() ?? "";
+
+            writer.WriteLine($"{domain}\t{flag}\t{path}\t{secure}\t{expiry}\t{name}\t{value}");
         }
     }
 

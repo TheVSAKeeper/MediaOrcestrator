@@ -37,8 +37,6 @@ namespace MediaOrcestrator.Runner
             uiConvertProgressBar = new ToolStripProgressBar();
             uiConvertStatusLabel = new ToolStripStatusLabel();
             uiFilterControl = new FilterToolStripControl();
-            uiSelectAllButton = new Button();
-            uiDeselectAllButton = new Button();
             uiConvertCancelMenu = new ContextMenuStrip(components);
             uiCancelConvertItem = new ToolStripMenuItem();
             ((System.ComponentModel.ISupportInitialize)uiMediaGrid).BeginInit();
@@ -80,7 +78,7 @@ namespace MediaOrcestrator.Runner
             uiSearchTextBox.Size = new Size(100, 23);
             uiSearchTextBox.TabIndex = 3;
             uiSearchTextBox.Visible = false;
-            // 
+            //
             // uiMergerSelectedMediaButton
             // 
             uiMergerSelectedMediaButton.Location = new Point(453, 28);
@@ -123,69 +121,47 @@ namespace MediaOrcestrator.Runner
             uiFilteredCountLabel.Name = "uiFilteredCountLabel";
             uiFilteredCountLabel.Size = new Size(107, 17);
             uiFilteredCountLabel.Text = "Отфильтровано: 0";
-            // 
+            //
             // uiConvertProgressBar
-            // 
+            //
             uiConvertProgressBar.Name = "uiConvertProgressBar";
             uiConvertProgressBar.Size = new Size(150, 16);
             uiConvertProgressBar.Visible = false;
             uiConvertProgressBar.MouseDown += uiConvertProgressBar_MouseDown;
-            // 
+            //
             // uiConvertStatusLabel
-            // 
+            //
             uiConvertStatusLabel.Name = "uiConvertStatusLabel";
             uiConvertStatusLabel.Size = new Size(0, 17);
             uiConvertStatusLabel.Visible = false;
-            // 
+            //
             // uiFilterControl
-            // 
+            //
             uiFilterControl.Dock = DockStyle.Top;
             uiFilterControl.Location = new Point(0, 0);
             uiFilterControl.Name = "uiFilterControl";
             uiFilterControl.ShowStatusFilter = true;
             uiFilterControl.Size = new Size(1131, 25);
             uiFilterControl.TabIndex = 7;
-            // 
-            // uiSelectAllButton
-            // 
-            uiSelectAllButton.Location = new Point(190, 28);
-            uiSelectAllButton.Name = "uiSelectAllButton";
-            uiSelectAllButton.Size = new Size(90, 23);
-            uiSelectAllButton.TabIndex = 8;
-            uiSelectAllButton.Text = "Выбрать все";
-            uiSelectAllButton.UseVisualStyleBackColor = true;
-            uiSelectAllButton.Click += uiSelectAllButton_Click;
-            // 
-            // uiDeselectAllButton
-            // 
-            uiDeselectAllButton.Location = new Point(286, 28);
-            uiDeselectAllButton.Name = "uiDeselectAllButton";
-            uiDeselectAllButton.Size = new Size(110, 23);
-            uiDeselectAllButton.TabIndex = 9;
-            uiDeselectAllButton.Text = "Снять выделение";
-            uiDeselectAllButton.UseVisualStyleBackColor = true;
-            uiDeselectAllButton.Click += uiDeselectAllButton_Click;
-            // 
+            //
             // uiConvertCancelMenu
-            // 
+            //
             uiConvertCancelMenu.Items.AddRange(new ToolStripItem[] { uiCancelConvertItem });
             uiConvertCancelMenu.Name = "uiConvertCancelMenu";
             uiConvertCancelMenu.Size = new Size(206, 26);
-            // 
+            //
             // uiCancelConvertItem
-            // 
+            //
             uiCancelConvertItem.Name = "uiCancelConvertItem";
             uiCancelConvertItem.Size = new Size(205, 22);
             uiCancelConvertItem.Text = "Отменить конвертацию";
-            // 
+            //
             // MediaMatrixGridControl
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             Controls.Add(uiLoadingLabel);
             Controls.Add(uiMergerSelectedMediaButton);
-            Controls.Add(uiDeselectAllButton);
-            Controls.Add(uiSelectAllButton);
             Controls.Add(uiSearchTextBox);
             Controls.Add(uiRefreshButton);
             Controls.Add(uiMediaGrid);
@@ -210,8 +186,6 @@ namespace MediaOrcestrator.Runner
         private ToolStripStatusLabel uiTotalCountLabel;
         private ToolStripStatusLabel uiFilteredCountLabel;
         private FilterToolStripControl uiFilterControl;
-        private Button uiSelectAllButton;
-        private Button uiDeselectAllButton;
         private ToolStripProgressBar uiConvertProgressBar;
         private ToolStripStatusLabel uiConvertStatusLabel;
         private ContextMenuStrip uiConvertCancelMenu;
