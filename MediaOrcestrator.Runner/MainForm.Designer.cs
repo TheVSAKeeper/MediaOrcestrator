@@ -66,6 +66,7 @@
             uiRubuteAuthStateOpenBrowserButton = new Button();
             uiManageToolsButton = new Button();
             uiCheckUpdatesButton = new Button();
+            button2 = new Button();
             uiMainTabControl.SuspendLayout();
             uiFilesTabPage.SuspendLayout();
             uiStorageTabPage.SuspendLayout();
@@ -209,7 +210,7 @@
             uiStorageTabPage.Location = new Point(4, 24);
             uiStorageTabPage.Name = "uiStorageTabPage";
             uiStorageTabPage.Padding = new Padding(3);
-            uiStorageTabPage.Size = new Size(1143, 753);
+            uiStorageTabPage.Size = new Size(1208, 753);
             uiStorageTabPage.TabIndex = 1;
             uiStorageTabPage.Text = "Хранилища";
             uiStorageTabPage.UseVisualStyleBackColor = true;
@@ -224,13 +225,14 @@
             uiRelationsTabPage.Controls.Add(uiRelationFromLabel);
             uiRelationsTabPage.Location = new Point(4, 24);
             uiRelationsTabPage.Name = "uiRelationsTabPage";
-            uiRelationsTabPage.Size = new Size(1143, 753);
+            uiRelationsTabPage.Size = new Size(1208, 753);
             uiRelationsTabPage.TabIndex = 2;
             uiRelationsTabPage.Text = "Связи";
             uiRelationsTabPage.UseVisualStyleBackColor = true;
             // 
             // uiAuditTabPage
             // 
+            uiAuditTabPage.Controls.Add(button2);
             uiAuditTabPage.Controls.Add(comboBox1);
             uiAuditTabPage.Controls.Add(button1);
             uiAuditTabPage.Controls.Add(uiClearSpecificTypeButton);
@@ -240,7 +242,7 @@
             uiAuditTabPage.Controls.Add(uiSyncButton);
             uiAuditTabPage.Location = new Point(4, 24);
             uiAuditTabPage.Name = "uiAuditTabPage";
-            uiAuditTabPage.Size = new Size(1143, 753);
+            uiAuditTabPage.Size = new Size(1208, 753);
             uiAuditTabPage.TabIndex = 3;
             uiAuditTabPage.Text = "Аудит";
             uiAuditTabPage.UseVisualStyleBackColor = true;
@@ -262,7 +264,7 @@
             button1.Name = "button1";
             button1.Size = new Size(348, 32);
             button1.TabIndex = 6;
-            button1.Text = "Быстро синхронизировать";
+            button1.Text = "Быстрый полный синхронизировать";
             button1.UseVisualStyleBackColor = true;
             button1.Click += button1_Click;
             // 
@@ -324,7 +326,7 @@
             uiSyncTreeTabPage.Controls.Add(uiSyncTreeControl);
             uiSyncTreeTabPage.Location = new Point(4, 24);
             uiSyncTreeTabPage.Name = "uiSyncTreeTabPage";
-            uiSyncTreeTabPage.Size = new Size(1143, 753);
+            uiSyncTreeTabPage.Size = new Size(1208, 753);
             uiSyncTreeTabPage.TabIndex = 6;
             uiSyncTreeTabPage.Text = "Дерево синхронизации";
             uiSyncTreeTabPage.UseVisualStyleBackColor = true;
@@ -334,7 +336,7 @@
             uiSyncTreeControl.Dock = DockStyle.Fill;
             uiSyncTreeControl.Location = new Point(0, 0);
             uiSyncTreeControl.Name = "uiSyncTreeControl";
-            uiSyncTreeControl.Size = new Size(1143, 753);
+            uiSyncTreeControl.Size = new Size(1208, 753);
             uiSyncTreeControl.TabIndex = 0;
             // 
             // uiLogsTabPage
@@ -342,7 +344,7 @@
             uiLogsTabPage.Location = new Point(4, 24);
             uiLogsTabPage.Name = "uiLogsTabPage";
             uiLogsTabPage.Padding = new Padding(3);
-            uiLogsTabPage.Size = new Size(1143, 753);
+            uiLogsTabPage.Size = new Size(1208, 753);
             uiLogsTabPage.TabIndex = 4;
             uiLogsTabPage.Text = "Логи";
             uiLogsTabPage.UseVisualStyleBackColor = true;
@@ -356,7 +358,7 @@
             uiToolsTabPage.Controls.Add(uiCheckUpdatesButton);
             uiToolsTabPage.Location = new Point(4, 24);
             uiToolsTabPage.Name = "uiToolsTabPage";
-            uiToolsTabPage.Size = new Size(1143, 753);
+            uiToolsTabPage.Size = new Size(1208, 753);
             uiToolsTabPage.TabIndex = 5;
             uiToolsTabPage.Text = "Вспомогательное";
             uiToolsTabPage.UseVisualStyleBackColor = true;
@@ -468,6 +470,17 @@
             uiCheckUpdatesButton.UseVisualStyleBackColor = true;
             uiCheckUpdatesButton.Click += uiCheckUpdatesButton_Click;
             // 
+            // button2
+            // 
+            button2.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            button2.Location = new Point(281, 233);
+            button2.Name = "button2";
+            button2.Size = new Size(348, 32);
+            button2.TabIndex = 8;
+            button2.Text = "До первого загруженного синхронизировать";
+            button2.UseVisualStyleBackColor = true;
+            button2.Click += button2_Click;
+            // 
             // MainForm
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
@@ -534,5 +547,6 @@
         private ComboBox comboBox1;
         private Button uiManageToolsButton;
         private Button uiCheckUpdatesButton;
+        private Button button2;
     }
 }

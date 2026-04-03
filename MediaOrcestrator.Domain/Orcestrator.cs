@@ -17,7 +17,7 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
         var sources = GetSourceTypes();
     }
 
-    public async Task GetStorageFullInfo(bool isFull, Source? filterSource = null)
+    public async Task GetStorageFullInfo(bool isFull, Source? filterSource = null, bool onlyNew = false)
     {
         logger.LogInformation("Запуск процесса синхронизации {Source}...", filterSource?.TitleFull);
 
@@ -75,6 +75,13 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
                 {
                     mediaList.Insert(0, s);
                     continue;
+                }
+
+                if (onlyNew)
+                {
+                    logger.LogInformation(s.Title + " уже существует. синхронизация остановлена");
+                    // получили только свежие, обновлять ничего не будем
+                    break;
                 }
 
                 var hasChange = false;
@@ -152,21 +159,21 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
                 cache.GetMedia(mediaSource.Id).Add(newMediaSource);
             }
 
-            var existsVideos = cache.GetMedia(mediaSource.Id);
-            foreach (var existsVideo in existsVideos)
+            if (!onlyNew)
             {
-                if (!foundIds.Contains(existsVideo.ExternalId))
+                var existsVideos = cache.GetMedia(mediaSource.Id);
+                foreach (var existsVideo in existsVideos)
                 {
-                    existsVideo.Status = MediaStatus.Missing;
-                    mediaCol.Update(existsVideo.Media);
+                    if (!foundIds.Contains(existsVideo.ExternalId))
+                    {
+                        existsVideo.Status = MediaStatus.Missing;
+                        mediaCol.Update(existsVideo.Media);
+                    }
                 }
             }
-            // save ?:)
         });
 
         logger.LogInformation("Синхронизация успешно завершена.");
-
-        var zalupa = 1;
     }
 
     public List<Media> GetMedias()

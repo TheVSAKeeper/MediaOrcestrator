@@ -106,6 +106,41 @@ public partial class MainForm : Form
         }
     }
 
+    private async void button2_Click(object sender, EventArgs e)
+    {
+        Source? syncSource = null;
+        if (comboBox1.SelectedItem != null)
+        {
+            if (comboBox1.SelectedItem is not Source value)
+            {
+                MessageBox.Show("Пожалуйста, выберите источник для связи.", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            syncSource = value;
+        }
+
+        // todo дубрирование ебейшее
+        _logger.LogInformation("Пользователь нажал кнопку синхронизации быстрой.");
+        uiSyncButton.Enabled = false;
+        try
+        {
+            await _orcestrator.GetStorageFullInfo(false, syncSource, true);
+            _logger.LogInformation("Синхронизация через UI завершена.");
+            DrawSources();
+            uiMediaMatrixGridControl.RefreshData();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Ошибка при синхронизации через UI.");
+            MessageBox.Show($"Ошибка при синхронизации: {ex.Message}");
+        }
+        finally
+        {
+            uiSyncButton.Enabled = true;
+        }
+    }
+
     private void uiAddSourceButton_Click(object sender, EventArgs e)
     {
         if (uiSourcesComboBox.SelectedItem is not ISourceType selectedPlugin)
