@@ -65,8 +65,10 @@ public partial class MediaMatrixGridControl : UserControl
             var selectedColumnIds = uiFilterControl.GetSelectedMetadataFields();
             var selectedMetadata = allMetadataColumns.Where(c => selectedColumnIds.Contains(c.ColumnId)).ToList();
 
+            uiMediaGrid.SaveState();
             uiMediaGrid.SetupColumns(sources, selectedMetadata);
             uiMediaGrid.PopulateGrid(sources, mediaData, selectedMetadata);
+            uiMediaGrid.RestoreState();
             UpdateStatusBar(allMediaCount, mediaData.Count);
 
             _logger?.LogInformation("Список медиа успешно обновлен. Отображается: {Count} из {Total}", mediaData.Count, allMediaCount);
