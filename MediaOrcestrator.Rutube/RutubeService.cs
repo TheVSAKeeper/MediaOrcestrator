@@ -70,7 +70,7 @@ public sealed partial class RutubeService
             videoId = session.VideoId;
         }
 
-        string errorMessage = "";
+        var errorMessage = "";
         if (!string.IsNullOrEmpty(thumbnailPath) && File.Exists(thumbnailPath))
         {
             try
@@ -85,13 +85,13 @@ public sealed partial class RutubeService
                     {
                         _logger.LogInformation("Обнаружен WebP формат, конвертируем в JPG...");
 
-                        string tempJpgPath = thumbnailPath + ".jpg";
+                        var tempJpgPath = thumbnailPath + ".jpg";
 
                         using (var image = Image.Load(thumbnailPath))
                         {
                             var encoder = new JpegEncoder
                             {
-                                Quality = 90
+                                Quality = 90,
                             };
 
                             if (File.Exists(tempJpgPath))
@@ -127,6 +127,7 @@ public sealed partial class RutubeService
                 errorMessage += "Ошибка загрузки превьюшки";
             }
         }
+
         if (isNewVideo)
         {
             // todo код с душком
@@ -152,24 +153,48 @@ public sealed partial class RutubeService
                 {
                     errorMessage += "\r\n";
                 }
+
                 errorMessage += "Ошибка публикации";
             }
         }
+
         if (errorMessage == null)
         {
-            return new UploadResult
+            return new()
             {
                 Status = MediaStatusHelper.Ok(),
                 Id = videoId,
             };
         }
 
-        return new UploadResult
+        return new()
         {
             Status = MediaStatusHelper.GetById(MediaStatus.PartialOk),
             Id = videoId,
             Message = errorMessage,
         };
+    }
+
+    public async Task<VideoDetailsResponse> GetVideoByIdAsync(string videoId)
+    {
+        var url = $"https://studio.rutube.ru/api/v2/video/{videoId}/?client=vulp";
+        _logger.LogDebug("Запрос информации о видео {VideoId}", videoId);
+
+        var response = await _httpClient.GetAsync(url);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var err = await response.Content.ReadAsStringAsync();
+            _logger.LogError("Ошибка получения видео {VideoId}. Статус: {StatusCode}, Ответ: {Response}", videoId, response.StatusCode, err);
+            throw new HttpRequestException($"Не удалось получить видео {videoId}: {response.StatusCode}. Ответ: {err}");
+        }
+
+        var body = await response.Content.ReadAsStringAsync();
+        var result = JsonSerializer.Deserialize<VideoDetailsResponse>(body)
+                     ?? throw new InvalidOperationException($"Не удалось десериализовать ответ для видео {videoId}");
+
+        _logger.LogInformation("Получена информация о видео. Название: '{Title}'", result.Title);
+        return result;
     }
 
     public async Task<List<CategoryInfo>> GetCategoriesAsync()
@@ -445,14 +470,16 @@ public sealed partial class RutubeService
         }
     }
 
-    // TODO: Проверить и исправить часовые пояса (скорее всего Rutube принимает в МСК)
     private async Task PublishVideoAsync(string videoId, DateTime publishAt)
     {
+        var moscowTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Russian Standard Time");
+        var moscowTime = TimeZoneInfo.ConvertTime(publishAt, moscowTimeZone);
+
         var url = "https://studio.rutube.ru/api/video/publication/?client=vulp";
         var payload = new PublicationRequest
         {
             VideoId = videoId,
-            Timestamp = publishAt.ToString("yyyy-MM-ddTHH:mm:ss"),
+            Timestamp = moscowTime.ToString("yyyy-MM-ddTHH:mm:ss"),
             HideVideo = false,
         };
 

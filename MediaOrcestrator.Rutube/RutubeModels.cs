@@ -50,8 +50,23 @@ public sealed class MetadataUpdateProperties
     public bool HideComments { get; set; }
 }
 
-public sealed class VideoDetailsResponse
+public interface IRutubeVideoInfo
 {
+    string? Id { get; }
+    string? Title { get; }
+    string? Description { get; }
+    string? VideoUrl { get; }
+    string? ThumbnailUrl { get; }
+    int Duration { get; }
+    Author? Author { get; }
+    int Hits { get; }
+    string CreatedTsFormatted { get; }
+}
+
+public sealed class VideoDetailsResponse : IRutubeVideoInfo
+{
+    public string CreatedTsFormatted => CreatedTs ?? "";
+
     [JsonPropertyName("id")]
     public string Id { get; set; } = string.Empty;
 
@@ -120,6 +135,8 @@ public sealed class VideoDetailsResponse
 
     [JsonPropertyName("properties")]
     public VideoProperties Properties { get; set; } = new();
+
+    Author? IRutubeVideoInfo.Author => Author;
 }
 
 public sealed class Author
@@ -227,7 +244,6 @@ public sealed class ThumbnailResponse
     public string ThumbnailUrl { get; set; } = string.Empty;
 }
 
-
 public class GetVideoApiResponse
 {
     [JsonPropertyName("has_next")]
@@ -255,8 +271,10 @@ public class GetVideoApiResponse
     public int VideoCount { get; set; }
 }
 
-public class GetVideoApiItem
+public class GetVideoApiItem : IRutubeVideoInfo
 {
+    public string CreatedTsFormatted => CreatedTs.ToString("O");
+
     [JsonPropertyName("id")]
     public string? Id { get; set; }
 

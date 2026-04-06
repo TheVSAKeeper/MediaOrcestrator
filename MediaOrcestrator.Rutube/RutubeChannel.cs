@@ -8,12 +8,20 @@ using System.Text.Json;
 namespace MediaOrcestrator.Rutube;
 
 // TODO: Костыль с ILogger<RutubeService>. Желательно сделать полноценную регистрацию модулей в DI.
-public class RutubeChannel(ILogger<RutubeChannel> logger, ILogger<RutubeService> serviceLogger) : ISourceType, IAuthenticatable
+public class RutubeChannel(ILogger<RutubeChannel> logger, ILogger<RutubeService> serviceLogger, IToolPathProvider toolPathProvider)
+    : ISourceType, IAuthenticatable, IToolConsumer
 {
-    public SyncDirection ChannelType => SyncDirection.OnlyUpload;
+    public SyncDirection ChannelType => SyncDirection.Full;
+
+    public IReadOnlyList<ToolDescriptor> RequiredTools { get; } =
+    [
+        WellKnownTools.YtDlpDescriptor,
+        WellKnownTools.FFmpegDescriptor,
+    ];
 
     public string Name => "Rutube";
 
+    // TODO: Подумать на сортировкой
     public IEnumerable<SourceSettings> SettingsKeys { get; } =
     [
         new()
@@ -44,6 +52,20 @@ public class RutubeChannel(ILogger<RutubeChannel> logger, ILogger<RutubeService>
             IsRequired = false,
             Title = "ограничение скорости выгрузки (Мбит/с)",
             Description = "Максимальная скорость выгрузки видео. Пустое значение — без ограничений",
+        },
+        new()
+        {
+            Key = "temp_path",
+            IsRequired = true,
+            Title = "путь к временной папке",
+            Description = "Папка для временного хранения скачиваемых видео",
+        },
+        new()
+        {
+            Key = "speed_limit",
+            IsRequired = false,
+            Title = "ограничение скорости скачивания (Мбит/с)",
+            Description = "Максимальная скорость скачивания видео. Пустое значение — без ограничений",
         },
     ];
 
@@ -88,64 +110,106 @@ public class RutubeChannel(ILogger<RutubeChannel> logger, ILogger<RutubeService>
         await foreach (var video in apiVideoItems)
         {
             logger.LogDebug("Обработка видео: '{VideoTitle}' (ID: {VideoId})", video.Title, video.Id);
-
-            var metadata = new List<MetadataItem>
-            {
-                new()
-                {
-                    Key = "Duration",
-                    DisplayName = "Длительность",
-                    Value = TimeSpan.FromSeconds(video.Duration).ToString(),
-                    DisplayType = "System.TimeSpan",
-                },
-                new()
-                {
-                    Key = "Author",
-                    DisplayName = "Автор",
-                    Value = video.Author.Name,
-                    DisplayType = "System.String",
-                },
-                new()
-                {
-                    Key = "CreationDate",
-                    DisplayName = "Дата создания",
-                    Value = video.CreatedTs.ToString("O"),
-                    DisplayType = "System.DateTime",
-                },
-                new()
-                {
-                    Key = "Views",
-                    DisplayName = "Просмотры",
-                    Value = video.Hits.ToString(),
-                    DisplayType = "System.Int64",
-                },
-                new()
-                {
-                    Key = "PreviewUrl",
-                    Value = video.ThumbnailUrl ?? "",
-                },
-            };
-
-            yield return new()
-            {
-                Id = video.Id,
-                Title = video.Title,
-                DataPath = video.VideoUrl,
-                PreviewPath = video.ThumbnailUrl,
-                Metadata = metadata,
-            };
+            yield return CreateMediaDto(video);
         }
     }
 
-    public Task<MediaDto?> GetMediaByIdAsync(string externalId, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
+    public async Task<MediaDto?> GetMediaByIdAsync(string externalId, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
+        logger.LogInformation("Получение информации о видео RuTube. ID: {VideoId}", externalId);
+        var rutubeService = await CreateRutubeServiceAsync(settings);
+        var video = await rutubeService.GetVideoByIdAsync(externalId);
+        return CreateMediaDto(video);
     }
 
-    public Task<MediaDto> Download(string videoId, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
+    // TODO: Дублирование с Youtube
+    public async Task<MediaDto> Download(string videoId, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
     {
-        logger.LogWarning("Загрузка видео с RuTube не реализована. ID: {VideoId}", videoId);
-        throw new NotImplementedException("Загрузка с RuTube не поддерживается");
+        logger.LogInformation("Начало скачивания видео с RuTube. ID: {VideoId}", videoId);
+
+        var media = await GetMediaByIdAsync(videoId, settings, cancellationToken)
+                    ?? throw new InvalidOperationException($"Видео не найдено: {videoId}");
+
+        logger.LogDebug("Получена информация о видео. Название: '{Title}'", media.Title);
+
+        var tempPath = settings["temp_path"];
+        var guid = Guid.NewGuid().ToString();
+        var finalPath = Path.Combine(tempPath, guid, "media.mp4");
+
+        Directory.CreateDirectory(Path.GetDirectoryName(finalPath)!);
+        logger.LogDebug("Создана временная директория: {TempPath}", Path.GetDirectoryName(finalPath));
+
+        var ytDlpPath = toolPathProvider.GetToolPath(WellKnownTools.YtDlp)
+                        ?? throw new InvalidOperationException("yt-dlp не установлен. Установите через панель управления инструментами.");
+
+        var ffmpegPath = toolPathProvider.GetToolPath(WellKnownTools.FFmpeg)
+                         ?? throw new InvalidOperationException("ffmpeg не установлен. Установите через панель управления инструментами.");
+
+        var authStatePath = settings.GetValueOrDefault("auth_state_path", "");
+        var netscapeCookiePath = "";
+        if (!string.IsNullOrEmpty(authStatePath) && File.Exists(authStatePath))
+        {
+            netscapeCookiePath = Path.Combine(Path.GetDirectoryName(finalPath)!, "cookies.txt");
+            ConvertPlaywrightToNetscape(authStatePath, netscapeCookiePath);
+            logger.LogDebug("Cookies конвертированы в Netscape формат: {Path}", netscapeCookiePath);
+        }
+
+        var ytDlp = new YtDlp(ytDlpPath, ffmpegPath, netscapeCookiePath);
+
+        object progressLock = new();
+        double oldPercent = -1;
+        var currentPart = 0;
+
+        Progress<YtDlpProgress> progress = new(p =>
+        {
+            lock (progressLock)
+            {
+                if (p.PartNumber != currentPart)
+                {
+                    currentPart = p.PartNumber;
+                    oldPercent = -1;
+                    logger.LogInformation("Скачивание части #{PartNumber}", currentPart);
+                }
+
+                if (Math.Abs(p.Progress - oldPercent) < double.Epsilon)
+                {
+                    return;
+                }
+
+                var isSignificantChange = Math.Abs(p.Progress - oldPercent) >= 0.1;
+                var isCompletion = p.Progress >= 1.0;
+                var isStart = oldPercent < 0;
+
+                if (!isSignificantChange && !isCompletion && !isStart)
+                {
+                    return;
+                }
+
+                logger.LogInformation("Прогресс скачивания [Часть {PartNumber}]: {Percent:P0}", p.PartNumber, p.Progress);
+                oldPercent = p.Progress;
+            }
+        });
+
+        logger.LogInformation("Запуск скачивания через yt-dlp. URL: https://rutube.ru/video/{VideoId}/", videoId);
+
+        try
+        {
+            var rateLimitBytes = SpeedLimitHelper.ParseDownloadBytesPerSecond(settings);
+            await ytDlp.DownloadAsync($"https://rutube.ru/video/{videoId}/", finalPath, progress, rateLimitBytes, cancellationToken);
+            logger.LogInformation("Видео успешно скачано. ID: {VideoId}, Путь: {FilePath}", videoId, finalPath);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Ошибка при скачивании видео через yt-dlp. ID: {VideoId}", videoId);
+            throw;
+        }
+
+        media.TempDataPath = finalPath;
+        return media;
     }
 
     public async Task<UploadResult> Upload(MediaDto media, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
@@ -283,6 +347,92 @@ public class RutubeChannel(ILogger<RutubeChannel> logger, ILogger<RutubeService>
         }
     }
 
+    private static MediaDto CreateMediaDto(IRutubeVideoInfo video)
+    {
+        var metadata = new List<MetadataItem>
+        {
+            new()
+            {
+                Key = "Duration",
+                DisplayName = "Длительность",
+                Value = TimeSpan.FromSeconds(video.Duration).ToString(),
+                DisplayType = "System.TimeSpan",
+            },
+            new()
+            {
+                Key = "Author",
+                DisplayName = "Автор",
+                Value = video.Author?.Name ?? "",
+                DisplayType = "System.String",
+            },
+            new()
+            {
+                Key = "CreationDate",
+                DisplayName = "Дата создания",
+                Value = video.CreatedTsFormatted,
+                DisplayType = "System.DateTime",
+            },
+            new()
+            {
+                Key = "Views",
+                DisplayName = "Просмотры",
+                Value = video.Hits.ToString(),
+                DisplayType = "System.Int64",
+            },
+            new()
+            {
+                Key = "PreviewUrl",
+                Value = video.ThumbnailUrl ?? "",
+            },
+        };
+
+        return new()
+        {
+            Id = video.Id,
+            Title = video.Title,
+            Description = video.Description,
+            DataPath = video.VideoUrl ?? "",
+            PreviewPath = video.ThumbnailUrl,
+            Metadata = metadata,
+        };
+    }
+
+    // TODO: Дублирование с Youtube
+    private static void ConvertPlaywrightToNetscape(string playwrightJsonPath, string netscapePath)
+    {
+        var json = File.ReadAllText(playwrightJsonPath);
+        using var doc = JsonDocument.Parse(json);
+        var cookies = doc.RootElement.GetProperty("cookies");
+
+        using var writer = new StreamWriter(netscapePath, false, new UTF8Encoding(false));
+        writer.WriteLine("# Netscape HTTP Cookie File");
+
+        foreach (var cookie in cookies.EnumerateArray())
+        {
+            var domain = cookie.GetProperty("domain").GetString() ?? "";
+            if (string.IsNullOrEmpty(domain))
+            {
+                continue;
+            }
+
+            if (!domain.StartsWith('.'))
+            {
+                domain = "." + domain;
+            }
+
+            var flag = "TRUE";
+
+            var path = cookie.GetProperty("path").GetString() ?? "/";
+            var secure = cookie.GetProperty("secure").GetBoolean() ? "TRUE" : "FALSE";
+            var expires = cookie.GetProperty("expires").GetDouble();
+            var expiry = expires > 0 ? (long)expires : 0;
+            var name = cookie.GetProperty("name").GetString() ?? "";
+            var value = cookie.GetProperty("value").GetString() ?? "";
+
+            writer.WriteLine($"{domain}\t{flag}\t{path}\t{secure}\t{expiry}\t{name}\t{value}");
+        }
+    }
+
     private async Task<RutubeService> CreateRutubeServiceAsync(Dictionary<string, string> settings)
     {
         var authStatePath = settings.GetValueOrDefault("auth_state_path");
@@ -330,15 +480,5 @@ public class RutubeChannel(ILogger<RutubeChannel> logger, ILogger<RutubeService>
         logger.LogDebug("CSRF токен успешно получен");
 
         return new(cookieStringBuilder.ToString(), csrfToken, serviceLogger);
-    }
-
-    public ConvertType[] GetAvailabelConvertTypes()
-    {
-        return [];
-    }
-
-    public Task ConvertAsync(int typeId, string externalId, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
-    {
-        throw new NotImplementedException();
     }
 }
