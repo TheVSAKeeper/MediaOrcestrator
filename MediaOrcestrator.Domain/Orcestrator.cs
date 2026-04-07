@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging;
 
 namespace MediaOrcestrator.Domain;
 
-public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<Orcestrator> logger)
+public class Orcestrator(PluginManager pluginManager, LiteDatabase db, TempManager tempManager, ILogger<Orcestrator> logger)
 {
     public Dictionary<string, ISourceType> GetSourceTypes()
     {
@@ -326,6 +326,8 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
             }
 
             source.Type = sourceType;
+
+            source.Settings["_system_temp_path"] = tempManager.TempPath;
         }
 
         return sources;
@@ -450,6 +452,7 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
         }
 
         UploadResult uploadResult;
+        MediaDto? tempMedia = null;
         var debug = false;
         if (debug)
         {
@@ -466,7 +469,7 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
         }
         else
         {
-            var tempMedia = await rel.From.Type.DownloadAsync(fromMediaSource.ExternalId, rel.From.Settings, cancellationToken);
+            tempMedia = await rel.From.Type.DownloadAsync(fromMediaSource.ExternalId, rel.From.Settings, cancellationToken);
             tempMedia.Id = media.Id;
             if (toMediaSource?.Status == MediaStatus.PartialOk)
             {
@@ -498,6 +501,16 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, ILogger<O
             toMediaSource.ExternalId = uploadResult.Id!;
             UpdateMedia(media);
             logger.LogInformation("Успешно синхронизировано медиа {Media} в {ToSource}. ExternalId: {ExternalId}", media, rel.To, uploadResult.Id);
+
+            if (tempMedia != null && !string.IsNullOrEmpty(tempMedia.TempDataPath))
+            {
+                var guid = Path.GetFileName(Path.GetDirectoryName(tempMedia.TempDataPath));
+
+                if (guid != null)
+                {
+                    tempManager.CleanMedia(guid);
+                }
+            }
         }
         else
         {

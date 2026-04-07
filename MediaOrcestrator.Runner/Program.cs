@@ -29,6 +29,7 @@ file static class Program
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Debug()
             .MinimumLevel.Override("Microsoft.Extensions.Http", LogEventLevel.Warning)
+            .MinimumLevel.Override("System.Net.Http.HttpClient", LogEventLevel.Warning)
             .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{SourceContext}] {Message:lj}{NewLine}{Exception}")
             .WriteTo.Debug()
             .WriteTo.File("logs/log-.txt",
@@ -73,12 +74,30 @@ file static class Program
                 settingsManager.SetValue("database_path", result);
             }
 
+            var tempPath = settingsManager.GetStringValue("temp_path");
+            if (tempPath == null)
+            {
+                var result = InputMessageBox.Show("Введите путь до временной папки для загрузок", "Важная настройка", "temp");
+                if (result == null)
+                {
+                    MessageBox.Show("Так нельзя, закрываюсь");
+                    return;
+                }
+
+                tempPath = result;
+                settingsManager.SetValue("temp_path", result);
+            }
+
             Log.Information("Приложение запускается...");
             CheckUpdaterLog();
             var services = new ServiceCollection();
             services.AddSingleton(logControl);
             services.AddSingleton(settingsManager);
             ConfigureServices(services, databasePath);
+            services.AddSingleton(sp =>
+                new TempManager(tempPath,
+                    sp.GetRequiredService<LiteDatabase>(),
+                    sp.GetRequiredService<ILogger<TempManager>>()));
 
             using var serviceProvider = services.BuildServiceProvider();
             var mainForm = serviceProvider.GetRequiredService<MainForm>();
@@ -90,6 +109,10 @@ file static class Program
             backupService.ValidateLog();
             backupService.Backup(BackupTrigger.Startup);
             backupService.StartScheduled(TimeSpan.FromHours(6));
+
+            var tempManager = serviceProvider.GetRequiredService<TempManager>();
+            tempManager.MigrateOldTempPaths();
+            tempManager.CleanAll();
 
             Task.Run(async () =>
             {

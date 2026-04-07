@@ -146,10 +146,12 @@ public sealed class VkVideoChannel(ILogger<VkVideoChannel> logger, ILogger<VkVid
         var downloadUrl = video.Files?.GetBestQualityUrl()
                           ?? throw new InvalidOperationException($"Нет доступных URL для скачивания видео {videoId}");
 
-        // TODO: Сделать как в ютуб. Ещё также можно через yt-dlp скачивать. Он поддерживает. Нужно подумать как обыграть
-        var tempDir = Path.GetTempPath();
-        var tempVideoPath = Path.Combine(tempDir, $"vkvideo_{ownerId}_{vid}.mp4");
-        var tempPreviewPath = Path.Combine(tempDir, $"vkvideo_{ownerId}_{vid}_preview.jpg");
+        var tempPath = settings["_system_temp_path"];
+        var guid = Guid.NewGuid().ToString();
+        var tempVideoPath = Path.Combine(tempPath, guid, "media.mp4");
+        var tempPreviewPath = Path.Combine(tempPath, guid, "preview.jpg");
+
+        Directory.CreateDirectory(Path.Combine(tempPath, guid));
 
         //logger.LogInformation("Скачивание видео из {Url}", downloadUrl[..Math.Min(80, downloadUrl.Length)] + "...");
         logger.LogInformation("Скачивание видео из {Url}", downloadUrl);

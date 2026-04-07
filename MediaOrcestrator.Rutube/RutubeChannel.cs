@@ -56,13 +56,6 @@ public class RutubeChannel(ILogger<RutubeChannel> logger, ILogger<RutubeService>
         },
         new()
         {
-            Key = "temp_path",
-            IsRequired = true,
-            Title = "путь к временной папке",
-            Description = "Папка для временного хранения скачиваемых видео",
-        },
-        new()
-        {
             Key = "speed_limit",
             IsRequired = false,
             Title = "ограничение скорости скачивания (Мбит/с)",
@@ -133,7 +126,7 @@ public class RutubeChannel(ILogger<RutubeChannel> logger, ILogger<RutubeService>
 
         logger.LogDebug("Получена информация о видео. Название: '{Title}'", media.Title);
 
-        var tempPath = settings["temp_path"];
+        var tempPath = settings["_system_temp_path"];
         var guid = Guid.NewGuid().ToString();
         var finalPath = Path.Combine(tempPath, guid, "media.mp4");
 

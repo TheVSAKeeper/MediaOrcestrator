@@ -39,14 +39,6 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger, IToolPathProvider to
         },
         new()
         {
-            Key = "temp_path",
-            IsRequired = true,
-            Title = "путь к временной папке для загрузки",
-            DefaultValue = @"E:\bobgroup\projects\mediaOrcestrator\tempDir",
-            Description = "Папка для временного хранения загружаемых видео",
-        },
-        new()
-        {
             Key = "js_runtime",
             IsRequired = true,
             Title = "вариант JS runtime",
@@ -281,7 +273,7 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger, IToolPathProvider to
 
         logger.LogDebug("Получена информация о видео. Название: '{Title}'", media.Title);
 
-        var tempPath = settings["temp_path"];
+        var tempPath = settings["_system_temp_path"];
         var guid = Guid.NewGuid().ToString();
         var finalPath = Path.Combine(tempPath, guid, "media.mp4");
 

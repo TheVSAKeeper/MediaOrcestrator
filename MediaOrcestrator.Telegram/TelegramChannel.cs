@@ -59,13 +59,6 @@ public sealed class TelegramChannel(ILogger<TelegramChannel> logger, ILogger<Tel
         },
         new()
         {
-            Key = "temp_path",
-            IsRequired = true,
-            Title = "путь для временных файлов",
-            Description = "Директория для скачанных видео и превью",
-        },
-        new()
-        {
             Key = "speed_limit",
             IsRequired = false,
             Title = "ограничение скорости скачивания (Мбит/с)",
@@ -124,7 +117,7 @@ public sealed class TelegramChannel(ILogger<TelegramChannel> logger, ILogger<Tel
                       ?? throw new InvalidOperationException($"Видео {videoId} не найдено");
 
         var doc = (Document)((MessageMediaDocument)message.media!).document!;
-        var tempPath = settings["temp_path"];
+        var tempPath = settings["_system_temp_path"];
         var guid = Guid.NewGuid().ToString("N");
         var tempVideoPath = Path.Combine(tempPath, guid, "media.mp4");
         var tempPreviewPath = Path.Combine(tempPath, guid, "preview.jpg");
