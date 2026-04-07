@@ -149,6 +149,18 @@ public sealed class VkVideoService : IDisposable
         return (response.Videos, nextFrom);
     }
 
+    public Task<VideoGetResponse> GetVideosAsync(long ownerId, int count = 200, int offset = 0)
+    {
+        _logger.LogDebug("Запрос списка видео: owner_id={OwnerId}, count={Count}, offset={Offset}", ownerId, count, offset);
+
+        return CallApiAsync<VideoGetResponse>("video.get", new()
+        {
+            [OwnerIdKey] = ownerId.ToString(),
+            ["count"] = count.ToString(),
+            ["offset"] = offset.ToString(),
+        });
+    }
+
     public async Task<VideoItem?> GetVideoByIdAsync(long ownerId, long videoId)
     {
         var videoKey = $"{ownerId}_{videoId}";

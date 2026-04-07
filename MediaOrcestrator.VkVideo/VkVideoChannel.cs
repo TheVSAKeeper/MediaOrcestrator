@@ -65,31 +65,61 @@ public sealed class VkVideoChannel(ILogger<VkVideoChannel> logger, ILogger<VkVid
         return new($"https://vkvideo.ru/video{externalId}");
     }
 
+    // public async IAsyncEnumerable<MediaDto> GetMedia(Dictionary<string, string> settings, bool isFull, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    // {
+    //     logger.LogInformation("Получение списка медиа для VkVideo");
+    //     var service = await CreateServiceAsync(settings);
+    //     var groupId = long.Parse(settings["group_id"]);
+    //
+    //     var (videos, sectionId, nextFrom) = await service.GetCatalogFirstPageAsync(groupId);
+    //
+    //     foreach (var video in videos)
+    //     {
+    //         yield return CreateMediaDto(video);
+    //     }
+    //
+    //     while (sectionId != null && nextFrom != null)
+    //     {
+    //         cancellationToken.ThrowIfCancellationRequested();
+    //
+    //         var (nextVideos, newNextFrom) = await service.GetCatalogNextPageAsync(sectionId, nextFrom);
+    //
+    //         foreach (var video in nextVideos)
+    //         {
+    //             yield return CreateMediaDto(video);
+    //         }
+    //
+    //         nextFrom = newNextFrom;
+    //     }
+    // }
+
+    // TODO: Альтернативный вариант. У меня оба вроде работают
     public async IAsyncEnumerable<MediaDto> GetMedia(Dictionary<string, string> settings, bool isFull, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         logger.LogInformation("Получение списка медиа для VkVideo");
         var service = await CreateServiceAsync(settings);
-        var groupId = long.Parse(settings["group_id"]);
+        var ownerId = -long.Parse(settings["group_id"]);
 
-        var (videos, sectionId, nextFrom) = await service.GetCatalogFirstPageAsync(groupId);
+        const int PageSize = 200;
+        var offset = 0;
 
-        foreach (var video in videos)
-        {
-            yield return CreateMediaDto(video);
-        }
-
-        while (sectionId != null && nextFrom != null)
+        while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var (nextVideos, newNextFrom) = await service.GetCatalogNextPageAsync(sectionId, nextFrom);
+            var response = await service.GetVideosAsync(ownerId, PageSize, offset);
 
-            foreach (var video in nextVideos)
+            foreach (var video in response.Items)
             {
                 yield return CreateMediaDto(video);
             }
 
-            nextFrom = newNextFrom;
+            offset += response.Items.Count;
+
+            if (response.Items.Count < PageSize || offset >= response.Count)
+            {
+                break;
+            }
         }
     }
 

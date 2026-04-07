@@ -199,6 +199,15 @@ public sealed class GroupItem
     public string? ScreenName { get; set; }
 }
 
+public sealed class VideoGetResponse
+{
+    [JsonPropertyName("count")]
+    public int Count { get; set; }
+
+    [JsonPropertyName("items")]
+    public List<VideoItem> Items { get; set; } = [];
+}
+
 public sealed class VideoGetByIdsResponse
 {
     [JsonPropertyName("items")]
