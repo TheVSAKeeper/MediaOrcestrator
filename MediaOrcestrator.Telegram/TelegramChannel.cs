@@ -59,13 +59,6 @@ public sealed class TelegramChannel(ILogger<TelegramChannel> logger, ILogger<Tel
         },
         new()
         {
-            Key = "temp_path",
-            IsRequired = true,
-            Title = "путь для временных файлов",
-            Description = "Директория для скачанных видео и превью",
-        },
-        new()
-        {
             Key = "speed_limit",
             IsRequired = false,
             Title = "ограничение скорости скачивания (Мбит/с)",
@@ -113,7 +106,7 @@ public sealed class TelegramChannel(ILogger<TelegramChannel> logger, ILogger<Tel
         return message != null ? CreateMediaDto(message) : null;
     }
 
-    public async Task<MediaDto> Download(string videoId, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
+    public async Task<MediaDto> DownloadAsync(string videoId, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
     {
         logger.LogInformation("Скачивание видео {VideoId} из Telegram", videoId);
         var service = await CreateServiceAsync(settings);
@@ -124,7 +117,7 @@ public sealed class TelegramChannel(ILogger<TelegramChannel> logger, ILogger<Tel
                       ?? throw new InvalidOperationException($"Видео {videoId} не найдено");
 
         var doc = (Document)((MessageMediaDocument)message.media!).document!;
-        var tempPath = settings["temp_path"];
+        var tempPath = settings["_system_temp_path"];
         var guid = Guid.NewGuid().ToString("N");
         var tempVideoPath = Path.Combine(tempPath, guid, "media.mp4");
         var tempPreviewPath = Path.Combine(tempPath, guid, "preview.jpg");
@@ -155,7 +148,7 @@ public sealed class TelegramChannel(ILogger<TelegramChannel> logger, ILogger<Tel
         return dto;
     }
 
-    public async Task<UploadResult> Upload(MediaDto media, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
+    public async Task<UploadResult> UploadAsync(MediaDto media, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
     {
         logger.LogInformation("Загрузка видео в Telegram-канал. Название: '{Title}'", media.Title);
 
@@ -198,7 +191,7 @@ public sealed class TelegramChannel(ILogger<TelegramChannel> logger, ILogger<Tel
         }
     }
 
-    public async Task<UploadResult> Update(string externalId, MediaDto tempMedia, Dictionary<string, string> settings, CancellationToken cancellationToken)
+    public async Task<UploadResult> UpdateAsync(string externalId, MediaDto tempMedia, Dictionary<string, string> settings, CancellationToken cancellationToken)
     {
         logger.LogInformation("Обновление видео {ExternalId} в Telegram", externalId);
 
@@ -483,12 +476,12 @@ public sealed class TelegramChannel(ILogger<TelegramChannel> logger, ILogger<Tel
         }
     }
 
-    public ConvertType[] GetAvailabelConvertTypes()
+    public ConvertType[] GetAvailableConvertTypes()
     {
         return [];
     }
 
-    public Task ConvertAsync(int typeId, string externalId, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
+    public Task ConvertAsync(int typeId, string externalId, Dictionary<string, string> settings, IProgress<ConvertProgress>? progress = null, CancellationToken cancellationToken = default)
     {
         throw new NotImplementedException();
     }

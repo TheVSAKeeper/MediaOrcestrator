@@ -14,6 +14,7 @@
 
   <ItemGroup>
     <PackageReference Include="CliWrap" Version="3.6.6" />
+    <PackageReference Include="Google.Apis.YouTube.v3" Version="1.68.0.3662" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.0" />
     <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="8.0.0" />
   </ItemGroup>
@@ -27,6 +28,10 @@
     </ItemGroup>
     <MakeDir Directories="$(TargetFolder)" Condition="!Exists('$(TargetFolder)')" />
     <Copy SourceFiles="@(AllBuildFiles)" DestinationFolder="$(TargetFolder)%(RecursiveDir)" SkipUnchangedFiles="true" />
+    <ItemGroup>
+      <DocFiles Include="..\MediaOrcestrator.Youtube\docs\**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(DocFiles)" DestinationFolder="$(TargetFolder)docs\%(RecursiveDir)" SkipUnchangedFiles="true" Condition="@(DocFiles->Count()) > 0" />
     <Message Text="✅ Все файлы сборки $(AssemblyName) скопированы в $(TargetFolder)" Importance="high" />
   </Target>
 

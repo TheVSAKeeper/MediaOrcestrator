@@ -65,31 +65,61 @@ public sealed class VkVideoChannel(ILogger<VkVideoChannel> logger, ILogger<VkVid
         return new($"https://vkvideo.ru/video{externalId}");
     }
 
+    // public async IAsyncEnumerable<MediaDto> GetMedia(Dictionary<string, string> settings, bool isFull, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    // {
+    //     logger.LogInformation("Получение списка медиа для VkVideo");
+    //     var service = await CreateServiceAsync(settings);
+    //     var groupId = long.Parse(settings["group_id"]);
+    //
+    //     var (videos, sectionId, nextFrom) = await service.GetCatalogFirstPageAsync(groupId);
+    //
+    //     foreach (var video in videos)
+    //     {
+    //         yield return CreateMediaDto(video);
+    //     }
+    //
+    //     while (sectionId != null && nextFrom != null)
+    //     {
+    //         cancellationToken.ThrowIfCancellationRequested();
+    //
+    //         var (nextVideos, newNextFrom) = await service.GetCatalogNextPageAsync(sectionId, nextFrom);
+    //
+    //         foreach (var video in nextVideos)
+    //         {
+    //             yield return CreateMediaDto(video);
+    //         }
+    //
+    //         nextFrom = newNextFrom;
+    //     }
+    // }
+
+    // TODO: Альтернативный вариант. У меня оба вроде работают
     public async IAsyncEnumerable<MediaDto> GetMedia(Dictionary<string, string> settings, bool isFull, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         logger.LogInformation("Получение списка медиа для VkVideo");
         var service = await CreateServiceAsync(settings);
-        var groupId = long.Parse(settings["group_id"]);
+        var ownerId = -long.Parse(settings["group_id"]);
 
-        var (videos, sectionId, nextFrom) = await service.GetCatalogFirstPageAsync(groupId);
+        const int PageSize = 200;
+        var offset = 0;
 
-        foreach (var video in videos)
-        {
-            yield return CreateMediaDto(video);
-        }
-
-        while (sectionId != null && nextFrom != null)
+        while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var (nextVideos, newNextFrom) = await service.GetCatalogNextPageAsync(sectionId, nextFrom);
+            var response = await service.GetVideosAsync(ownerId, PageSize, offset);
 
-            foreach (var video in nextVideos)
+            foreach (var video in response.Items)
             {
                 yield return CreateMediaDto(video);
             }
 
-            nextFrom = newNextFrom;
+            offset += response.Items.Count;
+
+            if (response.Items.Count < PageSize || offset >= response.Count)
+            {
+                break;
+            }
         }
     }
 
@@ -104,7 +134,7 @@ public sealed class VkVideoChannel(ILogger<VkVideoChannel> logger, ILogger<VkVid
     }
 
     // TODO: Переделать нормально
-    public async Task<MediaDto> Download(string videoId, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
+    public async Task<MediaDto> DownloadAsync(string videoId, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
     {
         logger.LogInformation("Скачивание видео {VideoId}", videoId);
         var service = await CreateServiceAsync(settings);
@@ -116,10 +146,12 @@ public sealed class VkVideoChannel(ILogger<VkVideoChannel> logger, ILogger<VkVid
         var downloadUrl = video.Files?.GetBestQualityUrl()
                           ?? throw new InvalidOperationException($"Нет доступных URL для скачивания видео {videoId}");
 
-        // TODO: Сделать как в ютуб. Ещё также можно через yt-dlp скачивать. Он поддерживает. Нужно подумать как обыграть
-        var tempDir = Path.GetTempPath();
-        var tempVideoPath = Path.Combine(tempDir, $"vkvideo_{ownerId}_{vid}.mp4");
-        var tempPreviewPath = Path.Combine(tempDir, $"vkvideo_{ownerId}_{vid}_preview.jpg");
+        var tempPath = settings["_system_temp_path"];
+        var guid = Guid.NewGuid().ToString();
+        var tempVideoPath = Path.Combine(tempPath, guid, "media.mp4");
+        var tempPreviewPath = Path.Combine(tempPath, guid, "preview.jpg");
+
+        Directory.CreateDirectory(Path.Combine(tempPath, guid));
 
         //logger.LogInformation("Скачивание видео из {Url}", downloadUrl[..Math.Min(80, downloadUrl.Length)] + "...");
         logger.LogInformation("Скачивание видео из {Url}", downloadUrl);
@@ -173,7 +205,7 @@ public sealed class VkVideoChannel(ILogger<VkVideoChannel> logger, ILogger<VkVid
         };
     }
 
-    public async Task<UploadResult> Upload(MediaDto media, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
+    public async Task<UploadResult> UploadAsync(MediaDto media, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
     {
         logger.LogInformation("Загрузка видео на VK Video. Название: '{Title}'", media.Title);
 
@@ -237,7 +269,7 @@ public sealed class VkVideoChannel(ILogger<VkVideoChannel> logger, ILogger<VkVid
         }
     }
 
-    public async Task<UploadResult> Update(string externalId, MediaDto tempMedia, Dictionary<string, string> settings, CancellationToken cancellationToken)
+    public async Task<UploadResult> UpdateAsync(string externalId, MediaDto tempMedia, Dictionary<string, string> settings, CancellationToken cancellationToken)
     {
         logger.LogInformation("Обновление видео {ExternalId} на VK Video", externalId);
 
@@ -481,12 +513,12 @@ public sealed class VkVideoChannel(ILogger<VkVideoChannel> logger, ILogger<VkVid
         }
     }
 
-    public ConvertType[] GetAvailabelConvertTypes()
+    public ConvertType[] GetAvailableConvertTypes()
     {
         return [];
     }
 
-    public Task ConvertAsync(int typeId, string externalId, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
+    public Task ConvertAsync(int typeId, string externalId, Dictionary<string, string> settings, IProgress<ConvertProgress>? progress = null, CancellationToken cancellationToken = default)
     {
         throw new NotImplementedException();
     }
