@@ -1,4 +1,4 @@
-using MediaOrcestrator.Modules;
+﻿using MediaOrcestrator.Modules;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
@@ -228,7 +228,7 @@ public sealed class VkVideoService : IDisposable
                ?? throw new InvalidOperationException("thumb_upload_url не получен");
     }
 
-    public async Task UploadThumbnailAsync(long ownerId, long videoId, string thumbnailPath)
+    public async Task<long> UploadThumbnailAsync(long ownerId, long videoId, string thumbnailPath)
     {
         var thumbUploadUrl = await GetThumbUploadUrlAsync(ownerId, videoId);
 
@@ -258,7 +258,8 @@ public sealed class VkVideoService : IDisposable
             throw new HttpRequestException($"Ошибка загрузки превью: {uploadResponse.StatusCode}");
         }
 
-        var saveResult = await CallApiAsync<SaveThumbResponse>("video.saveUploadedThumb", new()
+        // asiodjpqaskodjaiopsdj asoiud short!!!! isShort
+        var saveResult = await CallApiAsync<SaveThumbResponse>("shortVideo.saveUploadedThumb", new()
         {
             [OwnerIdKey] = ownerId.ToString(),
             [VideoIdKey] = videoId.ToString(),
@@ -267,6 +268,7 @@ public sealed class VkVideoService : IDisposable
         });
 
         _logger.LogInformation("Превью загружено. PhotoId: {PhotoId}", saveResult.PhotoId);
+        return saveResult.PhotoId;
     }
 
     public async Task<PublishVideoResponse> UploadVideoAsync(
@@ -275,10 +277,13 @@ public sealed class VkVideoService : IDisposable
         string title,
         string description,
         string fileExtension,
+        string? thumbnailPath = null,
         long? publishAt = null,
         long? uploadBytesPerSecond = null,
         CancellationToken cancellationToken = default)
     {
+        var isShorts = true;
+
         var fileInfo = new FileInfo(filePath);
         if (!fileInfo.Exists)
         {
@@ -287,15 +292,27 @@ public sealed class VkVideoService : IDisposable
 
         _logger.LogInformation("Шаг 1/3: Резервирование слота для '{Title}'", title);
 
-        var saveResponse = await CallApiAsync<VideoSaveResponse>("video.save", new()
+        VideoSaveResponse saveResponse;
+        if (isShorts)
         {
-            ["group_id"] = groupId.ToString(),
-            ["source_file_name"] = fileInfo.Name,
-            ["file_size"] = fileInfo.Length.ToString(),
-            ["batch_id"] = $"-{groupId}_{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}",
-            ["preview"] = "1",
-            ["thumb_upload"] = "1",
-        });
+            saveResponse = await CallApiAsync<VideoSaveResponse>("shortVideo.create", new()
+            {
+                ["group_id"] = groupId.ToString(),
+                ["file_size"] = fileInfo.Length.ToString(),
+            });
+        }
+        else
+        {
+            saveResponse = await CallApiAsync<VideoSaveResponse>("video.save", new()
+            {
+                ["group_id"] = groupId.ToString(),
+                ["source_file_name"] = fileInfo.Name,
+                ["file_size"] = fileInfo.Length.ToString(),
+                ["batch_id"] = $"-{groupId}_{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}",
+                ["preview"] = "1",
+                ["thumb_upload"] = "1",
+            });
+        }
 
         _logger.LogInformation("Слот зарезервирован. VideoId: {VideoId}, OwnerId: {OwnerId}", saveResponse.VideoId, saveResponse.OwnerId);
 
@@ -305,32 +322,89 @@ public sealed class VkVideoService : IDisposable
 
         _logger.LogInformation("Файл загружен. Hash: {Hash}", uploadResponse.VideoHash);
 
-        _logger.LogInformation("Шаг 3/3: Публикация");
-
-        var publishParams = new Dictionary<string, string>
+        string? errorMessage = null;
+        long? thumbId = null;
+        if (!string.IsNullOrEmpty(thumbnailPath) && File.Exists(thumbnailPath))
         {
-            ["owner_id"] = saveResponse.OwnerId.ToString(),
-            ["video_id"] = saveResponse.VideoId.ToString(),
-            ["title"] = title,
-            ["description"] = description,
-            ["file_ext"] = fileExtension,
-            ["repeat"] = "0",
-            ["hide_auto_subs"] = "0",
-            ["add_to_wall"] = "0",
-            ["check_content_id"] = "0",
-        };
-
-        if (publishAt.HasValue)
-        {
-            publishParams["publish_at"] = publishAt.Value.ToString();
+            try
+            {
+                _logger.LogInformation("Загрузка превью");
+                thumbId = await UploadThumbnailAsync(saveResponse.OwnerId, saveResponse.VideoId, thumbnailPath);
+                _logger.LogInformation("Превью загружено");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка загрузки превьюшки");
+                errorMessage += "Ошибка загрузки превьюшки";
+            }
         }
 
-        var publishResponse = await CallApiAsync<PublishResponse>("video.publish", publishParams);
+        _logger.LogInformation("Шаг 3/3: Публикация");
 
-        _logger.LogInformation("Видео опубликовано: {Url}", publishResponse.Video?.DirectUrl);
+        if (isShorts)
+        {
+            var publishParams222 = new Dictionary<string, string>
+            {
+                ["owner_id"] = saveResponse.OwnerId.ToString(),
+                ["video_id"] = saveResponse.VideoId.ToString(),
+                ["description"] = title,
+                ["privacy_view"] = "all",
+                ["can_make_duet"] = "1",
+                ["privacy_comment"] = "all",
+                ["audio_raw_id"] = "",
+                ["ord_info"] = "{\"is_ads\":false,\"advertisers\":[]}",
+                ["thumb_id"] = thumbId != null ? thumbId.Value.ToString() : "united:0_-232164160",
+            };
 
-        return publishResponse.Video
-               ?? throw new InvalidOperationException("Ответ video.publish не содержит объект video");
+            var publishResponse333 = await CallApiAsync<PublishResponse>("shortVideo.edit", publishParams222);
+            _logger.LogInformation("Видео отредактировано перед публикацией");
+
+            var publishParams = new Dictionary<string, string>
+            {
+                ["owner_id"] = saveResponse.OwnerId.ToString(),
+                ["video_id"] = saveResponse.VideoId.ToString(),
+                ["title"] = title,
+                ["license_agree"] = "1",
+                ["add_to_wall"] = "0",
+                ["publish_date"] = "0",
+                ["ref"] = "video_as_clip_video_upload",
+            };
+
+           Thread.Sleep(5000);
+            // нельзя публикнуть, пока не допроцессилось, подлумать
+            var publishResponse = await CallApiAsync<PublishResponse>("shortVideo.publish", publishParams);
+
+            _logger.LogInformation("Видео опубликовано: {Url}", publishResponse.Video?.DirectUrl);
+
+            return publishResponse.Video
+                   ?? throw new InvalidOperationException("Ответ video.publish не содержит объект video");
+        }
+        else
+        {
+            var publishParams = new Dictionary<string, string>
+            {
+                ["owner_id"] = saveResponse.OwnerId.ToString(),
+                ["video_id"] = saveResponse.VideoId.ToString(),
+                ["title"] = title,
+                ["description"] = description,
+                ["file_ext"] = fileExtension,
+                ["repeat"] = "0",
+                ["hide_auto_subs"] = "0",
+                ["add_to_wall"] = "0",
+                ["check_content_id"] = "0",
+            };
+
+            if (publishAt.HasValue)
+            {
+                publishParams["publish_at"] = publishAt.Value.ToString();
+            }
+
+            var publishResponse = await CallApiAsync<PublishResponse>("video.publish", publishParams);
+            _logger.LogInformation("Видео опубликовано: {Url}", publishResponse.Video?.DirectUrl);
+
+            return publishResponse.Video
+                   ?? throw new InvalidOperationException("Ответ shortVideo.publish не содержит объект video");
+        }
     }
 
     private static bool IsHtmlResponse(string body)

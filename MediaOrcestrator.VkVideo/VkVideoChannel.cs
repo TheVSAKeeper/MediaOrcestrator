@@ -65,60 +65,62 @@ public sealed class VkVideoChannel(ILogger<VkVideoChannel> logger, ILogger<VkVid
         return new($"https://vkvideo.ru/video{externalId}");
     }
 
-    // public async IAsyncEnumerable<MediaDto> GetMedia(Dictionary<string, string> settings, bool isFull, [EnumeratorCancellation] CancellationToken cancellationToken = default)
-    // {
-    //     logger.LogInformation("Получение списка медиа для VkVideo");
-    //     var service = await CreateServiceAsync(settings);
-    //     var groupId = long.Parse(settings["group_id"]);
-    //
-    //     var (videos, sectionId, nextFrom) = await service.GetCatalogFirstPageAsync(groupId);
-    //
-    //     foreach (var video in videos)
-    //     {
-    //         yield return CreateMediaDto(video);
-    //     }
-    //
-    //     while (sectionId != null && nextFrom != null)
-    //     {
-    //         cancellationToken.ThrowIfCancellationRequested();
-    //
-    //         var (nextVideos, newNextFrom) = await service.GetCatalogNextPageAsync(sectionId, nextFrom);
-    //
-    //         foreach (var video in nextVideos)
-    //         {
-    //             yield return CreateMediaDto(video);
-    //         }
-    //
-    //         nextFrom = newNextFrom;
-    //     }
-    // }
-
-    // TODO: Альтернативный вариант. У меня оба вроде работают
     public async IAsyncEnumerable<MediaDto> GetMedia(Dictionary<string, string> settings, bool isFull, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        logger.LogInformation("Получение списка медиа для VkVideo");
-        var service = await CreateServiceAsync(settings);
-        var ownerId = -long.Parse(settings["group_id"]);
-
-        const int PageSize = 200;
-        var offset = 0;
-
-        while (true)
+        if (false)
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            logger.LogInformation("Получение списка медиа для VkVideo");
+            var service = await CreateServiceAsync(settings);
+            var groupId = long.Parse(settings["group_id"]);
 
-            var response = await service.GetVideosAsync(ownerId, PageSize, offset);
+            var (videos, sectionId, nextFrom) = await service.GetCatalogFirstPageAsync(groupId);
 
-            foreach (var video in response.Items)
+            foreach (var video in videos)
             {
                 yield return CreateMediaDto(video);
             }
 
-            offset += response.Items.Count;
-
-            if (response.Items.Count < PageSize || offset >= response.Count)
+            while (sectionId != null && nextFrom != null)
             {
-                break;
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var (nextVideos, newNextFrom) = await service.GetCatalogNextPageAsync(sectionId, nextFrom);
+
+                foreach (var video in nextVideos)
+                {
+                    yield return CreateMediaDto(video);
+                }
+
+                nextFrom = newNextFrom;
+            }
+        }
+        else
+        {
+            // TODO: Альтернативный вариант. У меня оба вроде работают
+            logger.LogInformation("Получение списка медиа для VkVideo");
+            var service = await CreateServiceAsync(settings);
+            var ownerId = -long.Parse(settings["group_id"]);
+
+            const int PageSize = 200;
+            var offset = 0;
+
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var response = await service.GetVideosAsync(ownerId, PageSize, offset);
+
+                foreach (var video in response.Items)
+                {
+                    yield return CreateMediaDto(video);
+                }
+
+                offset += response.Items.Count;
+
+                if (response.Items.Count < PageSize || offset >= response.Count)
+                {
+                    break;
+                }
             }
         }
     }
@@ -247,7 +249,7 @@ public sealed class VkVideoChannel(ILogger<VkVideoChannel> logger, ILogger<VkVid
         {
             var uploadBytesPerSecond = SpeedLimitHelper.ParseUploadBytesPerSecond(settings);
             var result = await service.UploadVideoAsync(groupId, filePath, media.Title, media.Description,
-                fileExt, publishAtUnix, uploadBytesPerSecond, cancellationToken);
+                fileExt, media.TempPreviewPath, publishAtUnix, uploadBytesPerSecond, cancellationToken);
 
             var externalId = $"{result.OwnerId}_{result.Id}";
             logger.LogInformation("Видео загружено на VK Video. ID: {ExternalId}", externalId);
