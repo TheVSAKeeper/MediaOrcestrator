@@ -31,6 +31,7 @@ public class RutubeChannel(ILogger<RutubeChannel> logger, ILogger<RutubeService>
             IsRequired = true,
             Title = "путь до фаила куки",
             Description = "JSON файл с cookies и CSRF токеном для авторизации на RuTube",
+            Type = SettingType.FilePath,
         },
         new()
         {

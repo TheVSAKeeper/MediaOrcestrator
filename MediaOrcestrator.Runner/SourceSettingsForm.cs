@@ -256,6 +256,7 @@ public partial class SourceSettingsForm : Form
         {
             TextBox textBox => textBox.Text,
             ComboBox comboBox => (comboBox.SelectedItem as ComboBoxItem)?.Value ?? "",
+            Panel panel => panel.Controls.OfType<TextBox>().FirstOrDefault()?.Text ?? "",
             _ => "",
         };
     }
@@ -396,9 +397,17 @@ public partial class SourceSettingsForm : Form
 
     private Control CreateInputControl(SourceSettings setting)
     {
-        return setting.Type == SettingType.Dropdown
-            ? CreateComboBox()
-            : CreateTextBox(setting);
+        if (setting.Type == SettingType.Dropdown)
+        {
+            return CreateComboBox();
+        }
+
+        if (setting.Type is SettingType.FolderPath or SettingType.FilePath)
+        {
+            return CreatePathPanel(setting);
+        }
+
+        return CreateTextBox(setting);
     }
 
     private static ComboBox CreateComboBox()
@@ -455,6 +464,70 @@ public partial class SourceSettingsForm : Form
             Font = new("Segoe UI", 10F),
             Text = _editSource?.Settings.GetValueOrDefault(setting.Key) ?? setting.DefaultValue ?? "",
         };
+    }
+
+    private Panel CreatePathPanel(SourceSettings setting)
+    {
+        var panel = new Panel
+        {
+            Dock = DockStyle.Top,
+            Height = 27,
+        };
+
+        var textBox = CreateTextBox(setting);
+        textBox.Dock = DockStyle.Fill;
+
+        var browseButton = new Button
+        {
+            Text = "...",
+            Width = 30,
+            Dock = DockStyle.Right,
+        };
+
+        var isFolder = setting.Type == SettingType.FolderPath;
+        browseButton.Click += (_, _) =>
+        {
+            if (isFolder)
+            {
+                using var dialog = new FolderBrowserDialog();
+
+                if (!string.IsNullOrEmpty(textBox.Text) && Directory.Exists(textBox.Text))
+                {
+                    dialog.SelectedPath = textBox.Text;
+                }
+
+                if (dialog.ShowDialog(this) == DialogResult.OK)
+                {
+                    textBox.Text = dialog.SelectedPath;
+                }
+            }
+            else
+            {
+                using var dialog = new OpenFileDialog();
+
+                if (!string.IsNullOrEmpty(textBox.Text))
+                {
+                    var dir = Path.GetDirectoryName(textBox.Text);
+
+                    if (dir != null && Directory.Exists(dir))
+                    {
+                        dialog.InitialDirectory = dir;
+                    }
+
+                    dialog.FileName = Path.GetFileName(textBox.Text);
+                }
+
+                if (dialog.ShowDialog(this) == DialogResult.OK)
+                {
+                    textBox.Text = dialog.FileName;
+                }
+            }
+        };
+
+        panel.Controls.Add(textBox);
+        panel.Controls.Add(browseButton);
+
+        return panel;
     }
 
     private Button CreateLoadButton(SourceSettings setting, ComboBox comboBox)

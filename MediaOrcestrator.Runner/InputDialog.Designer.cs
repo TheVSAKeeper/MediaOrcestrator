@@ -21,69 +21,69 @@ partial class InputDialog
     }
 
     #region Windows Form Designer generated code
-    private Label lblPrompt;
-    private TextBox txtInput;
-    private Button btnOk;
-    private Button btnCancel;
+    private Label uiPromptLabel;
+    private TextBox uiInputTextBox;
+    private Button uiOkButton;
+    private Button uiCancelButton;
 
     private void InitializeComponent()
     {
-        lblPrompt = new Label();
-        txtInput = new TextBox();
-        btnOk = new Button();
-        btnCancel = new Button();
+        uiPromptLabel = new Label();
+        uiInputTextBox = new TextBox();
+        uiOkButton = new Button();
+        uiCancelButton = new Button();
         SuspendLayout();
         // 
-        // lblPrompt
+        // uiPromptLabel
         // 
-        lblPrompt.AutoSize = true;
-        lblPrompt.Location = new Point(14, 17);
-        lblPrompt.Margin = new Padding(4, 0, 4, 0);
-        lblPrompt.Name = "lblPrompt";
-        lblPrompt.Size = new Size(115, 15);
-        lblPrompt.TabIndex = 0;
-        lblPrompt.Text = "Тут текстовый текст";
+        uiPromptLabel.AutoSize = true;
+        uiPromptLabel.Location = new Point(14, 17);
+        uiPromptLabel.Margin = new Padding(4, 0, 4, 0);
+        uiPromptLabel.Name = "uiPromptLabel";
+        uiPromptLabel.Size = new Size(115, 15);
+        uiPromptLabel.TabIndex = 0;
+        uiPromptLabel.Text = "Тут текстовый текст";
         // 
-        // txtInput
+        // uiInputTextBox
         // 
-        txtInput.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-        txtInput.Location = new Point(14, 46);
-        txtInput.Margin = new Padding(4, 3, 4, 3);
-        txtInput.Name = "txtInput";
-        txtInput.Size = new Size(482, 23);
-        txtInput.TabIndex = 1;
+        uiInputTextBox.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+        uiInputTextBox.Location = new Point(14, 46);
+        uiInputTextBox.Margin = new Padding(4, 3, 4, 3);
+        uiInputTextBox.Name = "uiInputTextBox";
+        uiInputTextBox.Size = new Size(482, 23);
+        uiInputTextBox.TabIndex = 1;
         // 
-        // btnOk
+        // uiOkButton
         // 
-        btnOk.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        btnOk.Location = new Point(314, 81);
-        btnOk.Margin = new Padding(4, 3, 4, 3);
-        btnOk.Name = "btnOk";
-        btnOk.Size = new Size(88, 27);
-        btnOk.TabIndex = 2;
-        btnOk.Text = "OK";
-        btnOk.Click += btnOk_Click;
+        uiOkButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        uiOkButton.Location = new Point(314, 81);
+        uiOkButton.Margin = new Padding(4, 3, 4, 3);
+        uiOkButton.Name = "uiOkButton";
+        uiOkButton.Size = new Size(88, 27);
+        uiOkButton.TabIndex = 2;
+        uiOkButton.Text = "OK";
+        uiOkButton.Click += uiOkButton_Click;
         // 
-        // btnCancel
+        // uiCancelButton
         // 
-        btnCancel.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        btnCancel.Location = new Point(409, 81);
-        btnCancel.Margin = new Padding(4, 3, 4, 3);
-        btnCancel.Name = "btnCancel";
-        btnCancel.Size = new Size(88, 27);
-        btnCancel.TabIndex = 3;
-        btnCancel.Text = "Отмена";
-        btnCancel.Click += btnCancel_Click;
+        uiCancelButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        uiCancelButton.Location = new Point(409, 81);
+        uiCancelButton.Margin = new Padding(4, 3, 4, 3);
+        uiCancelButton.Name = "uiCancelButton";
+        uiCancelButton.Size = new Size(88, 27);
+        uiCancelButton.TabIndex = 3;
+        uiCancelButton.Text = "Отмена";
+        uiCancelButton.Click += uiCancelButton_Click;
         // 
         // InputDialog
         // 
         AutoScaleDimensions = new SizeF(7F, 15F);
         AutoScaleMode = AutoScaleMode.Font;
         ClientSize = new Size(510, 121);
-        Controls.Add(lblPrompt);
-        Controls.Add(txtInput);
-        Controls.Add(btnOk);
-        Controls.Add(btnCancel);
+        Controls.Add(uiPromptLabel);
+        Controls.Add(uiInputTextBox);
+        Controls.Add(uiOkButton);
+        Controls.Add(uiCancelButton);
         FormBorderStyle = FormBorderStyle.FixedDialog;
         Margin = new Padding(4, 3, 4, 3);
         Name = "InputDialog";

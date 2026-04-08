@@ -24,6 +24,7 @@ public sealed class VkVideoChannel(ILogger<VkVideoChannel> logger, ILogger<VkVid
             IsRequired = true,
             Title = "путь до файла куки",
             Description = "JSON файл с cookies для авторизации на VK Video (Playwright StorageState)",
+            Type = SettingType.FilePath,
         },
         new()
         {
