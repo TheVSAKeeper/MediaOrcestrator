@@ -56,6 +56,7 @@ public sealed class TelegramChannel(ILogger<TelegramChannel> logger, ILogger<Tel
             IsRequired = true,
             Title = "путь до файла сессии",
             Description = @"Файл сессии Telegram (например, C:\path\to\telegram.session)",
+            Type = SettingType.FilePath,
         },
         new()
         {

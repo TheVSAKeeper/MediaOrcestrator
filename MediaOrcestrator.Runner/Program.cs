@@ -49,7 +49,7 @@ file static class Program
             var pluginPath = settingsManager.GetStringValue("plugin_path");
             if (pluginPath == null)
             {
-                var result = InputMessageBox.Show("Введите путь до папки с плугинами, или оставьте системный", "Важная настройка", "ModuleBuilds");
+                var result = InputMessageBox.Show("Введите путь до папки с плугинами, или оставьте системный", "Важная настройка", "ModuleBuilds", InputBrowseMode.Folder);
                 if (result == null)
                 {
                     MessageBox.Show("Так нельзя, закрываюсь");
@@ -63,7 +63,7 @@ file static class Program
             var databasePath = settingsManager.GetStringValue("database_path");
             if (databasePath == null)
             {
-                var result = InputMessageBox.Show("Введите путь до базы данных, или оставьте системный", "Важная настройка", "MyData.db");
+                var result = InputMessageBox.Show("Введите путь до базы данных, или оставьте системный", "Важная настройка", "MyData.db", InputBrowseMode.File);
                 if (result == null)
                 {
                     MessageBox.Show("Так нельзя, закрываюсь");
@@ -77,7 +77,7 @@ file static class Program
             var tempPath = settingsManager.GetStringValue("temp_path");
             if (tempPath == null)
             {
-                var result = InputMessageBox.Show("Введите путь до временной папки для загрузок", "Важная настройка", "temp");
+                var result = InputMessageBox.Show("Введите путь до временной папки для загрузок", "Важная настройка", "temp", InputBrowseMode.Folder);
                 if (result == null)
                 {
                     MessageBox.Show("Так нельзя, закрываюсь");
@@ -345,9 +345,9 @@ file static class Program
 
 file static class InputMessageBox
 {
-    public static string? Show(string prompt, string title = "Ввод данных", string defaultValue = "")
+    public static string? Show(string prompt, string title = "Ввод данных", string defaultValue = "", InputBrowseMode browseMode = InputBrowseMode.None)
     {
-        using var dialog = new InputDialog(prompt, title, defaultValue);
+        using var dialog = new InputDialog(prompt, title, defaultValue, browseMode);
         return dialog.ShowDialog() == DialogResult.OK ? dialog.InputText : null;
     }
 }

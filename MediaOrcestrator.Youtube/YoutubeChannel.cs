@@ -59,6 +59,7 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger, IToolPathProvider to
             IsRequired = true,
             Title = "путь до фаила куки",
             Description = "JSON файл с cookies и CSRF токеном для авторизации на Youtube (для 18+ видео)",
+            Type = SettingType.FilePath,
         },
         new()
         {

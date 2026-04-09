@@ -29,6 +29,7 @@ public partial class HardDiskDriveChannel(ILogger<HardDiskDriveChannel> logger, 
             IsRequired = true,
             Title = "путь к папке хранения",
             Description = "Папка для хранения видеофайлов и базы данных",
+            Type = SettingType.FolderPath,
         },
         new()
         {

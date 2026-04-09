@@ -245,6 +245,12 @@ public enum SettingType
     /// или загружаются динамически через <see cref="ISourceType.GetSettingOptionsAsync" />.
     /// </summary>
     Dropdown = 2,
+
+    /// <summary>Выбор папки через диалог.</summary>
+    FolderPath = 3,
+
+    /// <summary>Выбор файла через диалог.</summary>
+    FilePath = 4,
 }
 
 /// <summary>
