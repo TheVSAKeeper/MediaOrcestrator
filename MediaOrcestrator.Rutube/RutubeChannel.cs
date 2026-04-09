@@ -9,7 +9,10 @@ using System.Text.Json;
 namespace MediaOrcestrator.Rutube;
 
 // TODO: Костыль с ILogger<RutubeService>. Желательно сделать полноценную регистрацию модулей в DI.
-public class RutubeChannel(ILogger<RutubeChannel> logger, ILogger<RutubeService> serviceLogger, IToolPathProvider toolPathProvider)
+public class RutubeChannel(
+    ILogger<RutubeChannel> logger,
+    ILogger<RutubeService> serviceLogger,
+    IToolPathProvider toolPathProvider)
     : ISourceType, IAuthenticatable, IToolConsumer
 {
     public SyncDirection ChannelType => SyncDirection.Full;
@@ -82,10 +85,10 @@ public class RutubeChannel(ILogger<RutubeChannel> logger, ILogger<RutubeService>
             var categories = await rutubeService.GetCategoriesAsync();
 
             return categories.Select(x => new SettingOption
-                {
-                    Value = x.Id.ToString(),
-                    Label = x.Name,
-                })
+            {
+                Value = x.Id.ToString(),
+                Label = x.Name,
+            })
                 .OrderBy(x => x.Label)
                 .ToList();
         }

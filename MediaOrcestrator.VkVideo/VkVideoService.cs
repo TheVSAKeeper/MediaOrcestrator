@@ -228,7 +228,7 @@ public sealed class VkVideoService : IDisposable
                ?? throw new InvalidOperationException("thumb_upload_url не получен");
     }
 
-    public async Task<long> UploadThumbnailAsync(long ownerId, long videoId, string thumbnailPath)
+    public async Task<SaveThumbResponse> UploadThumbnailAsync(bool isShorts, long ownerId, long videoId, string thumbnailPath)
     {
         var thumbUploadUrl = await GetThumbUploadUrlAsync(ownerId, videoId);
 
@@ -258,8 +258,8 @@ public sealed class VkVideoService : IDisposable
             throw new HttpRequestException($"Ошибка загрузки превью: {uploadResponse.StatusCode}");
         }
 
-        // asiodjpqaskodjaiopsdj asoiud short!!!! isShort
-        var saveResult = await CallApiAsync<SaveThumbResponse>("shortVideo.saveUploadedThumb", new()
+        var url = isShorts ? "shortVideo.saveUploadedThumb" : "video.saveUploadedThumb";
+        var saveResult = await CallApiAsync<SaveThumbResponse>(url, new()
         {
             [OwnerIdKey] = ownerId.ToString(),
             [VideoIdKey] = videoId.ToString(),
@@ -268,10 +268,11 @@ public sealed class VkVideoService : IDisposable
         });
 
         _logger.LogInformation("Превью загружено. PhotoId: {PhotoId}", saveResult.PhotoId);
-        return saveResult.PhotoId;
+        return saveResult;
     }
 
     public async Task<PublishVideoResponse> UploadVideoAsync(
+        bool isShorts,
         long groupId,
         string filePath,
         string title,
@@ -282,8 +283,6 @@ public sealed class VkVideoService : IDisposable
         long? uploadBytesPerSecond = null,
         CancellationToken cancellationToken = default)
     {
-        var isShorts = true;
-
         var fileInfo = new FileInfo(filePath);
         if (!fileInfo.Exists)
         {
@@ -323,13 +322,13 @@ public sealed class VkVideoService : IDisposable
         _logger.LogInformation("Файл загружен. Hash: {Hash}", uploadResponse.VideoHash);
 
         string? errorMessage = null;
-        long? thumbId = null;
+        SaveThumbResponse? thumbId = null;
         if (!string.IsNullOrEmpty(thumbnailPath) && File.Exists(thumbnailPath))
         {
             try
             {
                 _logger.LogInformation("Загрузка превью");
-                thumbId = await UploadThumbnailAsync(saveResponse.OwnerId, saveResponse.VideoId, thumbnailPath);
+                thumbId = await UploadThumbnailAsync(isShorts, saveResponse.OwnerId, saveResponse.VideoId, thumbnailPath);
                 _logger.LogInformation("Превью загружено");
             }
             catch (Exception ex)
@@ -343,7 +342,7 @@ public sealed class VkVideoService : IDisposable
 
         if (isShorts)
         {
-            var publishParams222 = new Dictionary<string, string>
+            var editParams = new Dictionary<string, string>
             {
                 ["owner_id"] = saveResponse.OwnerId.ToString(),
                 ["video_id"] = saveResponse.VideoId.ToString(),
@@ -353,10 +352,14 @@ public sealed class VkVideoService : IDisposable
                 ["privacy_comment"] = "all",
                 ["audio_raw_id"] = "",
                 ["ord_info"] = "{\"is_ads\":false,\"advertisers\":[]}",
-                ["thumb_id"] = thumbId != null ? thumbId.Value.ToString() : "united:0_-232164160",
+                //["thumb_id"] = thumbId != null ? thumbId.PhotoId.ToString() : "united:0_-232164160",
             };
+            if (thumbId != null)
+            {
+                editParams["thumb_id"] = thumbId.PhotoId.ToString();
+            }
 
-            var publishResponse333 = await CallApiAsync<PublishResponse>("shortVideo.edit", publishParams222);
+            var publishResponse333 = await CallApiAsync<PublishResponse>("shortVideo.edit", editParams);
             _logger.LogInformation("Видео отредактировано перед публикацией");
 
             var publishParams = new Dictionary<string, string>
@@ -370,14 +373,14 @@ public sealed class VkVideoService : IDisposable
                 ["ref"] = "video_as_clip_video_upload",
             };
 
-           Thread.Sleep(5000);
+            Thread.Sleep(5000);
             // нельзя публикнуть, пока не допроцессилось, подлумать
             var publishResponse = await CallApiAsync<PublishResponse>("shortVideo.publish", publishParams);
 
             _logger.LogInformation("Видео опубликовано: {Url}", publishResponse.Video?.DirectUrl);
 
             return publishResponse.Video
-                   ?? throw new InvalidOperationException("Ответ video.publish не содержит объект video");
+                   ?? throw new InvalidOperationException("Ответ shortVideo.publish не содержит объект video");
         }
         else
         {
@@ -394,6 +397,12 @@ public sealed class VkVideoService : IDisposable
                 ["check_content_id"] = "0",
             };
 
+            if (thumbId != null)
+            {
+                publishParams["thumb_id"] = thumbId.PhotoId + "_" + thumbId.PhotoOwnerId;
+                publishParams["thumb_hash"] = thumbId.PhotoHash;
+            }
+
             if (publishAt.HasValue)
             {
                 publishParams["publish_at"] = publishAt.Value.ToString();
@@ -403,7 +412,7 @@ public sealed class VkVideoService : IDisposable
             _logger.LogInformation("Видео опубликовано: {Url}", publishResponse.Video?.DirectUrl);
 
             return publishResponse.Video
-                   ?? throw new InvalidOperationException("Ответ shortVideo.publish не содержит объект video");
+                   ?? throw new InvalidOperationException("Ответ video.publish не содержит объект video");
         }
     }
 
