@@ -373,14 +373,38 @@ public sealed class VkVideoService : IDisposable
                 ["ref"] = "video_as_clip_video_upload",
             };
 
-            Thread.Sleep(5000);
-            // нельзя публикнуть, пока не допроцессилось, подлумать
-            var publishResponse = await CallApiAsync<PublishResponse>("shortVideo.publish", publishParams);
+            Thread.Sleep(10000);
+            for (var i = 0; i < 10; i++)
+            {
+                // todo retry helper
+                try
+                {
+                    // нельзя публикнуть, пока не допроцессилось, подлумать
+                    var publishResponse = await CallApiAsync<PublishResponse>("shortVideo.publish", publishParams);
+                    _logger.LogInformation("Видео опубликовано: {Url}", publishResponse.Video?.DirectUrl);
+                    return publishResponse.Video
+                           ?? throw new InvalidOperationException("Ответ shortVideo.publish не содержит объект video");
+                }
+                catch (Exception ex)
+                {
+                    if (ex.Message.Contains("video in processing"))
+                    {
+                        if (i == 9)
+                        {
+                            throw;
+                        }
+                        _logger.LogInformation("video in processing. publish failed #" + i + 1);
+                        Thread.Sleep(15000);
+                        continue;
+                    }
+                    else
+                    {
+                        throw;
+                    }
+                }
+            }
 
-            _logger.LogInformation("Видео опубликовано: {Url}", publishResponse.Video?.DirectUrl);
-
-            return publishResponse.Video
-                   ?? throw new InvalidOperationException("Ответ shortVideo.publish не содержит объект video");
+            throw new Exception("такого не должно быть");
         }
         else
         {
