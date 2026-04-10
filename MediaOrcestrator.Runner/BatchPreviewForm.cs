@@ -216,8 +216,26 @@ public class BatchPreviewForm : Form
 
         CancelButton = uiCancelButton;
 
-        _uiFromSourceRadio.CheckedChanged += (_, _) => OnModeChanged();
-        _uiFromFileRadio.CheckedChanged += (_, _) => OnModeChanged();
+        _uiFromSourceRadio.CheckedChanged += (_, _) =>
+        {
+            if (_uiFromSourceRadio.Checked)
+            {
+                _uiFromFileRadio.Checked = false;
+            }
+
+            OnModeChanged();
+        };
+
+        _uiFromFileRadio.CheckedChanged += (_, _) =>
+        {
+            if (_uiFromFileRadio.Checked)
+            {
+                _uiFromSourceRadio.Checked = false;
+            }
+
+            OnModeChanged();
+        };
+
         _uiDonorComboBox.SelectedIndexChanged += (_, _) => OnDonorChanged();
 
         PopulateDonors();
