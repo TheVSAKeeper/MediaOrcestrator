@@ -11,6 +11,9 @@
 
   <ItemGroup>
     <Content Include="icon.ico" />
+    <None Update="docs\**\*.md">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
   <ItemGroup>

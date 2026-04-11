@@ -20,6 +20,8 @@ public sealed class CoverTemplateForm : Form
 
     private readonly ListBox _uiLayersList;
     private readonly Button _uiRemoveLayerButton;
+    private readonly Button _uiMoveLayerUpButton;
+    private readonly Button _uiMoveLayerDownButton;
 
     private readonly GroupBox _uiLayerGroup;
     private readonly TextBox _uiLayerTextBox;
@@ -31,18 +33,22 @@ public sealed class CoverTemplateForm : Form
     private readonly Label _uiPositionLabel;
 
     private readonly List<MutableLayer> _layers = [];
+    private readonly ToolTip _uiToolTip = new();
 
     private string? _templatePath;
+    private string? _currentProfileName;
     private bool _suppressPreview;
     private bool _suppressLayerEdits;
     private int _prevSelectedLayerIndex = -1;
+    private bool _isDraggingLayer;
 
-    public CoverTemplateForm(CoverGenerator coverGenerator, CoverTemplateStore store, CoverTemplate? initial)
+    public CoverTemplateForm(CoverGenerator coverGenerator, CoverTemplateStore store, CoverTemplate? initial, string? initialProfileName = null)
     {
         _coverGenerator = coverGenerator;
         _store = store;
+        _currentProfileName = initialProfileName;
 
-        Text = "Шаблон обложки";
+        Text = FormatTitle(_currentProfileName);
         Size = new(1080, 760);
         MinimumSize = new(900, 600);
         StartPosition = FormStartPosition.CenterParent;
@@ -86,6 +92,8 @@ public sealed class CoverTemplateForm : Form
         };
 
         _uiPreview.MouseDown += OnPreviewMouseDown;
+        _uiPreview.MouseMove += OnPreviewMouseMove;
+        _uiPreview.MouseUp += OnPreviewMouseUp;
 
         _uiPositionLabel = new()
         {
@@ -378,8 +386,30 @@ public sealed class CoverTemplateForm : Form
 
         _uiRemoveLayerButton.Click += (_, _) => RemoveSelectedLayer();
 
+        _uiMoveLayerUpButton = new()
+        {
+            Text = "Вверх",
+            AutoSize = true,
+            Width = 90,
+            Enabled = false,
+        };
+
+        _uiMoveLayerUpButton.Click += (_, _) => MoveSelectedLayer(-1);
+
+        _uiMoveLayerDownButton = new()
+        {
+            Text = "Вниз",
+            AutoSize = true,
+            Width = 90,
+            Enabled = false,
+        };
+
+        _uiMoveLayerDownButton.Click += (_, _) => MoveSelectedLayer(1);
+
         layersButtons.Controls.Add(uiAddLayerButton);
         layersButtons.Controls.Add(_uiRemoveLayerButton);
+        layersButtons.Controls.Add(_uiMoveLayerUpButton);
+        layersButtons.Controls.Add(_uiMoveLayerDownButton);
 
         layersLayout.Controls.Add(_uiLayersList, 0, 0);
         layersLayout.Controls.Add(layersButtons, 1, 0);
@@ -523,8 +553,17 @@ public sealed class CoverTemplateForm : Form
         var uiOkButton = new Button { Text = "OK" };
         uiOkButton.Click += (_, _) => OnApply();
 
+        var uiHelpButton = new Button
+        {
+            Text = "Справка",
+            AutoSize = true,
+        };
+
+        uiHelpButton.Click += (_, _) => ShowHelp();
+
         buttonPanel.Controls.Add(uiCancelButton);
         buttonPanel.Controls.Add(uiOkButton);
+        buttonPanel.Controls.Add(uiHelpButton);
 
         rootLayout.SetColumnSpan(buttonPanel, 2);
         rootLayout.Controls.Add(buttonPanel, 0, 1);
@@ -560,29 +599,69 @@ public sealed class CoverTemplateForm : Form
 
     private void OnPreviewMouseDown(object? sender, MouseEventArgs e)
     {
-        if (_uiPreview.Image == null)
+        if (e.Button != MouseButtons.Left || _uiPreview.Image == null)
         {
             return;
         }
 
+        if (!TryApplyDragPosition(e.Location))
+        {
+            return;
+        }
+
+        _isDraggingLayer = true;
+        _uiPreview.Capture = true;
+    }
+
+    private void OnPreviewMouseMove(object? sender, MouseEventArgs e)
+    {
+        if (!_isDraggingLayer)
+        {
+            return;
+        }
+
+        TryApplyDragPosition(e.Location);
+    }
+
+    private void OnPreviewMouseUp(object? sender, MouseEventArgs e)
+    {
+        if (!_isDraggingLayer)
+        {
+            return;
+        }
+
+        _isDraggingLayer = false;
+        _uiPreview.Capture = false;
+    }
+
+    private static string FormatTitle(string? profileName)
+    {
+        return string.IsNullOrEmpty(profileName)
+            ? "Шаблон обложки"
+            : $"Шаблон обложки — {profileName}";
+    }
+
+    private bool TryApplyDragPosition(Point location)
+    {
         var layer = GetSelectedLayer();
 
         if (layer == null)
         {
-            return;
+            return false;
         }
 
         var rect = GetZoomedImageRect();
 
-        if (!rect.Contains(e.Location))
+        if (rect.Width <= 0 || rect.Height <= 0)
         {
-            return;
+            return false;
         }
 
-        layer.TextX = Math.Clamp((e.X - rect.X) / rect.Width, 0f, 1f);
-        layer.TextY = Math.Clamp((e.Y - rect.Y) / rect.Height, 0f, 1f);
+        layer.TextX = Math.Clamp((location.X - rect.X) / rect.Width, 0f, 1f);
+        layer.TextY = Math.Clamp((location.Y - rect.Y) / rect.Height, 0f, 1f);
         UpdatePositionLabel();
         UpdatePreview();
+        return true;
     }
 
     private void ApplyInitial(CoverTemplate initial)
@@ -591,7 +670,7 @@ public sealed class CoverTemplateForm : Form
         _suppressLayerEdits = true;
 
         _templatePath = initial.TemplatePath;
-        _uiTemplatePathTextBox.Text = initial.TemplatePath;
+        SetTemplatePathDisplay(initial.TemplatePath);
         _uiStartNumber.Value = Math.Clamp(initial.StartNumber, (int)_uiStartNumber.Minimum, (int)_uiStartNumber.Maximum);
         _uiSampleNumber.Value = Math.Clamp(initial.StartNumber, (int)_uiSampleNumber.Minimum, (int)_uiSampleNumber.Maximum);
         _uiTitleRegexTextBox.Text = string.IsNullOrWhiteSpace(initial.TitleRegexPattern) ? CoverTemplate.DefaultTitleRegex : initial.TitleRegexPattern;
@@ -649,12 +728,16 @@ public sealed class CoverTemplateForm : Form
         {
             _uiLayerGroup.Enabled = false;
             _uiRemoveLayerButton.Enabled = false;
+            _uiMoveLayerUpButton.Enabled = false;
+            _uiMoveLayerDownButton.Enabled = false;
             _uiPositionLabel.Text = "Слой не выбран";
             return;
         }
 
         _uiLayerGroup.Enabled = true;
         _uiRemoveLayerButton.Enabled = _layers.Count > 1;
+        _uiMoveLayerUpButton.Enabled = currentIndex > 0;
+        _uiMoveLayerDownButton.Enabled = currentIndex >= 0 && currentIndex < _layers.Count - 1;
 
         _suppressLayerEdits = true;
         _uiLayerTextBox.Text = layer.TextTemplate;
@@ -725,6 +808,22 @@ public sealed class CoverTemplateForm : Form
         UpdatePreview();
     }
 
+    private void MoveSelectedLayer(int direction)
+    {
+        var idx = _uiLayersList.SelectedIndex;
+        var target = idx + direction;
+
+        if (idx < 0 || target < 0 || target >= _layers.Count)
+        {
+            return;
+        }
+
+        (_layers[idx], _layers[target]) = (_layers[target], _layers[idx]);
+        RefreshLayersList();
+        _uiLayersList.SelectedIndex = target;
+        UpdatePreview();
+    }
+
     private void RefreshLayersList()
     {
         var preserved = _uiLayersList.SelectedIndex;
@@ -775,8 +874,21 @@ public sealed class CoverTemplateForm : Form
         }
 
         _templatePath = dialog.FileName;
-        _uiTemplatePathTextBox.Text = dialog.FileName;
+        SetTemplatePathDisplay(dialog.FileName);
         UpdatePreview();
+    }
+
+    private void SetTemplatePathDisplay(string? fullPath)
+    {
+        if (string.IsNullOrEmpty(fullPath))
+        {
+            _uiTemplatePathTextBox.Text = string.Empty;
+            _uiToolTip.SetToolTip(_uiTemplatePathTextBox, string.Empty);
+            return;
+        }
+
+        _uiTemplatePathTextBox.Text = Path.GetFileName(fullPath);
+        _uiToolTip.SetToolTip(_uiTemplatePathTextBox, fullPath);
     }
 
     private void PopulateProfiles(string? select = null)
@@ -816,12 +928,14 @@ public sealed class CoverTemplateForm : Form
             return;
         }
 
+        _currentProfileName = name;
+        Text = FormatTitle(_currentProfileName);
         ApplyInitial(loaded);
     }
 
     private void SaveAsProfile()
     {
-        using var dialog = new InputDialog("Имя профиля:", "Сохранение профиля", _uiProfilesCombo.Text);
+        using var dialog = new InputDialog("Имя профиля:", "Сохранение профиля", _currentProfileName ?? string.Empty);
 
         if (dialog.ShowDialog(this) != DialogResult.OK)
         {
@@ -852,6 +966,8 @@ public sealed class CoverTemplateForm : Form
         }
 
         _store.Save(name, BuildTemplate());
+        _currentProfileName = name;
+        Text = FormatTitle(_currentProfileName);
         PopulateProfiles(name);
     }
 
@@ -872,6 +988,13 @@ public sealed class CoverTemplateForm : Form
         }
 
         _store.Delete(name);
+
+        if (string.Equals(name, _currentProfileName, StringComparison.OrdinalIgnoreCase))
+        {
+            _currentProfileName = null;
+            Text = FormatTitle(null);
+        }
+
         PopulateProfiles();
     }
 
@@ -997,6 +1120,22 @@ public sealed class CoverTemplateForm : Form
         Result = BuildTemplate();
         DialogResult = DialogResult.OK;
         Close();
+    }
+
+    private void ShowHelp()
+    {
+        var docsDir = Path.Combine(AppContext.BaseDirectory, "docs");
+        var helpPath = Path.Combine(docsDir, "covers.md");
+
+        if (!File.Exists(helpPath))
+        {
+            MessageBox.Show($"Файл справки не найден: {helpPath}", "Справка", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        var markdown = File.ReadAllText(helpPath);
+        using var form = new DocumentationForm("Генератор обложек — справка", markdown, docsDir);
+        form.ShowDialog(this);
     }
 
     private sealed class MutableLayer

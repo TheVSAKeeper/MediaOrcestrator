@@ -1,4 +1,6 @@
 using MediaOrcestrator.Domain;
+using SkiaSharp;
+using System.Text.RegularExpressions;
 
 namespace MediaOrcestrator.Runner;
 
@@ -17,6 +19,7 @@ public class BatchPreviewForm : Form
     private readonly Button _uiBrowseButton;
     private readonly Button _uiTemplateButton;
     private readonly ComboBox _uiProfileCombo;
+    private readonly PictureBox _uiCoverThumbnail;
     private readonly CheckedListBox _uiTargetsListBox;
     private readonly DataGridView _uiResultGrid;
     private readonly Button _uiApplyButton;
@@ -26,6 +29,7 @@ public class BatchPreviewForm : Form
     private List<Source> _donors = [];
     private List<Source> _targets = [];
     private CoverTemplate? _coverTemplate;
+    private string? _currentProfileName;
 
     private bool _suppressProfileComboEvents;
 
@@ -169,9 +173,19 @@ public class BatchPreviewForm : Form
 
         _uiProfileCombo.SelectedIndexChanged += (_, _) => OnProfileComboChanged();
 
+        _uiCoverThumbnail = new()
+        {
+            Size = new(160, 90),
+            SizeMode = PictureBoxSizeMode.Zoom,
+            BackColor = Color.Black,
+            BorderStyle = BorderStyle.FixedSingle,
+            Margin = new(6, 0, 0, 0),
+        };
+
         templateLayout.Controls.Add(_uiFromTemplateRadio);
         templateLayout.Controls.Add(_uiTemplateButton);
         templateLayout.Controls.Add(_uiProfileCombo);
+        templateLayout.Controls.Add(_uiCoverThumbnail);
 
         sourcePanelLayout.Controls.Add(donorLayout, 0, 0);
         sourcePanelLayout.Controls.Add(fileLayout, 0, 1);
@@ -304,6 +318,7 @@ public class BatchPreviewForm : Form
         PopulateDonors();
         OnModeChanged();
         RefreshProfilesCombo();
+        RefreshCoverThumbnail();
     }
 
     protected override void OnFormClosing(FormClosingEventArgs e)
@@ -316,9 +331,83 @@ public class BatchPreviewForm : Form
         base.OnFormClosing(e);
     }
 
+    protected override void OnFormClosed(FormClosedEventArgs e)
+    {
+        _uiCoverThumbnail.Image?.Dispose();
+        _uiCoverThumbnail.Image = null;
+        base.OnFormClosed(e);
+    }
+
     private static string RowKey(string mediaId, string sourceId)
     {
         return $"{mediaId}|{sourceId}";
+    }
+
+    private void RefreshCoverThumbnail()
+    {
+        _uiCoverThumbnail.Image?.Dispose();
+        _uiCoverThumbnail.Image = null;
+
+        if (_coverTemplate == null || string.IsNullOrEmpty(_coverTemplate.TemplatePath) || !File.Exists(_coverTemplate.TemplatePath))
+        {
+            return;
+        }
+
+        try
+        {
+            var sampleNumber = ResolveSampleNumber(_coverTemplate);
+            using var skBitmap = _coverGenerator.Render(_coverTemplate, sampleNumber);
+            using var skImage = SKImage.FromBitmap(skBitmap);
+            using var data = skImage.Encode(SKEncodedImageFormat.Png, 90);
+            using var ms = new MemoryStream(data.ToArray());
+            using var sourceBitmap = new Bitmap(ms);
+            _uiCoverThumbnail.Image = new Bitmap(sourceBitmap);
+        }
+        catch
+        {
+        }
+    }
+
+    private int ResolveSampleNumber(CoverTemplate template)
+    {
+        if (template.NumberMode != CoverNumberMode.TitleRegex || _medias.Count == 0)
+        {
+            return template.StartNumber;
+        }
+
+        var title = _medias[0].Title;
+
+        if (string.IsNullOrEmpty(title))
+        {
+            return template.StartNumber;
+        }
+
+        var pattern = string.IsNullOrWhiteSpace(template.TitleRegexPattern)
+            ? CoverTemplate.DefaultTitleRegex
+            : template.TitleRegexPattern;
+
+        try
+        {
+            var match = Regex.Match(title, pattern, RegexOptions.None, TimeSpan.FromMilliseconds(100));
+
+            if (match.Success)
+            {
+                var captured = match.Groups.Count > 1 && match.Groups[1].Success ? match.Groups[1].Value : match.Value;
+
+                if (int.TryParse(captured, out var parsed))
+                {
+                    return parsed;
+                }
+            }
+        }
+        catch (ArgumentException)
+        {
+        }
+        catch (RegexMatchTimeoutException)
+        {
+        }
+
+        return template.StartNumber;
     }
 
     private void RefreshProfilesCombo()
@@ -366,7 +455,9 @@ public class BatchPreviewForm : Form
         }
 
         _coverTemplate = loaded;
+        _currentProfileName = name;
         _coverTemplateStore.SaveLast(loaded);
+        RefreshCoverThumbnail();
         UpdatePreview();
     }
 
@@ -495,7 +586,7 @@ public class BatchPreviewForm : Form
 
     private void OpenTemplateEditor()
     {
-        using var form = new CoverTemplateForm(_coverGenerator, _coverTemplateStore, _coverTemplate);
+        using var form = new CoverTemplateForm(_coverGenerator, _coverTemplateStore, _coverTemplate, _currentProfileName);
 
         if (form.ShowDialog(this) != DialogResult.OK || form.Result == null)
         {
@@ -505,6 +596,7 @@ public class BatchPreviewForm : Form
         _coverTemplate = form.Result;
         _coverTemplateStore.SaveLast(_coverTemplate);
         RefreshProfilesCombo();
+        RefreshCoverThumbnail();
         UpdatePreview();
     }
 
