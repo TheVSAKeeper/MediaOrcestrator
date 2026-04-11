@@ -33,6 +33,7 @@ public partial class MainForm : Form
         uiRelationsGraphControl.InvertRequested += OnGraphInvertRequested;
         uiRelationsGraphControl.DeleteRequested += OnGraphDeleteRequested;
         uiRelationsGraphControl.CreateRequested += OnGraphCreateRequested;
+        uiRelationsGraphControl.RefreshRequested += (_, _) => DrawRelations();
         DrawSources();
         DrawRelations();
         // TODO: SetZalupaV2

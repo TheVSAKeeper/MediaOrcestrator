@@ -12,19 +12,29 @@ namespace MediaOrcestrator.Runner;
 
 public sealed class RelationsGraphControl : UserControl
 {
+    private static readonly Dictionary<NodeRole, DColor> RoleGraphColors = new()
+    {
+        [NodeRole.Reader] = new(152, 251, 152),
+        [NodeRole.Writer] = new(173, 216, 230),
+        [NodeRole.Transit] = new(255, 228, 181),
+    };
+
     private readonly GViewer _viewer;
+    private readonly Label _emptyStateLabel;
     private readonly ContextMenuStrip _edgeMenu;
     private readonly ContextMenuStrip _nodeMenu;
     private readonly ToolStripButton _createRelationButton;
     private readonly ToolStripLabel _statusLabel;
     private readonly HashSet<string> _disabledSourceIds = new(StringComparer.Ordinal);
     private readonly HashSet<string> _disabledEdgeKeys = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, NodeRole> _nodeRoles = new(StringComparer.Ordinal);
 
     private DEdge? _selectedEdge;
     private string? _menuTargetNodeId;
     private SelectionMode _mode = SelectionMode.Idle;
     private string? _pendingFromId;
     private string? _focusedNodeId;
+    private bool _forceFitOnNextSet;
 
     public RelationsGraphControl()
     {
@@ -33,6 +43,17 @@ public sealed class RelationsGraphControl : UserControl
             Dock = DockStyle.Fill,
             ToolBarIsVisible = true,
             OutsideAreaBrush = Brushes.White,
+            LayoutEditingEnabled = false,
+        };
+
+        _emptyStateLabel = new()
+        {
+            Text = "Нет связей. Кликните правой кнопкой по узлу или нажмите «Создать связь».",
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleCenter,
+            ForeColor = SystemColors.GrayText,
+            Font = new("Segoe UI", 10F, FontStyle.Regular),
+            Visible = false,
         };
 
         _edgeMenu = new();
@@ -45,7 +66,40 @@ public sealed class RelationsGraphControl : UserControl
         _createRelationButton = new("Создать связь");
         _createRelationButton.Click += OnCreateRelationButtonClick;
 
+        var rebuildButton = new ToolStripButton("Перестроить")
+        {
+            ToolTipText = "Перечитать связи из базы и пересобрать раскладку графа",
+        };
+
+        rebuildButton.Click += OnRebuildButtonClick;
+
         _statusLabel = new(string.Empty);
+
+        var readerLegend = new ToolStripLabel("Источник")
+        {
+            Image = CreateLegendSwatch(Color.PaleGreen),
+            ImageAlign = ContentAlignment.MiddleLeft,
+        };
+
+        var writerLegend = new ToolStripLabel("Цель")
+        {
+            Image = CreateLegendSwatch(Color.LightBlue),
+            ImageAlign = ContentAlignment.MiddleLeft,
+        };
+
+        var transitLegend = new ToolStripLabel("Транзит")
+        {
+            Image = CreateLegendSwatch(Color.Moccasin),
+            ImageAlign = ContentAlignment.MiddleLeft,
+        };
+
+        var helpButton = new ToolStripButton("?")
+        {
+            Alignment = ToolStripItemAlignment.Right,
+            ToolTipText = "Справка по работе с графом",
+        };
+
+        helpButton.Click += OnHelpButtonClick;
 
         var toolStrip = new ToolStrip
         {
@@ -55,18 +109,33 @@ public sealed class RelationsGraphControl : UserControl
         };
 
         toolStrip.Items.Add(_createRelationButton);
+        toolStrip.Items.Add(rebuildButton);
         toolStrip.Items.Add(new ToolStripSeparator());
         toolStrip.Items.Add(_statusLabel);
+        toolStrip.Items.Add(new ToolStripSeparator());
+        toolStrip.Items.Add(readerLegend);
+        toolStrip.Items.Add(writerLegend);
+        toolStrip.Items.Add(transitLegend);
+        toolStrip.Items.Add(helpButton);
 
         _viewer.MouseDown += OnViewerMouseDown;
 
         Controls.Add(_viewer);
+        Controls.Add(_emptyStateLabel);
         Controls.Add(toolStrip);
     }
 
     public event EventHandler<RelationGraphEdgeEventArgs>? CreateRequested;
     public event EventHandler<RelationGraphEdgeEventArgs>? DeleteRequested;
     public event EventHandler<RelationGraphEdgeEventArgs>? InvertRequested;
+    public event EventHandler? RefreshRequested;
+
+    private enum NodeRole
+    {
+        Reader = 0,
+        Writer = 1,
+        Transit = 2,
+    }
 
     private enum SelectionMode
     {
@@ -79,9 +148,12 @@ public sealed class RelationsGraphControl : UserControl
     {
         _disabledSourceIds.Clear();
         _disabledEdgeKeys.Clear();
+        _nodeRoles.Clear();
 
         var graph = new DGraph("relations");
         var seen = new HashSet<string>(StringComparer.Ordinal);
+        var hasOut = new HashSet<string>(StringComparer.Ordinal);
+        var hasIn = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var relation in relations)
         {
@@ -97,6 +169,8 @@ public sealed class RelationsGraphControl : UserControl
             EnsureNode(graph, seen, toId, relation.To);
 
             var edge = graph.AddEdge(fromId, toId);
+            hasOut.Add(fromId);
+            hasIn.Add(toId);
 
             if (relation.From?.IsDisable == true)
             {
@@ -115,12 +189,62 @@ public sealed class RelationsGraphControl : UserControl
             }
         }
 
+        foreach (var nodeId in seen)
+        {
+            var isOut = hasOut.Contains(nodeId);
+            var isIn = hasIn.Contains(nodeId);
+            _nodeRoles[nodeId] = (isOut, isIn) switch
+            {
+                (true, false) => NodeRole.Reader,
+                (false, true) => NodeRole.Writer,
+                _ => NodeRole.Transit,
+            };
+        }
+
+        var isEmpty = graph.NodeCount == 0;
+        _emptyStateLabel.Visible = isEmpty;
+        _viewer.Visible = !isEmpty;
+
         _focusedNodeId = null;
         _pendingFromId = null;
         SetMode(SelectionMode.Idle);
 
         ApplyVisualState(graph);
+
+        var shouldPreserveZoom = !_forceFitOnNextSet && _viewer.Graph != null;
+        _forceFitOnNextSet = false;
+
+        var savedZoom = shouldPreserveZoom ? _viewer.ZoomF : (double?)null;
         _viewer.Graph = graph;
+
+        if (savedZoom.HasValue)
+        {
+            _viewer.ZoomF = savedZoom.Value;
+        }
+    }
+
+    protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+    {
+        if (keyData == Keys.Escape && _mode != SelectionMode.Idle)
+        {
+            _pendingFromId = null;
+            SetMode(SelectionMode.Idle);
+            RefreshVisualState();
+            return true;
+        }
+
+        return base.ProcessCmdKey(ref msg, keyData);
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _edgeMenu.Dispose();
+            _nodeMenu.Dispose();
+        }
+
+        base.Dispose(disposing);
     }
 
     private void OnViewerMouseDown(object? sender, MouseEventArgs e)
@@ -194,6 +318,37 @@ public sealed class RelationsGraphControl : UserControl
         RefreshVisualState();
     }
 
+    private void OnHelpButtonClick(object? sender, EventArgs e)
+    {
+        var docsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "docs", "relations-graph.md");
+        var content = File.ReadAllText(docsPath);
+
+        using var form = new DocumentationForm("Граф связей — справка",
+            content,
+            Path.GetDirectoryName(docsPath) ?? AppDomain.CurrentDomain.BaseDirectory);
+
+        form.ShowDialog(FindForm());
+    }
+
+    private void OnRebuildButtonClick(object? sender, EventArgs e)
+    {
+        _forceFitOnNextSet = true;
+        RefreshRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    private static Image CreateLegendSwatch(Color color)
+    {
+        var bitmap = new Bitmap(12, 12);
+
+        using (var graphics = Graphics.FromImage(bitmap))
+        {
+            graphics.Clear(color);
+            graphics.DrawRectangle(Pens.Gray, 0, 0, 11, 11);
+        }
+
+        return bitmap;
+    }
+
     private static void EnsureNode(DGraph graph, HashSet<string> seen, string id, Source? source)
     {
         if (!seen.Add(id))
@@ -239,9 +394,19 @@ public sealed class RelationsGraphControl : UserControl
 
         foreach (var node in graph.Nodes)
         {
-            node.Attr.FillColor = _disabledSourceIds.Contains(node.Id)
-                ? DColor.LightGray
-                : DColor.White;
+            var isDimmed = neighbors != null && !neighbors.Contains(node.Id);
+
+            if (isDimmed)
+            {
+                node.Attr.FillColor = DColor.WhiteSmoke;
+                node.Attr.Color = DColor.LightGray;
+                node.Attr.LineWidth = 1;
+                node.Label.FontColor = DColor.LightGray;
+                continue;
+            }
+
+            node.Attr.FillColor = ResolveNodeFillColor(node.Id);
+            node.Label.FontColor = DColor.Black;
 
             if (node.Id == _pendingFromId)
             {
@@ -254,13 +419,6 @@ public sealed class RelationsGraphControl : UserControl
             {
                 node.Attr.Color = DColor.Blue;
                 node.Attr.LineWidth = 2;
-                continue;
-            }
-
-            if (neighbors != null && !neighbors.Contains(node.Id))
-            {
-                node.Attr.Color = DColor.LightGray;
-                node.Attr.LineWidth = 1;
                 continue;
             }
 
@@ -288,6 +446,18 @@ public sealed class RelationsGraphControl : UserControl
         }
     }
 
+    private DColor ResolveNodeFillColor(string nodeId)
+    {
+        if (_disabledSourceIds.Contains(nodeId))
+        {
+            return DColor.LightGray;
+        }
+
+        return _nodeRoles.TryGetValue(nodeId, out var role)
+            ? RoleGraphColors[role]
+            : DColor.White;
+    }
+
     private void HandleNodeClick(string nodeId)
     {
         switch (_mode)
@@ -305,9 +475,12 @@ public sealed class RelationsGraphControl : UserControl
                 }
 
                 var fromId = _pendingFromId;
-                _pendingFromId = null;
-                SetMode(SelectionMode.Idle);
                 CreateRequested?.Invoke(this, new(fromId, nodeId));
+
+                _pendingFromId = fromId;
+                _focusedNodeId = null;
+                SetMode(SelectionMode.SelectingTo);
+                RefreshVisualState();
                 break;
 
             default:
@@ -336,11 +509,12 @@ public sealed class RelationsGraphControl : UserControl
         _statusLabel.Text = mode switch
         {
             SelectionMode.SelectingFrom => "Выберите начальный узел",
-            SelectionMode.SelectingTo => "Выберите целевой узел",
+            SelectionMode.SelectingTo => "Выберите целевой узел (Esc — выйти)",
             _ => string.Empty,
         };
 
         _createRelationButton.Checked = mode != SelectionMode.Idle;
+        _viewer.Cursor = mode != SelectionMode.Idle ? Cursors.Cross : Cursors.Default;
     }
 
     private void RaiseEdgeEvent(EventHandler<RelationGraphEdgeEventArgs>? handler)
@@ -352,17 +526,6 @@ public sealed class RelationsGraphControl : UserControl
 
         handler?.Invoke(this, new(_selectedEdge.Source, _selectedEdge.Target));
         _selectedEdge = null;
-    }
-
-    protected override void Dispose(bool disposing)
-    {
-        if (disposing)
-        {
-            _edgeMenu.Dispose();
-            _nodeMenu.Dispose();
-        }
-
-        base.Dispose(disposing);
     }
 }
 
