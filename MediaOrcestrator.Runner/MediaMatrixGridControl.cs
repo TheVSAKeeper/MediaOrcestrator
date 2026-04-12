@@ -6,6 +6,7 @@ namespace MediaOrcestrator.Runner;
 public partial class MediaMatrixGridControl : UserControl
 {
     private Orcestrator? _orcestrator;
+    private SyncRetryRunner? _retryRunner;
     private ILogger<MediaMatrixGridControl>? _logger;
     private BatchRenameService? _batchRenameService;
     private BatchPreviewService? _batchPreviewService;
@@ -20,9 +21,10 @@ public partial class MediaMatrixGridControl : UserControl
         uiCancelConvertItem.Click += (_, _) => _convertCts?.Cancel();
     }
 
-    public void Initialize(Orcestrator orcestrator, ILogger<MediaMatrixGridControl> logger, SettingsManager settingsManager, BatchRenameService batchRenameService, BatchPreviewService batchPreviewService, CoverGenerator coverGenerator, CoverTemplateStore coverTemplateStore)
+    public void Initialize(Orcestrator orcestrator, SyncRetryRunner retryRunner, ILogger<MediaMatrixGridControl> logger, SettingsManager settingsManager, BatchRenameService batchRenameService, BatchPreviewService batchPreviewService, CoverGenerator coverGenerator, CoverTemplateStore coverTemplateStore)
     {
         _orcestrator = orcestrator;
+        _retryRunner = retryRunner;
         _logger = logger;
         _batchRenameService = batchRenameService;
         _batchPreviewService = batchPreviewService;

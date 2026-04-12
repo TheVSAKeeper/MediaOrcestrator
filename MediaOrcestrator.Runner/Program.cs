@@ -362,6 +362,7 @@ file static class Program
         });
 
         services.AddSingleton<Orcestrator>();
+        services.AddSingleton<SyncRetryRunner>();
         services.AddSingleton<BatchRenameService>();
         services.AddSingleton<CoverGenerator>();
         services.AddSingleton<CoverTemplateStore>();

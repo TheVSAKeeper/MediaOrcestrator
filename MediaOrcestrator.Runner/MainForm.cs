@@ -38,6 +38,7 @@ public partial class MainForm : Form
         DrawRelations();
         // TODO: SetZalupaV2
         uiMediaMatrixGridControl.Initialize(_orcestrator,
+            _serviceProvider.GetRequiredService<SyncRetryRunner>(),
             _serviceProvider.GetRequiredService<ILogger<MediaMatrixGridControl>>(),
             _serviceProvider.GetRequiredService<SettingsManager>(),
             _serviceProvider.GetRequiredService<BatchRenameService>(),
@@ -53,7 +54,10 @@ public partial class MainForm : Form
         }
 
         var planner = _serviceProvider.GetRequiredService<SyncPlanner>();
-        uiSyncTreeControl.Initialize(planner, _orcestrator, _serviceProvider.GetRequiredService<ILogger<SyncTreeControl>>());
+        uiSyncTreeControl.Initialize(planner,
+            _orcestrator,
+            _serviceProvider.GetRequiredService<SyncRetryRunner>(),
+            _serviceProvider.GetRequiredService<ILogger<SyncTreeControl>>());
 
         CheckToolUpdatesInBackground();
         CheckAppUpdateInBackground();
