@@ -321,7 +321,6 @@ public sealed class VkVideoService : IDisposable
 
         _logger.LogInformation("Файл загружен. Hash: {Hash}", uploadResponse.VideoHash);
 
-        string? errorMessage = null;
         SaveThumbResponse? thumbId = null;
         if (!string.IsNullOrEmpty(thumbnailPath) && File.Exists(thumbnailPath))
         {
@@ -333,8 +332,7 @@ public sealed class VkVideoService : IDisposable
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Ошибка загрузки превьюшки");
-                errorMessage += "Ошибка загрузки превьюшки";
+                _logger.LogWarning(ex, "Ошибка загрузки превью, публикация продолжится без него");
             }
         }
 
@@ -359,8 +357,13 @@ public sealed class VkVideoService : IDisposable
                 editParams["thumb_id"] = thumbId.PhotoId.ToString();
             }
 
-            var publishResponse333 = await CallApiAsync<PublishResponse>("shortVideo.edit", editParams);
+            await CallApiAsync<PublishResponse>("shortVideo.edit", editParams);
             _logger.LogInformation("Видео отредактировано перед публикацией");
+
+            if (publishAt.HasValue)
+            {
+                _logger.LogWarning("Отложенная публикация не поддерживается для shorts — видео будет опубликовано немедленно");
+            }
 
             var publishParams = new Dictionary<string, string>
             {
@@ -373,7 +376,7 @@ public sealed class VkVideoService : IDisposable
                 ["ref"] = "video_as_clip_video_upload",
             };
 
-            Thread.Sleep(10000);
+            await Task.Delay(10000, cancellationToken);
             for (var i = 0; i < 10; i++)
             {
                 // todo retry helper
@@ -393,9 +396,9 @@ public sealed class VkVideoService : IDisposable
                         {
                             throw;
                         }
-                        _logger.LogInformation("video in processing. publish failed #" + i + 1);
-                        Thread.Sleep(15000);
-                        continue;
+
+                        _logger.LogInformation("Видео ещё обрабатывается, попытка публикации #{Attempt} не удалась", i + 1);
+                        await Task.Delay(15000, cancellationToken);
                     }
                     else
                     {

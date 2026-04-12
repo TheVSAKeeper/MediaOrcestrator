@@ -84,6 +84,65 @@ public sealed partial class VideoTranscoder(IToolPathProvider toolPathProvider, 
         return RunFfmpegAsync(arguments, inputPath, outputPath, totalDuration, progress, cancellationToken);
     }
 
+    public async Task<VideoFrameSize?> GetVideoFrameSizeAsync(string filePath, CancellationToken cancellationToken = default)
+    {
+        var ffprobePath = toolPathProvider.GetCompanionPath(WellKnownTools.FFmpeg, "ffprobe");
+
+        if (ffprobePath is null)
+        {
+            logger.LogWarning("Отсутствует ffprobe для определения размера кадра");
+            return null;
+        }
+
+        try
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = ffprobePath,
+                Arguments = $"-v error -select_streams v:0 -show_entries stream=width,height -of csv=s=x:p=0 \"{filePath}\"",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            };
+
+            using var process = Process.Start(psi);
+
+            if (process is null)
+            {
+                return null;
+            }
+
+            var output = await process.StandardOutput.ReadToEndAsync(cancellationToken);
+            await process.WaitForExitAsync(cancellationToken);
+
+            if (process.ExitCode != 0)
+            {
+                logger.LogWarning("ffprobe завершился с кодом {ExitCode} для файла: {FilePath}", process.ExitCode, filePath);
+                return null;
+            }
+
+            var parts = output.Trim().Split('x');
+
+            if (parts.Length == 2 && int.TryParse(parts[0], out var width) && int.TryParse(parts[1], out var height))
+            {
+                return new VideoFrameSize(width, height);
+            }
+
+            logger.LogWarning("Неожиданный вывод ffprobe: '{Output}' для файла: {FilePath}", output.Trim(), filePath);
+            return null;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Не удалось определить размер кадра видео через ffprobe: {FilePath}", filePath);
+            return null;
+        }
+    }
+
     public async Task<string?> GetVideoCodecAsync(string filePath, CancellationToken cancellationToken = default)
     {
         var ffprobePath = toolPathProvider.GetCompanionPath(WellKnownTools.FFmpeg, "ffprobe");
