@@ -86,8 +86,11 @@ public partial class MainForm : Form
             return;
         }
 
+        // TODO: Немного шляпная тема мне кажется
+        var newSourceId = Guid.NewGuid().ToString();
         using var settingsForm = new SourceSettingsForm();
         settingsForm.SetSettings(selectedPlugin.SettingsKeys, selectedPlugin, _logger);
+        settingsForm.SetSystemContext(_serviceProvider.GetRequiredService<StateManager>(), newSourceId);
         if (settingsForm.ShowDialog() != DialogResult.OK || settingsForm.Settings == null)
         {
             return;
@@ -99,7 +102,7 @@ public partial class MainForm : Form
             return;
         }
 
-        _orcestrator.AddSource(selectedPlugin.Name, settingsForm.Settings);
+        _orcestrator.AddSource(newSourceId, selectedPlugin.Name, settingsForm.Settings);
         DrawSources();
     }
 

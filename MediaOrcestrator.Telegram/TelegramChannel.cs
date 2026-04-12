@@ -9,7 +9,11 @@ using WTelegram;
 
 namespace MediaOrcestrator.Telegram;
 
-public sealed class TelegramChannel(ILogger<TelegramChannel> logger, ILogger<TelegramService> serviceLogger, IToolPathProvider toolPathProvider) : ISourceType, IAuthenticatable, IToolConsumer
+public sealed class TelegramChannel(
+    ILogger<TelegramChannel> logger,
+    ILogger<TelegramService> serviceLogger,
+    IToolPathProvider toolPathProvider)
+    : ISourceType, IAuthenticatable, IToolConsumer
 {
     private readonly SemaphoreSlim _serviceLock = new(1, 1);
     private TelegramService? _cachedService;
@@ -49,14 +53,6 @@ public sealed class TelegramChannel(ILogger<TelegramChannel> logger, ILogger<Tel
             IsRequired = true,
             Title = "канал",
             Description = "Username канала (@channel) или числовой ID",
-        },
-        new()
-        {
-            Key = "session_path",
-            IsRequired = true,
-            Title = "путь до файла сессии",
-            Description = @"Файл сессии Telegram (например, C:\path\to\telegram.session)",
-            Type = SettingType.FilePath,
         },
         new()
         {
@@ -253,13 +249,7 @@ public sealed class TelegramChannel(ILogger<TelegramChannel> logger, ILogger<Tel
     // TODO: Придумать более умный механизм
     public bool IsAuthenticated(Dictionary<string, string> settings)
     {
-        var sessionPath = settings.GetValueOrDefault("session_path");
-        if (string.IsNullOrEmpty(sessionPath))
-        {
-            return false;
-        }
-
-        return File.Exists(sessionPath);
+        return File.Exists(GetSessionPath(settings));
     }
 
     public async Task AuthenticateAsync(Dictionary<string, string> settings, IAuthUI ui, CancellationToken ct)
@@ -267,9 +257,7 @@ public sealed class TelegramChannel(ILogger<TelegramChannel> logger, ILogger<Tel
         var apiId = int.Parse(settings["api_id"]);
         var apiHash = settings["api_hash"];
         var phoneNumber = settings["phone_number"];
-        var sessionPath = settings["session_path"];
-
-        Directory.CreateDirectory(Path.GetDirectoryName(sessionPath)!);
+        var sessionPath = GetSessionPath(settings);
 
         await using var client = new Client(apiId, apiHash, sessionPath);
 
@@ -398,7 +386,7 @@ public sealed class TelegramChannel(ILogger<TelegramChannel> logger, ILogger<Tel
     {
         var apiId = int.Parse(settings["api_id"]);
         var apiHash = settings["api_hash"];
-        var sessionPath = settings["session_path"];
+        var sessionPath = GetSessionPath(settings);
 
         await _serviceLock.WaitAsync();
         try
@@ -407,8 +395,6 @@ public sealed class TelegramChannel(ILogger<TelegramChannel> logger, ILogger<Tel
             {
                 return _cachedService;
             }
-
-            Directory.CreateDirectory(Path.GetDirectoryName(sessionPath)!);
 
             var oldService = _cachedService;
             var phoneNumber = settings["phone_number"];
@@ -424,6 +410,11 @@ public sealed class TelegramChannel(ILogger<TelegramChannel> logger, ILogger<Tel
         {
             _serviceLock.Release();
         }
+    }
+
+    private static string GetSessionPath(Dictionary<string, string> settings)
+    {
+        return Path.Combine(settings["_system_state_path"], "telegram.session");
     }
 
     private async Task<VideoInfo> ProbeVideoInfoAsync(string filePath, CancellationToken cancellationToken)

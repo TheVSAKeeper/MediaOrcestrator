@@ -15,6 +15,8 @@ public partial class SourceSettingsForm : Form
     private Button? _authButton;
     private Label? _authStatusLabel;
     private string[]? _docFiles;
+    private StateManager? _stateManager;
+    private string? _pendingSourceId;
 
     public SourceSettingsForm()
     {
@@ -30,9 +32,16 @@ public partial class SourceSettingsForm : Form
         _logger = logger;
     }
 
+    public void SetSystemContext(StateManager stateManager, string sourceId)
+    {
+        _stateManager = stateManager;
+        _pendingSourceId = sourceId;
+    }
+
     public void SetEditSource(Source source)
     {
         _editSource = source;
+        _pendingSourceId = source.Id;
         uiNameTextBox.Text = source.Title;
         uiCreateButton.Text = "Сохранить изменения";
     }
@@ -94,7 +103,6 @@ public partial class SourceSettingsForm : Form
             uiMainLayout.RowStyles.Add(new(SizeType.Absolute, 45F));
             uiMainLayout.RowStyles.Add(new(SizeType.Percent, 100F));
             uiMainLayout.RowStyles.Add(new(SizeType.Absolute, 45F));
-
         }
 
         var settingsTable = CreateSettingsTable();
@@ -583,6 +591,21 @@ public partial class SourceSettingsForm : Form
     private Dictionary<string, string> GetCurrentSettings()
     {
         var settings = new Dictionary<string, string>();
+
+        if (_editSource != null)
+        {
+            foreach (var (key, value) in _editSource.Settings)
+            {
+                if (key.StartsWith("_system_", StringComparison.Ordinal))
+                {
+                    settings[key] = value;
+                }
+            }
+        }
+        else if (_stateManager != null && _pendingSourceId != null && _sourceType is IAuthenticatable)
+        {
+            settings["_system_state_path"] = _stateManager.GetSourceStatePath(_pendingSourceId);
+        }
 
         foreach (var (key, control) in _controls)
         {

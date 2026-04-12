@@ -4,7 +4,12 @@ using Microsoft.Extensions.Logging;
 
 namespace MediaOrcestrator.Domain;
 
-public class Orcestrator(PluginManager pluginManager, LiteDatabase db, TempManager tempManager, ILogger<Orcestrator> logger)
+public class Orcestrator(
+    PluginManager pluginManager,
+    LiteDatabase db,
+    TempManager tempManager,
+    StateManager stateManager,
+    ILogger<Orcestrator> logger)
 {
     public Dictionary<string, ISourceType> GetSourceTypes()
     {
@@ -356,17 +361,22 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, TempManag
             source.Type = sourceType;
 
             source.Settings["_system_temp_path"] = tempManager.TempPath;
+
+            if (sourceType is IAuthenticatable)
+            {
+                source.Settings["_system_state_path"] = stateManager.GetSourceStatePath(source.Id);
+            }
         }
 
         return sources;
     }
 
-    public void AddSource(string typeId, Dictionary<string, string> settings)
+    public void AddSource(string sourceId, string typeId, Dictionary<string, string> settings)
     {
         db.GetCollection<Source>("sources")
             .Insert(new Source
             {
-                Id = Guid.NewGuid().ToString(),
+                Id = sourceId,
                 TypeId = typeId,
                 Settings = settings,
             });
@@ -375,6 +385,9 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, TempManag
     public void RemoveSource(string sourceId)
     {
         db.GetCollection<Source>("sources").Delete(sourceId);
+
+        // TODO: По идее нужно, но для отладки неудобно
+        //stateManager.CleanSource(sourceId);
     }
 
     public void UpdateSource(Source source)

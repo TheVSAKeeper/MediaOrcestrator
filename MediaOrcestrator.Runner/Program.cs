@@ -88,6 +88,20 @@ file static class Program
                 settingsManager.SetValue("temp_path", result);
             }
 
+            var statePath = settingsManager.GetStringValue("state_path");
+            if (statePath == null)
+            {
+                var result = InputMessageBox.Show("Введите путь до папки состояния источников (куки, сессии)", "Важная настройка", "state", InputBrowseMode.Folder);
+                if (result == null)
+                {
+                    MessageBox.Show("Так нельзя, закрываюсь");
+                    return;
+                }
+
+                statePath = result;
+                settingsManager.SetValue("state_path", result);
+            }
+
             Log.Information("Приложение запускается...");
             CheckUpdaterLog();
             var services = new ServiceCollection();
@@ -98,6 +112,11 @@ file static class Program
                 new TempManager(tempPath,
                     sp.GetRequiredService<LiteDatabase>(),
                     sp.GetRequiredService<ILogger<TempManager>>()));
+
+            services.AddSingleton(sp =>
+                new StateManager(statePath,
+                    sp.GetRequiredService<LiteDatabase>(),
+                    sp.GetRequiredService<ILogger<StateManager>>()));
 
             using var serviceProvider = services.BuildServiceProvider();
             var mainForm = serviceProvider.GetRequiredService<MainForm>();
@@ -113,6 +132,9 @@ file static class Program
             var tempManager = serviceProvider.GetRequiredService<TempManager>();
             tempManager.MigrateOldTempPaths();
             tempManager.CleanAll();
+
+            var stateManager = serviceProvider.GetRequiredService<StateManager>();
+            stateManager.MigrateLegacyStatePaths();
 
             Task.Run(async () =>
             {

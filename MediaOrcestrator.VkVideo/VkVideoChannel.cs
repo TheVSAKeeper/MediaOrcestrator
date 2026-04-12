@@ -25,14 +25,6 @@ public sealed class VkVideoChannel(
     [
         new()
         {
-            Key = "auth_state_path",
-            IsRequired = true,
-            Title = "путь до файла куки",
-            Description = "JSON файл с cookies для авторизации на VK Video (Playwright StorageState)",
-            Type = SettingType.FilePath,
-        },
-        new()
-        {
             Key = "group_id",
             IsRequired = true,
             Title = "идентификатор группы",
@@ -500,8 +492,8 @@ public sealed class VkVideoChannel(
     // TODO: Придумать более умный механизм
     public bool IsAuthenticated(Dictionary<string, string> settings)
     {
-        var authStatePath = settings.GetValueOrDefault("auth_state_path");
-        if (string.IsNullOrEmpty(authStatePath) || !File.Exists(authStatePath))
+        var authStatePath = GetAuthStatePath(settings);
+        if (!File.Exists(authStatePath))
         {
             return false;
         }
@@ -527,13 +519,7 @@ public sealed class VkVideoChannel(
 
     public async Task AuthenticateAsync(Dictionary<string, string> settings, IAuthUI ui, CancellationToken ct)
     {
-        var authStatePath = settings.GetValueOrDefault("auth_state_path");
-        if (string.IsNullOrEmpty(authStatePath))
-        {
-            await ui.ShowMessageAsync("Укажите путь к файлу куки в настройках.");
-            return;
-        }
-
+        var authStatePath = GetAuthStatePath(settings);
         var result = await ui.OpenBrowserAsync("https://cabinet.vkvideo.ru/", authStatePath);
         if (result != null)
         {
@@ -547,11 +533,7 @@ public sealed class VkVideoChannel(
 
     private async Task<VkVideoService> CreateServiceAsync(Dictionary<string, string> settings)
     {
-        var authStatePath = settings.GetValueOrDefault("auth_state_path");
-        if (string.IsNullOrEmpty(authStatePath))
-        {
-            throw new InvalidOperationException("Путь к файлу аутентификации VK Video не указан в настройках.");
-        }
+        var authStatePath = GetAuthStatePath(settings);
 
         await _serviceLock.WaitAsync();
         try
@@ -563,7 +545,7 @@ public sealed class VkVideoChannel(
 
             if (!File.Exists(authStatePath))
             {
-                throw new FileNotFoundException($"Файл аутентификации VK Video не найден: {authStatePath}", authStatePath);
+                throw new FileNotFoundException($"Файл аутентификации VK Video не найден: {authStatePath}. Выполните авторизацию.", authStatePath);
             }
 
             var authStateBody = await File.ReadAllTextAsync(authStatePath);
@@ -599,6 +581,11 @@ public sealed class VkVideoChannel(
     public ConvertType[] GetAvailableConvertTypes()
     {
         return [];
+    }
+
+    private static string GetAuthStatePath(Dictionary<string, string> settings)
+    {
+        return Path.Combine(settings["_system_state_path"], "auth_state");
     }
 
     public Task ConvertAsync(int typeId, string externalId, Dictionary<string, string> settings, IProgress<ConvertProgress>? progress = null, CancellationToken cancellationToken = default)
