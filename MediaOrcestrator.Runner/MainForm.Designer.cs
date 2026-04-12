@@ -73,6 +73,7 @@
             uiRubuteAuthStatePathTextBox = new TextBox();
             uiRubuteAuthStateOpenBrowserButton = new Button();
             uiManageToolsButton = new Button();
+            uiOpenSettingsButton = new Button();
             uiCheckUpdatesButton = new Button();
             uiAuditToolTip = new ToolTip();
             uiMainTabControl.SuspendLayout();
@@ -458,6 +459,7 @@
             uiToolsTabPage.Controls.Add(groupBox2);
             uiToolsTabPage.Controls.Add(groupBox1);
             uiToolsTabPage.Controls.Add(uiManageToolsButton);
+            uiToolsTabPage.Controls.Add(uiOpenSettingsButton);
             uiToolsTabPage.Controls.Add(uiCheckUpdatesButton);
             uiToolsTabPage.Location = new Point(4, 24);
             uiToolsTabPage.Name = "uiToolsTabPage";
@@ -562,7 +564,17 @@
             uiManageToolsButton.Text = "Управление инструментами";
             uiManageToolsButton.UseVisualStyleBackColor = true;
             uiManageToolsButton.Click += uiManageToolsButton_Click;
-            // 
+            //
+            // uiOpenSettingsButton
+            //
+            uiOpenSettingsButton.Location = new Point(6, 259);
+            uiOpenSettingsButton.Name = "uiOpenSettingsButton";
+            uiOpenSettingsButton.Size = new Size(200, 35);
+            uiOpenSettingsButton.TabIndex = 6;
+            uiOpenSettingsButton.Text = "Настройки приложения";
+            uiOpenSettingsButton.UseVisualStyleBackColor = true;
+            uiOpenSettingsButton.Click += uiOpenSettingsButton_Click;
+            //
             // uiCheckUpdatesButton
             // 
             uiCheckUpdatesButton.Location = new Point(6, 341);
@@ -648,6 +660,7 @@
         private Label uiBulkSourcesLabel;
         private Label uiBulkProgressLabel;
         private Button uiManageToolsButton;
+        private Button uiOpenSettingsButton;
         private Button uiCheckUpdatesButton;
         private Button uiSyncNewButton;
         private ToolTip uiAuditToolTip;

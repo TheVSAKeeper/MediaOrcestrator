@@ -244,6 +244,23 @@ public partial class MainForm : Form
         form.ShowDialog(this);
     }
 
+    private void uiOpenSettingsButton_Click(object sender, EventArgs e)
+    {
+        var settingsManager = _serviceProvider.GetRequiredService<SettingsManager>();
+        using var form = new SettingsForm();
+        form.SetSettingsManager(settingsManager);
+
+        if (form.ShowDialog(this) != DialogResult.OK)
+        {
+            return;
+        }
+
+        if (form.RestartRequested)
+        {
+            Application.Restart();
+        }
+    }
+
     private void uiCheckUpdatesButton_Click(object? sender, EventArgs e)
     {
         CheckAppUpdateInBackground();
