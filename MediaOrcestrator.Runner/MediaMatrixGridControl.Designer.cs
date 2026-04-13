@@ -30,6 +30,7 @@ namespace MediaOrcestrator.Runner
             uiRefreshButton = new Button();
             uiSearchTextBox = new TextBox();
             uiMergerSelectedMediaButton = new Button();
+            uiMergeAssistantButton = new Button();
             uiLoadingLabel = new Label();
             uiStatusStrip = new StatusStrip();
             uiTotalCountLabel = new ToolStripStatusLabel();
@@ -88,7 +89,17 @@ namespace MediaOrcestrator.Runner
             uiMergerSelectedMediaButton.Text = "Объеденить выбранные";
             uiMergerSelectedMediaButton.UseVisualStyleBackColor = true;
             uiMergerSelectedMediaButton.Click += uiMergerSelectedMediaButton_Click;
-            // 
+            //
+            // uiMergeAssistantButton
+            //
+            uiMergeAssistantButton.Location = new Point(616, 28);
+            uiMergeAssistantButton.Name = "uiMergeAssistantButton";
+            uiMergeAssistantButton.Size = new Size(180, 23);
+            uiMergeAssistantButton.TabIndex = 8;
+            uiMergeAssistantButton.Text = "Ассистент объединения";
+            uiMergeAssistantButton.UseVisualStyleBackColor = true;
+            uiMergeAssistantButton.Click += uiMergeAssistantButton_Click;
+            //
             // uiLoadingLabel
             // 
             uiLoadingLabel.Anchor = AnchorStyles.Top | AnchorStyles.Right;
@@ -161,6 +172,7 @@ namespace MediaOrcestrator.Runner
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             Controls.Add(uiLoadingLabel);
+            Controls.Add(uiMergeAssistantButton);
             Controls.Add(uiMergerSelectedMediaButton);
             Controls.Add(uiSearchTextBox);
             Controls.Add(uiRefreshButton);
@@ -181,6 +193,7 @@ namespace MediaOrcestrator.Runner
         private Button uiRefreshButton;
         private TextBox uiSearchTextBox;
         private Button uiMergerSelectedMediaButton;
+        private Button uiMergeAssistantButton;
         private Label uiLoadingLabel;
         private StatusStrip uiStatusStrip;
         private ToolStripStatusLabel uiTotalCountLabel;

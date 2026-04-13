@@ -1,5 +1,6 @@
 ﻿using LiteDB;
 using MediaOrcestrator.Domain;
+using MediaOrcestrator.Domain.Merging;
 using MediaOrcestrator.Modules;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -417,6 +418,7 @@ file static class Program
         services.AddSingleton<ErrorReportService>();
 
         services.AddSingleton<Orcestrator>();
+        services.AddSingleton<MediaMergeService>();
         services.AddSingleton<SyncRetryRunner>();
         services.AddSingleton<BatchRenameService>();
         services.AddSingleton<CoverGenerator>();

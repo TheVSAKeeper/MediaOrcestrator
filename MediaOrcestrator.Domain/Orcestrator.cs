@@ -345,6 +345,29 @@ public class Orcestrator(
         db.GetCollection<Media>("medias").Delete(media.Id);
     }
 
+    public void MergeMedia(Media target, IReadOnlyList<Media> toRemove)
+    {
+        var collection = db.GetCollection<Media>("medias");
+        db.BeginTrans();
+
+        try
+        {
+            collection.Update(target);
+
+            foreach (var media in toRemove)
+            {
+                collection.Delete(media.Id);
+            }
+
+            db.Commit();
+        }
+        catch
+        {
+            db.Rollback();
+            throw;
+        }
+    }
+
     public List<Source> GetSources()
     {
         var sources = db.GetCollection<Source>("sources").FindAll().ToList();

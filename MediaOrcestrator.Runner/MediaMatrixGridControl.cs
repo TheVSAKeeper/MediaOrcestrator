@@ -1,4 +1,5 @@
 ﻿using MediaOrcestrator.Domain;
+using MediaOrcestrator.Domain.Merging;
 using Microsoft.Extensions.Logging;
 
 namespace MediaOrcestrator.Runner;
@@ -12,6 +13,8 @@ public partial class MediaMatrixGridControl : UserControl
     private BatchPreviewService? _batchPreviewService;
     private CoverGenerator? _coverGenerator;
     private CoverTemplateStore? _coverTemplateStore;
+    private MediaMergeService? _mergeService;
+    private ILoggerFactory? _loggerFactory;
     private CancellationTokenSource? _convertCts;
 
     public MediaMatrixGridControl()
@@ -21,17 +24,19 @@ public partial class MediaMatrixGridControl : UserControl
         uiCancelConvertItem.Click += (_, _) => _convertCts?.Cancel();
     }
 
-    public void Initialize(Orcestrator orcestrator, SyncRetryRunner retryRunner, ILogger<MediaMatrixGridControl> logger, SettingsManager settingsManager, BatchRenameService batchRenameService, BatchPreviewService batchPreviewService, CoverGenerator coverGenerator, CoverTemplateStore coverTemplateStore)
+    public void Initialize(MediaMatrixContext context)
     {
-        _orcestrator = orcestrator;
-        _retryRunner = retryRunner;
-        _logger = logger;
-        _batchRenameService = batchRenameService;
-        _batchPreviewService = batchPreviewService;
-        _coverGenerator = coverGenerator;
-        _coverTemplateStore = coverTemplateStore;
-        uiFilterControl.SetSettingsManager(settingsManager);
-        uiFilterControl.PopulateRelationsFilter(orcestrator);
+        _orcestrator = context.Orcestrator;
+        _retryRunner = context.RetryRunner;
+        _logger = context.Logger;
+        _batchRenameService = context.BatchRenameService;
+        _batchPreviewService = context.BatchPreviewService;
+        _coverGenerator = context.CoverGenerator;
+        _coverTemplateStore = context.CoverTemplateStore;
+        _mergeService = context.MergeService;
+        _loggerFactory = context.LoggerFactory;
+        uiFilterControl.SetSettingsManager(context.SettingsManager);
+        uiFilterControl.PopulateRelationsFilter(context.Orcestrator);
     }
 
     public void PopulateRelationsFilter()
@@ -160,14 +165,38 @@ public partial class MediaMatrixGridControl : UserControl
         MergeSelectedMedia(selectedMediaList);
     }
 
+    private void uiMergeAssistantButton_Click(object sender, EventArgs e)
+    {
+        if (_orcestrator == null || _mergeService == null || _loggerFactory == null)
+        {
+            return;
+        }
+
+        using var form = new MergeAssistantForm(_orcestrator,
+            _mergeService,
+            _loggerFactory.CreateLogger<MergeAssistantForm>());
+
+        var result = form.ShowDialog(FindForm());
+
+        if (result == DialogResult.OK && form.AppliedCount > 0)
+        {
+            RefreshData();
+        }
+    }
+
     private void MergeSelectedMedia(List<Media> selectedMediaList)
     {
+        if (_mergeService == null || _orcestrator == null)
+        {
+            return;
+        }
+
         _logger?.LogInformation("Запуск операции объединения медиа. Выбрано элементов: {Count}", selectedMediaList.Count);
 
         try
         {
-            var mergePreview = ValidateMergeOperation(selectedMediaList);
-            var allSources = _orcestrator!.GetSources();
+            var mergePreview = _mergeService.BuildPreview(selectedMediaList);
+            var allSources = _orcestrator.GetSources();
 
             var mediaList = string.Join("\n", mergePreview.SourceMedias.Select(FormatMedia));
             var conflictsNote = mergePreview.HasConflicts
@@ -194,18 +223,8 @@ public partial class MediaMatrixGridControl : UserControl
                 return;
             }
 
-            _logger?.LogInformation("Выполняется объединение медиа. Целевое медиа: '{TargetMedia}'", mergePreview.TargetMedia.Title);
-            mergePreview.TargetMedia.Sources = mergePreview.ResultingSources;
-            _orcestrator.UpdateMedia(mergePreview.TargetMedia);
-
-            foreach (var media in mergePreview.SourceMedias)
-            {
-                _orcestrator.RemoveMedia(media);
-            }
-
+            _mergeService.Apply(mergePreview, true);
             RefreshData();
-
-            _logger?.LogInformation("Объединение медиа успешно завершено. Итоговое количество источников: {TotalSourcesCount}", mergePreview.TotalSourcesCount);
 
             string FormatMedia(Media m)
             {
@@ -331,68 +350,6 @@ public partial class MediaMatrixGridControl : UserControl
         }
 
         return result;
-    }
-
-    private MergePreviewData ValidateMergeOperation(List<Media> selectedMedia)
-    {
-        if (selectedMedia.Count < 2)
-        {
-            throw new InvalidOperationException("Для объединения необходимо выбрать как минимум 2 медиа");
-        }
-
-        var targetMedia = selectedMedia.First();
-        var sourceMedias = selectedMedia.Skip(1).ToList();
-        var conflicts = new List<string>();
-        var resultingSources = new List<MediaSourceLink>();
-
-        var sourceDict = new Dictionary<string, MediaSourceLink>();
-
-        foreach (var sourceLink in targetMedia.Sources)
-        {
-            sourceDict[sourceLink.SourceId] = sourceLink;
-        }
-
-        var allSources = _orcestrator?.GetSources() ?? [];
-
-        foreach (var media in sourceMedias)
-        {
-            foreach (var sourceLink in media.Sources)
-            {
-                if (sourceDict.TryAdd(sourceLink.SourceId, sourceLink))
-                {
-                    continue;
-                }
-
-                var source = allSources.FirstOrDefault(s => s.Id == sourceLink.SourceId);
-                var sourceName = source?.TitleFull ?? sourceLink.SourceId;
-                conflicts.Add($"Источник '{sourceName}' присутствует в нескольких медиа");
-            }
-        }
-
-        resultingSources.AddRange(sourceDict.Values);
-
-        return new()
-        {
-            TargetMedia = targetMedia,
-            SourceMedias = sourceMedias,
-            ResultingSources = resultingSources,
-            Conflicts = conflicts,
-        };
-    }
-
-    private sealed class MergePreviewData
-    {
-        public required Media TargetMedia { get; init; }
-
-        public required List<Media> SourceMedias { get; init; }
-
-        public required List<MediaSourceLink> ResultingSources { get; init; }
-
-        public required List<string> Conflicts { get; init; }
-
-        public int TotalSourcesCount => ResultingSources.Count;
-
-        public bool HasConflicts => Conflicts.Count > 0;
     }
 
     private void uiConvertProgressBar_MouseDown(object sender, MouseEventArgs e)

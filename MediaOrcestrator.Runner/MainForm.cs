@@ -1,4 +1,5 @@
 ﻿using MediaOrcestrator.Domain;
+using MediaOrcestrator.Domain.Merging;
 using MediaOrcestrator.Modules;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -44,14 +45,16 @@ public partial class MainForm : Form
         DrawSources();
         DrawRelations();
         // TODO: SetZalupaV2
-        uiMediaMatrixGridControl.Initialize(_orcestrator,
+        uiMediaMatrixGridControl.Initialize(new(_orcestrator,
             _serviceProvider.GetRequiredService<SyncRetryRunner>(),
             _serviceProvider.GetRequiredService<ILogger<MediaMatrixGridControl>>(),
             _serviceProvider.GetRequiredService<SettingsManager>(),
             _serviceProvider.GetRequiredService<BatchRenameService>(),
             _serviceProvider.GetRequiredService<BatchPreviewService>(),
             _serviceProvider.GetRequiredService<CoverGenerator>(),
-            _serviceProvider.GetRequiredService<CoverTemplateStore>());
+            _serviceProvider.GetRequiredService<CoverTemplateStore>(),
+            _serviceProvider.GetRequiredService<MediaMergeService>(),
+            _serviceProvider.GetRequiredService<ILoggerFactory>()));
 
         uiMediaMatrixGridControl.RefreshData();
 
