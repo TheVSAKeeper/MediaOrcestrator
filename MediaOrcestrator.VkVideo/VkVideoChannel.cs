@@ -1,6 +1,5 @@
 ﻿using MediaOrcestrator.Modules;
 using Microsoft.Extensions.Logging;
-using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
@@ -10,7 +9,7 @@ namespace MediaOrcestrator.VkVideo;
 public sealed class VkVideoChannel(
     ILogger<VkVideoChannel> logger,
     ILogger<VkVideoService> serviceLogger,
-    IToolPathProvider toolPathProvider)
+    VideoTranscoder videoTranscoder)
     : ISourceType, IAuthenticatable
 {
     private readonly SemaphoreSlim _serviceLock = new(1, 1);
@@ -23,14 +22,6 @@ public sealed class VkVideoChannel(
 
     public IEnumerable<SourceSettings> SettingsKeys { get; } =
     [
-        new()
-        {
-            Key = "auth_state_path",
-            IsRequired = true,
-            Title = "путь до файла куки",
-            Description = "JSON файл с cookies для авторизации на VK Video (Playwright StorageState)",
-            Type = SettingType.FilePath,
-        },
         new()
         {
             Key = "group_id",
@@ -223,11 +214,11 @@ public sealed class VkVideoChannel(
             throw new FileNotFoundException("Файл видео не найден", filePath);
         }
 
-        var size = await GetVideoFrameSizeAsync(filePath, cancellationToken);
-        if (size == null)
-        {
-            throw new Exception("Не удалось определить размер кадра видео");
-        }
+        var frameSize = await videoTranscoder.GetVideoFrameSizeAsync(filePath, cancellationToken)
+                        ?? throw new NonRetriableException("Не удалось определить размер кадра видео — невозможно выбрать режим загрузки (обычное / shorts)");
+
+        // todo поидее ещё и размер фаила надо проверять, но после первого инцидента будем
+        var isShorts = frameSize.IsPortrait;
 
         var service = await CreateServiceAsync(settings);
         var groupId = long.Parse(settings["group_id"]);
@@ -259,8 +250,6 @@ public sealed class VkVideoChannel(
 
         try
         {
-            // todo поидее ещё и размер фаила надо проверять, но после первого инцидента будем
-            var isShorts = size.Width < size.Height;
             var uploadBytesPerSecond = SpeedLimitHelper.ParseUploadBytesPerSecond(settings);
             var result = await service.UploadVideoAsync(isShorts, groupId, filePath, media.Title, media.Description,
                 fileExt, media.TempPreviewPath, publishAtUnix, uploadBytesPerSecond, cancellationToken);
@@ -285,67 +274,6 @@ public sealed class VkVideoChannel(
         }
     }
 
-    private async Task<Size?> GetVideoFrameSizeAsync(string filePath, CancellationToken cancellationToken)
-    {
-        var ffprobePath = toolPathProvider.GetCompanionPath(WellKnownTools.FFmpeg, "ffprobe");
-
-        if (ffprobePath is null)
-        {
-            logger.LogWarning("Отсутствуе ffprobe для определения размера кадра");
-            return null;
-        }
-
-        try
-        {
-            var psi = new ProcessStartInfo
-            {
-                FileName = ffprobePath,
-                Arguments = $"-v error -select_streams v:0 -show_entries stream=width,height -of csv=s=x:p=0 \"{filePath}\"",
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
-
-            using var process = Process.Start(psi);
-
-            if (process is null)
-            {
-                return null;
-            }
-
-            var output = await process.StandardOutput.ReadToEndAsync(cancellationToken);
-            await process.WaitForExitAsync(cancellationToken);
-
-            if (process.ExitCode != 0)
-            {
-                logger.LogWarning("ffprobe завершился с кодом {ExitCode} для файла: {FilePath}", process.ExitCode, filePath);
-                return null;
-            }
-
-            var split = output.Split('x');
-
-            var width = int.Parse(split[0]);
-            var heigth = int.Parse(split[1]);
-            return new Size { Width = width, Height = heigth };
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Не удалось определить размер кадра видео через ffprobe: {FilePath}", filePath);
-            return null;
-        }
-    }
-
-    private class Size
-    {
-        public int Width { get; set; }
-        public int Height { get; set; }
-    }
-
     public async Task<UploadResult> UpdateAsync(string externalId, MediaDto tempMedia, Dictionary<string, string> settings, CancellationToken cancellationToken)
     {
         logger.LogInformation("Обновление видео {ExternalId} на VK Video", externalId);
@@ -353,11 +281,11 @@ public sealed class VkVideoChannel(
         var service = await CreateServiceAsync(settings);
         var (ownerId, videoId) = ParseExternalId(externalId);
 
-        var size = await GetVideoFrameSizeAsync(tempMedia.DataPath, cancellationToken);
-        if (size == null)
-        {
-            throw new Exception("Не удалось определить размер кадра видео");
-        }
+        var frameSize = await videoTranscoder.GetVideoFrameSizeAsync(tempMedia.DataPath, cancellationToken)
+                        ?? throw new NonRetriableException("Не удалось определить размер кадра видео — невозможно выбрать режим обновления превью (обычное / shorts)");
+
+        var isShorts = frameSize.Width < frameSize.Height;
+
         var errorMessage = "";
 
         try
@@ -374,7 +302,6 @@ public sealed class VkVideoChannel(
         {
             try
             {
-                var isShorts = size.Width < size.Height;
                 await service.UploadThumbnailAsync(isShorts, ownerId, videoId, tempMedia.TempPreviewPath);
             }
             catch (Exception ex)
@@ -500,8 +427,8 @@ public sealed class VkVideoChannel(
     // TODO: Придумать более умный механизм
     public bool IsAuthenticated(Dictionary<string, string> settings)
     {
-        var authStatePath = settings.GetValueOrDefault("auth_state_path");
-        if (string.IsNullOrEmpty(authStatePath) || !File.Exists(authStatePath))
+        var authStatePath = GetAuthStatePath(settings);
+        if (!File.Exists(authStatePath))
         {
             return false;
         }
@@ -527,13 +454,7 @@ public sealed class VkVideoChannel(
 
     public async Task AuthenticateAsync(Dictionary<string, string> settings, IAuthUI ui, CancellationToken ct)
     {
-        var authStatePath = settings.GetValueOrDefault("auth_state_path");
-        if (string.IsNullOrEmpty(authStatePath))
-        {
-            await ui.ShowMessageAsync("Укажите путь к файлу куки в настройках.");
-            return;
-        }
-
+        var authStatePath = GetAuthStatePath(settings);
         var result = await ui.OpenBrowserAsync("https://cabinet.vkvideo.ru/", authStatePath);
         if (result != null)
         {
@@ -547,11 +468,7 @@ public sealed class VkVideoChannel(
 
     private async Task<VkVideoService> CreateServiceAsync(Dictionary<string, string> settings)
     {
-        var authStatePath = settings.GetValueOrDefault("auth_state_path");
-        if (string.IsNullOrEmpty(authStatePath))
-        {
-            throw new InvalidOperationException("Путь к файлу аутентификации VK Video не указан в настройках.");
-        }
+        var authStatePath = GetAuthStatePath(settings);
 
         await _serviceLock.WaitAsync();
         try
@@ -563,7 +480,7 @@ public sealed class VkVideoChannel(
 
             if (!File.Exists(authStatePath))
             {
-                throw new FileNotFoundException($"Файл аутентификации VK Video не найден: {authStatePath}", authStatePath);
+                throw new FileNotFoundException($"Файл аутентификации VK Video не найден: {authStatePath}. Выполните авторизацию.", authStatePath);
             }
 
             var authStateBody = await File.ReadAllTextAsync(authStatePath);
@@ -599,6 +516,11 @@ public sealed class VkVideoChannel(
     public ConvertType[] GetAvailableConvertTypes()
     {
         return [];
+    }
+
+    private static string GetAuthStatePath(Dictionary<string, string> settings)
+    {
+        return Path.Combine(settings["_system_state_path"], "auth_state");
     }
 
     public Task ConvertAsync(int typeId, string externalId, Dictionary<string, string> settings, IProgress<ConvertProgress>? progress = null, CancellationToken cancellationToken = default)

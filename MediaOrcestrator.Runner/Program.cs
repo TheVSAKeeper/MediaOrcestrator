@@ -1,5 +1,6 @@
 ﻿using LiteDB;
 using MediaOrcestrator.Domain;
+using MediaOrcestrator.Domain.Merging;
 using MediaOrcestrator.Modules;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -13,10 +14,14 @@ namespace MediaOrcestrator.Runner;
 
 file static class Program
 {
+    private static IServiceProvider? _runningServiceProvider;
+
     [STAThread]
     private static void Main()
     {
         ApplicationConfiguration.Initialize();
+
+        RegisterGlobalExceptionHandlers();
 
         // TODO: Выглядит не очень
         var logControl = new RichTextBox();
@@ -88,6 +93,20 @@ file static class Program
                 settingsManager.SetValue("temp_path", result);
             }
 
+            var statePath = settingsManager.GetStringValue("state_path");
+            if (statePath == null)
+            {
+                var result = InputMessageBox.Show("Введите путь до папки состояния источников (куки, сессии)", "Важная настройка", "state", InputBrowseMode.Folder);
+                if (result == null)
+                {
+                    MessageBox.Show("Так нельзя, закрываюсь");
+                    return;
+                }
+
+                statePath = result;
+                settingsManager.SetValue("state_path", result);
+            }
+
             Log.Information("Приложение запускается...");
             CheckUpdaterLog();
             var services = new ServiceCollection();
@@ -99,7 +118,13 @@ file static class Program
                     sp.GetRequiredService<LiteDatabase>(),
                     sp.GetRequiredService<ILogger<TempManager>>()));
 
+            services.AddSingleton(sp =>
+                new StateManager(statePath,
+                    sp.GetRequiredService<LiteDatabase>(),
+                    sp.GetRequiredService<ILogger<StateManager>>()));
+
             using var serviceProvider = services.BuildServiceProvider();
+            _runningServiceProvider = serviceProvider;
             var mainForm = serviceProvider.GetRequiredService<MainForm>();
 
             var orcestrator = serviceProvider.GetRequiredService<Orcestrator>();
@@ -114,6 +139,9 @@ file static class Program
             tempManager.MigrateOldTempPaths();
             tempManager.CleanAll();
 
+            var stateManager = serviceProvider.GetRequiredService<StateManager>();
+            stateManager.MigrateLegacyStatePaths();
+
             Task.Run(async () =>
             {
                 await GoGo(orcestrator);
@@ -124,7 +152,7 @@ file static class Program
         catch (Exception ex)
         {
             Log.Fatal(ex, "Приложение не смогло запуститься корректно");
-            MessageBox.Show(ex.Message, "Error");
+            ShowErrorReport(ex);
         }
         finally
         {
@@ -137,6 +165,54 @@ file static class Program
                 // Игнорируем ошибки при закрытии логов, так как приложение все равно завершается
             }
         }
+    }
+
+    private static void RegisterGlobalExceptionHandlers()
+    {
+        Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+
+        Application.ThreadException += (_, args) =>
+        {
+            Log.Fatal(args.Exception, "Необработанное исключение в UI-потоке");
+            ShowErrorReport(args.Exception);
+        };
+
+        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+        {
+            if (args.ExceptionObject is not Exception ex)
+            {
+                return;
+            }
+
+            Log.Fatal(ex, "Необработанное исключение вне UI-потока");
+            ShowErrorReport(ex);
+        };
+    }
+
+    private static void ShowErrorReport(Exception ex)
+    {
+        try
+        {
+            var service = _runningServiceProvider?.GetService<ErrorReportService>()
+                          ?? BuildFallbackErrorReportService();
+
+            using var form = new ErrorReportForm(service, ex);
+            form.ShowDialog();
+        }
+        catch (Exception reportEx)
+        {
+            Log.Error(reportEx, "Не удалось показать ErrorReportForm");
+            MessageBox.Show(ex.ToString(),
+                "Критическая ошибка",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
+    }
+
+    private static ErrorReportService BuildFallbackErrorReportService()
+    {
+        var loggerFactory = LoggerFactory.Create(builder => builder.AddSerilog());
+        return new(loggerFactory.CreateLogger<ErrorReportService>());
     }
 
     /// <summary>
@@ -339,8 +415,14 @@ file static class Program
                 sp.GetRequiredService<ILogger<AppUpdateManager>>());
         });
 
+        services.AddSingleton<ErrorReportService>();
+
         services.AddSingleton<Orcestrator>();
+        services.AddSingleton<MediaMergeService>();
+        services.AddSingleton<SyncRetryRunner>();
         services.AddSingleton<BatchRenameService>();
+        services.AddSingleton<CoverGenerator>();
+        services.AddSingleton<CoverTemplateStore>();
         services.AddSingleton<BatchPreviewService>();
         services.AddSingleton<SyncPlanner>();
         services.AddTransient<MainForm>();
@@ -348,6 +430,7 @@ file static class Program
         services.AddTransient<SourceControl>();
         services.AddTransient<RelationControl>();
         services.AddTransient<SyncTreeControl>();
+        services.AddTransient<PublishControl>();
     }
 }
 

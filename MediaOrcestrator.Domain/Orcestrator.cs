@@ -4,7 +4,12 @@ using Microsoft.Extensions.Logging;
 
 namespace MediaOrcestrator.Domain;
 
-public class Orcestrator(PluginManager pluginManager, LiteDatabase db, TempManager tempManager, ILogger<Orcestrator> logger)
+public class Orcestrator(
+    PluginManager pluginManager,
+    LiteDatabase db,
+    TempManager tempManager,
+    StateManager stateManager,
+    ILogger<Orcestrator> logger)
 {
     public Dictionary<string, ISourceType> GetSourceTypes()
     {
@@ -17,9 +22,10 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, TempManag
         var sources = GetSourceTypes();
     }
 
-    public async Task GetStorageFullInfo(bool isFull, Source? filterSource = null, bool onlyNew = false)
+    public async Task GetStorageFullInfo(bool isFull, Source? filterSource = null, bool onlyNew = false, IProgress<string>? progress = null)
     {
         logger.LogInformation("Запуск процесса синхронизации {Source}...", filterSource?.TitleFull);
+        progress?.Report(filterSource != null ? $"Запуск синхронизации «{filterSource.TitleFull}»" : "Запуск полной синхронизации");
 
         var mediaCol = db.GetCollection<Media>("medias");
         //mediaCol.DeleteAll();
@@ -45,6 +51,7 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, TempManag
         }
 
         logger.LogInformation("Обнаружено {Count} элементов медиа в локальном кэше.", mediaAll.Count);
+        progress?.Report($"Загружено {mediaAll.Count} медиа из кэша");
 
         var sourceTypes = GetSourceTypes();
         var sources = GetSources();
@@ -61,15 +68,22 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, TempManag
             if (plugin == null)
             {
                 logger.LogError("Плагин для типа {TypeId} не найден.", mediaSource.TypeId);
+                progress?.Report($"Плагин для {mediaSource.TypeId} не найден");
                 return;
             }
 
+            progress?.Report($"Сбор медиа из «{mediaSource.TitleFull}»...");
             var syncMedia = plugin.GetMedia(mediaSource.Settings, isFull, cancellationToken);
             var mediaList = new List<MediaDto>();
             var foundIds = new List<string>();
             await foreach (var s in syncMedia)
             {
                 foundIds.Add(s.Id);
+                if (foundIds.Count % 25 == 0)
+                {
+                    progress?.Report($"«{mediaSource.TitleFull}»: получено {foundIds.Count}");
+                }
+
                 var foundMediaSource = cache.GetMedia(mediaSource.Id).FirstOrDefault(x => x.ExternalId == s.Id);
                 if (foundMediaSource == null)
                 {
@@ -93,6 +107,7 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, TempManag
                         providedKeys.Add(item.Key);
                         var existing = foundMediaSource.Media.Metadata
                             .FirstOrDefault(m => m.Key == item.Key && m.SourceId == mediaSource.Id);
+
                         if (existing != null)
                         {
                             existing.Value = item.Value;
@@ -108,14 +123,16 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, TempManag
 
                     foundMediaSource.Media.Metadata
                         .RemoveAll(m => m.SourceId == mediaSource.Id && !providedKeys.Contains(m.Key));
+
                     hasChange = true;
                 }
-                if (foundMediaSource.Status == MediaStatus.Missing
-                    || foundMediaSource.Status == MediaStatus.Error)
+
+                if (foundMediaSource.Status is MediaStatus.Missing or MediaStatus.Error)
                 {
                     foundMediaSource.Status = MediaStatus.Ok;
                     hasChange = true;
                 }
+
                 if (hasChange)
                 {
                     mediaCol.Update(foundMediaSource!.Media);
@@ -178,9 +195,18 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, TempManag
                     logger.LogWarning("Пропуск пометки «пропало» для источника {Source}: список полученных элементов пуст", mediaSource.TitleFull);
                 }
             }
+
+            var sourcesCol = db.GetCollection<Source>("sources");
+            var dbSource = sourcesCol.FindById(mediaSource.Id);
+            if (dbSource != null)
+            {
+                dbSource.LastSyncedAt = DateTime.UtcNow;
+                sourcesCol.Update(dbSource);
+            }
         });
 
         logger.LogInformation("Синхронизация успешно завершена.");
+        progress?.Report("Синхронизация завершена");
     }
 
     public List<Media> GetMedias()
@@ -319,6 +345,29 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, TempManag
         db.GetCollection<Media>("medias").Delete(media.Id);
     }
 
+    public void MergeMedia(Media target, IReadOnlyList<Media> toRemove)
+    {
+        var collection = db.GetCollection<Media>("medias");
+        db.BeginTrans();
+
+        try
+        {
+            collection.Update(target);
+
+            foreach (var media in toRemove)
+            {
+                collection.Delete(media.Id);
+            }
+
+            db.Commit();
+        }
+        catch
+        {
+            db.Rollback();
+            throw;
+        }
+    }
+
     public List<Source> GetSources()
     {
         var sources = db.GetCollection<Source>("sources").FindAll().ToList();
@@ -335,17 +384,22 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, TempManag
             source.Type = sourceType;
 
             source.Settings["_system_temp_path"] = tempManager.TempPath;
+
+            if (sourceType is IAuthenticatable)
+            {
+                source.Settings["_system_state_path"] = stateManager.GetSourceStatePath(source.Id);
+            }
         }
 
         return sources;
     }
 
-    public void AddSource(string typeId, Dictionary<string, string> settings)
+    public void AddSource(string sourceId, string typeId, Dictionary<string, string> settings)
     {
         db.GetCollection<Source>("sources")
             .Insert(new Source
             {
-                Id = Guid.NewGuid().ToString(),
+                Id = sourceId,
                 TypeId = typeId,
                 Settings = settings,
             });
@@ -354,6 +408,9 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, TempManag
     public void RemoveSource(string sourceId)
     {
         db.GetCollection<Source>("sources").Delete(sourceId);
+
+        // TODO: По идее нужно, но для отладки неудобно
+        //stateManager.CleanSource(sourceId);
     }
 
     public void UpdateSource(Source source)
@@ -387,19 +444,51 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, TempManag
 
     public void AddRelation(Source from, Source to)
     {
+        AddRelation(from.Id, to.Id);
+    }
+
+    public void AddRelation(string fromId, string toId)
+    {
         db.GetCollection<SourceSyncRelation>("source_relations")
             .Insert(new SourceSyncRelation
             {
-                FromId = from.Id,
-                ToId = to.Id,
+                FromId = fromId,
+                ToId = toId,
             });
     }
 
     public void RemoveRelation(Source from, Source to)
     {
-        // TODO: Подумать
+        RemoveRelation(from.Id, to.Id);
+    }
+
+    public void RemoveRelation(string fromId, string toId)
+    {
         db.GetCollection<SourceSyncRelation>("source_relations")
-            .DeleteMany(x => x.FromId == from.Id && x.ToId == to.Id);
+            .DeleteMany(x => x.FromId == fromId && x.ToId == toId);
+    }
+
+    public void InvertRelation(string fromId, string toId)
+    {
+        db.BeginTrans();
+
+        try
+        {
+            var collection = db.GetCollection<SourceSyncRelation>("source_relations");
+            collection.DeleteMany(x => x.FromId == fromId && x.ToId == toId);
+            collection.Insert(new SourceSyncRelation
+            {
+                FromId = toId,
+                ToId = fromId,
+            });
+
+            db.Commit();
+        }
+        catch
+        {
+            db.Rollback();
+            throw;
+        }
     }
 
     public void ClearCollection(string collectionName)
@@ -433,6 +522,123 @@ public class Orcestrator(PluginManager pluginManager, LiteDatabase db, TempManag
         logger.LogInformation("========== Очистка БД завершена успешно ==========");
         logger.LogInformation("Всего удалено записей: {TotalCount} (медиа: {MediaCount}, связи: {RelationCount}, источники: {SourceCount})",
             mediaCount + relationCount + sourceCount, mediaCount, relationCount, sourceCount);
+    }
+
+    // TODO: Сомнительно
+    public async Task<Media> PublishMediaAsync(
+        Source source,
+        string title,
+        string? description,
+        string videoFilePath,
+        string? coverFilePath,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentException.ThrowIfNullOrWhiteSpace(title);
+        ArgumentException.ThrowIfNullOrWhiteSpace(videoFilePath);
+
+        if (!File.Exists(videoFilePath))
+        {
+            throw new FileNotFoundException("Файл видео не найден", videoFilePath);
+        }
+
+        if (!string.IsNullOrEmpty(coverFilePath) && !File.Exists(coverFilePath))
+        {
+            throw new FileNotFoundException("Файл обложки не найден", coverFilePath);
+        }
+
+        if (source.Type == null)
+        {
+            throw new InvalidOperationException($"Источник «{source.TitleFull}» не инициализирован (Type == null).");
+        }
+
+        var mediaId = Guid.NewGuid().ToString();
+        var tempDir = Path.Combine(tempManager.TempPath, mediaId);
+        Directory.CreateDirectory(tempDir);
+
+        logger.LogInformation("Публикация «{Title}» в источник {Source}. MediaId: {MediaId}", title, source.TitleFull, mediaId);
+
+        var videoExt = Path.GetExtension(videoFilePath);
+        var tempVideoPath = Path.Combine(tempDir, "media" + (string.IsNullOrEmpty(videoExt) ? ".mp4" : videoExt));
+        File.Copy(videoFilePath, tempVideoPath, true);
+
+        string? tempCoverPath = null;
+        if (!string.IsNullOrEmpty(coverFilePath))
+        {
+            var coverExt = Path.GetExtension(coverFilePath);
+            tempCoverPath = Path.Combine(tempDir, "cover" + (string.IsNullOrEmpty(coverExt) ? ".jpg" : coverExt));
+            File.Copy(coverFilePath, tempCoverPath, true);
+        }
+
+        var dto = new MediaDto
+        {
+            Id = mediaId,
+            Title = title,
+            Description = description ?? string.Empty,
+            TempDataPath = tempVideoPath,
+        };
+
+        if (tempCoverPath != null)
+        {
+            dto.TempPreviewPath = tempCoverPath;
+        }
+
+        UploadResult uploadResult;
+        try
+        {
+            uploadResult = await source.Type.UploadAsync(dto, source.Settings, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            tempManager.CleanMedia(mediaId);
+            throw;
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "Ошибка при публикации «{Title}» в {Source}", title, source.TitleFull);
+            tempManager.CleanMedia(mediaId);
+            throw;
+        }
+
+        if (string.IsNullOrEmpty(uploadResult.Id))
+        {
+            tempManager.CleanMedia(mediaId);
+            throw new InvalidOperationException($"Публикация в {source.TitleFull} не вернула идентификатор: {uploadResult.Status.Text} {uploadResult.Message}");
+        }
+
+        var mediaCollection = db.GetCollection<Media>("medias");
+        var existingLinks = mediaCollection.FindAll()
+            .SelectMany(x => x.Sources ?? [])
+            .Where(x => x.SourceId == source.Id)
+            .ToList();
+
+        var sortNumber = existingLinks.Select(x => x.SortNumber).DefaultIfEmpty(0).Max() + 1;
+
+        var media = new Media
+        {
+            Id = mediaId,
+            Title = title,
+            Description = description ?? string.Empty,
+            Sources = [],
+        };
+
+        var link = new MediaSourceLink
+        {
+            MediaId = mediaId,
+            Media = media,
+            SourceId = source.Id,
+            ExternalId = uploadResult.Id!,
+            Status = uploadResult.Status.Id,
+            SortNumber = sortNumber,
+        };
+
+        media.Sources.Add(link);
+        mediaCollection.Insert(media);
+
+        tempManager.CleanMedia(mediaId);
+
+        logger.LogInformation("Публикация «{Title}» завершена. ExternalId: {ExternalId}", title, uploadResult.Id);
+        return media;
     }
 
     public async Task TransferByRelation(Media media, SourceSyncRelation rel, CancellationToken cancellationToken = default)

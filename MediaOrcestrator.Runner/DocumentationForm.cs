@@ -1,73 +1,96 @@
 using Markdig;
+using System.Reflection;
 
 namespace MediaOrcestrator.Runner;
 
-public sealed class DocumentationForm : Form
+public partial class DocumentationForm : Form
 {
-    private readonly WebBrowser _webBrowser;
+    private const string TemplateResourceName = "MediaOrcestrator.Runner.Resources.docs.template.html";
 
-    public DocumentationForm(string title, string markdownContent, string basePath)
+    private static readonly MarkdownPipeline _pipeline = new MarkdownPipelineBuilder()
+        .UseAdvancedExtensions()
+        .Build();
+
+    private static readonly string _htmlTemplate = LoadTemplate();
+
+    private readonly string _markdownContent = "";
+    private readonly string _basePath = "";
+
+    public DocumentationForm()
     {
-        Text = title;
-        Size = new(850, 650);
-        StartPosition = FormStartPosition.CenterParent;
-        MinimumSize = new(400, 300);
-
-        _webBrowser = new()
-        {
-            Dock = DockStyle.Fill,
-            IsWebBrowserContextMenuEnabled = false,
-            ScriptErrorsSuppressed = true,
-        };
-
-        Controls.Add(_webBrowser);
-
-        var html = RenderMarkdown(markdownContent, basePath);
-        _webBrowser.DocumentText = html;
+        InitializeComponent();
     }
 
-    private static string RenderMarkdown(string markdown, string basePath)
+    public DocumentationForm(string title, string markdownContent, string basePath) : this()
     {
-        var pipeline = new MarkdownPipelineBuilder()
-            .UseAdvancedExtensions()
-            .Build();
+        Text = title;
+        _markdownContent = markdownContent;
+        _basePath = basePath;
+    }
 
-        var htmlBody = Markdown.ToHtml(markdown, pipeline);
-        var baseUri = new Uri(basePath + Path.DirectorySeparatorChar).AbsoluteUri;
+    public static void ShowAppDoc(IWin32Window? owner, string title, string fileName)
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, "docs", fileName);
+        ShowForFile(owner, title, path);
+    }
 
-        return $$"""
-                 <!DOCTYPE html>
-                 <html>
-                 <head>
-                     <meta charset="utf-8" />
-                     <base href="{{baseUri}}" />
-                     <style>
-                         body {
-                             font-family: 'Segoe UI', sans-serif;
-                             font-size: 14px;
-                             line-height: 1.6;
-                             color: #333;
-                             max-width: 780px;
-                             margin: 0 auto;
-                             padding: 20px;
-                         }
-                         h1 { font-size: 22px; border-bottom: 1px solid #ddd; padding-bottom: 8px; }
-                         h2 { font-size: 18px; margin-top: 24px; }
-                         h3 { font-size: 15px; }
-                         code { background: #f4f4f4; padding: 2px 5px; border-radius: 3px; font-size: 13px; }
-                         pre { background: #f4f4f4; padding: 12px; border-radius: 5px; overflow-x: auto; }
-                         pre code { padding: 0; background: none; }
-                         table { border-collapse: collapse; width: 100%; margin: 12px 0; }
-                         th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-                         th { background: #f8f8f8; font-weight: 600; }
-                         img { max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px; margin: 8px 0; }
-                         a { color: #0066cc; }
-                     </style>
-                 </head>
-                 <body>
-                 {{htmlBody}}
-                 </body>
-                 </html>
-                 """;
+    public static void ShowForFile(IWin32Window? owner, string title, string markdownPath)
+    {
+        if (!File.Exists(markdownPath))
+        {
+            MessageBox.Show($"Файл справки не найден: {markdownPath}",
+                "Справка",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+
+            return;
+        }
+
+        string markdown;
+
+        try
+        {
+            markdown = File.ReadAllText(markdownPath);
+        }
+        catch (IOException ex)
+        {
+            MessageBox.Show($"Не удалось прочитать файл справки: {ex.Message}",
+                "Справка",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+
+            return;
+        }
+
+        var basePath = Path.GetDirectoryName(Path.GetFullPath(markdownPath)) ?? AppContext.BaseDirectory;
+        var form = new DocumentationForm(title, markdown, basePath);
+        form.FormClosed += (_, _) => form.Dispose();
+        form.Show(owner);
+    }
+
+    internal static string RenderMarkdown(string markdown, string basePath)
+    {
+        var htmlBody = Markdown.ToHtml(markdown, _pipeline);
+        var baseUri = string.IsNullOrEmpty(basePath)
+            ? new Uri(AppContext.BaseDirectory).AbsoluteUri
+            : new Uri(Path.GetFullPath(basePath) + Path.DirectorySeparatorChar).AbsoluteUri;
+
+        return _htmlTemplate
+            .Replace("{{baseUri}}", baseUri)
+            .Replace("{{body}}", htmlBody);
+    }
+
+    private void DocumentationForm_Load(object? sender, EventArgs e)
+    {
+        uiWebBrowser.DocumentText = RenderMarkdown(_markdownContent, _basePath);
+    }
+
+    private static string LoadTemplate()
+    {
+        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(TemplateResourceName)
+                           ?? throw new InvalidOperationException($"Не найден embedded ресурс {TemplateResourceName}");
+
+        using var reader = new StreamReader(stream);
+        return reader.ReadToEnd();
     }
 }

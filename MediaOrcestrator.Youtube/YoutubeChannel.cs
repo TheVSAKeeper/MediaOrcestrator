@@ -55,14 +55,6 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger, IToolPathProvider to
         },
         new()
         {
-            Key = "auth_state_path",
-            IsRequired = true,
-            Title = "путь до фаила куки",
-            Description = "JSON файл с cookies и CSRF токеном для авторизации на Youtube (для 18+ видео)",
-            Type = SettingType.FilePath,
-        },
-        new()
-        {
             Key = "speed_limit",
             IsRequired = false,
             Title = "ограничение скорости скачивания (Мбит/с)",
@@ -95,13 +87,6 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger, IToolPathProvider to
             IsRequired = false,
             Title = "OAuth Client Secret",
             Description = "Client Secret из Google Cloud Console (необходим для загрузки видео)",
-        },
-        new()
-        {
-            Key = "token_path",
-            IsRequired = false,
-            Title = "путь к файлу OAuth-токена",
-            Description = "JSON файл для хранения OAuth-токена YouTube API",
         },
         new()
         {
@@ -220,7 +205,7 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger, IToolPathProvider to
 
         if (!YoutubeAuthService.IsConfigured(settings))
         {
-            logger.LogError("YoutubeExplode не работает, а OAuth не настроен. Укажите client_id, client_secret и token_path для fallback через YouTube API");
+            logger.LogError("YoutubeExplode не работает, а OAuth не настроен. Укажите client_id и client_secret для fallback через YouTube API");
             yield break;
         }
 
@@ -292,7 +277,12 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger, IToolPathProvider to
             ? Path.GetDirectoryName(denoPath)
             : null;
 
-        var cookiePath = settings.GetValueOrDefault("auth_state_path", "");
+        var cookiePath = GetAuthStatePath(settings);
+        if (!File.Exists(cookiePath))
+        {
+            cookiePath = "";
+        }
+
         var ytDlp = new YtDlp(ytDlpPath, ffmpegPath, jsRuntime, jsRuntimeDir, cookiePath);
 
         object progressLock = new();
@@ -382,13 +372,7 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger, IToolPathProvider to
 
     public async Task AuthenticateAsync(Dictionary<string, string> settings, IAuthUI ui, CancellationToken ct)
     {
-        var authStatePath = settings.GetValueOrDefault("auth_state_path");
-        if (string.IsNullOrEmpty(authStatePath))
-        {
-            await ui.ShowMessageAsync("Укажите путь к файлу куки в настройках.");
-            return;
-        }
-
+        var authStatePath = GetAuthStatePath(settings);
         var tempJsonPath = authStatePath + ".tmp.json";
 
         try
@@ -434,9 +418,8 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger, IToolPathProvider to
 
     private static bool HasValidCookieFile(Dictionary<string, string> settings)
     {
-        var authStatePath = settings.GetValueOrDefault("auth_state_path");
-
-        if (string.IsNullOrEmpty(authStatePath) || !File.Exists(authStatePath))
+        var authStatePath = GetAuthStatePath(settings);
+        if (!File.Exists(authStatePath))
         {
             return false;
         }
@@ -450,6 +433,11 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger, IToolPathProvider to
         {
             return false;
         }
+    }
+
+    private static string GetAuthStatePath(Dictionary<string, string> settings)
+    {
+        return Path.Combine(settings["_system_state_path"], "auth_state");
     }
 
     private static void ConvertPlaywrightToNetscape(string playwrightJsonPath, string netscapePath)

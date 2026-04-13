@@ -30,14 +30,6 @@ public class RutubeChannel(
     [
         new()
         {
-            Key = "auth_state_path",
-            IsRequired = true,
-            Title = "путь до фаила куки",
-            Description = "JSON файл с cookies и CSRF токеном для авторизации на RuTube",
-            Type = SettingType.FilePath,
-        },
-        new()
-        {
             Key = "category_id",
             IsRequired = true,
             Title = "идентификатор категории",
@@ -143,9 +135,9 @@ public class RutubeChannel(
         var ffmpegPath = toolPathProvider.GetToolPath(WellKnownTools.FFmpeg)
                          ?? throw new InvalidOperationException("ffmpeg не установлен. Установите через панель управления инструментами.");
 
-        var authStatePath = settings.GetValueOrDefault("auth_state_path", "");
+        var authStatePath = GetAuthStatePath(settings);
         var netscapeCookiePath = "";
-        if (!string.IsNullOrEmpty(authStatePath) && File.Exists(authStatePath))
+        if (File.Exists(authStatePath))
         {
             netscapeCookiePath = Path.Combine(Path.GetDirectoryName(finalPath)!, "cookies.txt");
             ConvertPlaywrightToNetscape(authStatePath, netscapeCookiePath);
@@ -355,8 +347,8 @@ public class RutubeChannel(
     // TODO: Придумать более умный механизм
     public bool IsAuthenticated(Dictionary<string, string> settings)
     {
-        var authStatePath = settings.GetValueOrDefault("auth_state_path");
-        if (string.IsNullOrEmpty(authStatePath) || !File.Exists(authStatePath))
+        var authStatePath = GetAuthStatePath(settings);
+        if (!File.Exists(authStatePath))
         {
             return false;
         }
@@ -380,19 +372,18 @@ public class RutubeChannel(
 
     public async Task AuthenticateAsync(Dictionary<string, string> settings, IAuthUI ui, CancellationToken ct)
     {
-        var authStatePath = settings.GetValueOrDefault("auth_state_path");
-        if (string.IsNullOrEmpty(authStatePath))
-        {
-            await ui.ShowMessageAsync("Укажите путь к файлу куки в настройках.");
-            return;
-        }
-
+        var authStatePath = GetAuthStatePath(settings);
         var result = await ui.OpenBrowserAsync("https://studio.rutube.ru/", authStatePath);
         if (result != null)
         {
             logger.LogInformation("RuTube: авторизация сохранена в {Path}", result);
             await ui.ShowMessageAsync("Авторизация RuTube сохранена!");
         }
+    }
+
+    private static string GetAuthStatePath(Dictionary<string, string> settings)
+    {
+        return Path.Combine(settings["_system_state_path"], "auth_state");
     }
 
     private static MediaDto CreateMediaDto(IRutubeVideoInfo video)
@@ -483,15 +474,10 @@ public class RutubeChannel(
 
     private async Task<RutubeService> CreateRutubeServiceAsync(Dictionary<string, string> settings)
     {
-        var authStatePath = settings.GetValueOrDefault("auth_state_path");
-        if (string.IsNullOrEmpty(authStatePath))
-        {
-            throw new InvalidOperationException("Путь к файлу аутентификации RuTube не указан в настройках.");
-        }
-
+        var authStatePath = GetAuthStatePath(settings);
         if (!File.Exists(authStatePath))
         {
-            throw new FileNotFoundException($"Файл аутентификации RuTube не найден: {authStatePath}", authStatePath);
+            throw new FileNotFoundException($"Файл аутентификации RuTube не найден: {authStatePath}. Выполните авторизацию.", authStatePath);
         }
 
         logger.LogDebug("Чтение данных аутентификации из: {AuthStatePath}", authStatePath);

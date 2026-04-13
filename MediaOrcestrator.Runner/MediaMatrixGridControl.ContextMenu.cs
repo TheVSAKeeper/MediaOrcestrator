@@ -10,6 +10,12 @@ namespace MediaOrcestrator.Runner;
 // TODO: Костыль чтобы не передавать зависимости через конструктор контрола
 public partial class MediaMatrixGridControl
 {
+    // TODO: BatchSyncMaxAttempts урезан с дефолтных 50 из-за того, что RunBatchOperationAsync
+    // обходит список последовательно - 50 попыток × backoff до часа превратили бы один битый
+    // элемент в многодневную заморозку.
+    // Нормальное решение - параллелить батч или подвесить UI-кнопку отмены.
+    private const int BatchSyncMaxAttempts = 5;
+
     private static Bitmap? _syncIcon;
     private static Bitmap? _copyIcon;
     private static Bitmap? _deleteIcon;
@@ -377,6 +383,7 @@ public partial class MediaMatrixGridControl
                     try
                     {
                         _logger?.LogInformation("Запуск синхронизации медиа '{Title}' из {From} в {To}", media.Title, rel.From.TitleFull, rel.To.TitleFull);
+                        // TODO: одиночная синхронизация пока идёт мимо SyncRetryRunner.
                         await _orcestrator.TransferByRelation(media, rel);
                         _logger?.LogInformation("Синхронизация медиа '{Title}' успешно завершена", media.Title);
                     }
@@ -541,7 +548,7 @@ public partial class MediaMatrixGridControl
 
         return RunBatchOperationAsync("Синхронизировано", "Пакетная синхронизация завершена с ошибками", mediaList, async media =>
         {
-            await _orcestrator!.TransferByRelation(media, rel);
+            await _retryRunner!.RunAsync(media, rel, maxAttempts: BatchSyncMaxAttempts);
             _logger?.LogInformation("Синхронизировано: '{Title}'", media.Title);
         });
     }
@@ -581,7 +588,7 @@ public partial class MediaMatrixGridControl
 
     private void HandleBatchPreview(List<Media> selectedMedia)
     {
-        using var form = new BatchPreviewForm(selectedMedia, _batchPreviewService!);
+        using var form = new BatchPreviewForm(selectedMedia, _batchPreviewService!, _coverGenerator!, _coverTemplateStore!);
 
         if (form.ShowDialog(this) == DialogResult.OK)
         {

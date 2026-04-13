@@ -20,7 +20,7 @@ public sealed class YoutubeAuthService(ILogger logger)
     {
         return !string.IsNullOrEmpty(settings.GetValueOrDefault("client_id"))
                && !string.IsNullOrEmpty(settings.GetValueOrDefault("client_secret"))
-               && !string.IsNullOrEmpty(settings.GetValueOrDefault("token_path"));
+               && !string.IsNullOrEmpty(settings.GetValueOrDefault("_system_state_path"));
     }
 
     public static bool HasCachedToken(Dictionary<string, string> settings)
@@ -30,8 +30,7 @@ public sealed class YoutubeAuthService(ILogger logger)
             return false;
         }
 
-        var tokenPath = settings["token_path"];
-        var tokenDir = Path.GetDirectoryName(Path.GetFullPath(tokenPath))!;
+        var tokenDir = GetTokenDir(settings);
 
         return Directory.Exists(tokenDir)
                && Directory.EnumerateFiles(tokenDir, "Google.Apis.Auth.OAuth2.Responses.*").Any();
@@ -45,11 +44,10 @@ public sealed class YoutubeAuthService(ILogger logger)
         var clientSecret = settings.GetValueOrDefault("client_secret")
                            ?? throw new InvalidOperationException("Настройка 'client_secret' не задана. Укажите OAuth Client Secret из Google Cloud Console.");
 
-        var tokenPath = settings.GetValueOrDefault("token_path")
-                        ?? throw new InvalidOperationException("Настройка 'token_path' не задана. Укажите путь для сохранения OAuth-токена.");
+        var tokenDir = GetTokenDir(settings);
+        Directory.CreateDirectory(tokenDir);
 
-        var settingsKey = $"{clientId}:{tokenPath}";
-        var tokenDir = Path.GetDirectoryName(Path.GetFullPath(tokenPath))!;
+        var settingsKey = $"{clientId}:{tokenDir}";
 
         UserCredential credential;
 
@@ -59,7 +57,7 @@ public sealed class YoutubeAuthService(ILogger logger)
         }
         else
         {
-            logger.LogDebug("Авторизация YouTube API. Токен: {TokenPath}", tokenPath);
+            logger.LogDebug("Авторизация YouTube API. Токен: {TokenDir}", tokenDir);
 
             var clientSecrets = new ClientSecrets
             {
@@ -95,5 +93,10 @@ public sealed class YoutubeAuthService(ILogger logger)
             HttpClientInitializer = credential,
             ApplicationName = settings.GetValueOrDefault("app_name", "MediaOrcestrator"),
         });
+    }
+
+    private static string GetTokenDir(Dictionary<string, string> settings)
+    {
+        return Path.Combine(settings["_system_state_path"], "oauth");
     }
 }

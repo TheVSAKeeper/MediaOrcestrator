@@ -1,4 +1,5 @@
 ﻿using MediaOrcestrator.Domain;
+using MediaOrcestrator.Domain.Merging;
 using MediaOrcestrator.Modules;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -12,6 +13,9 @@ public partial class MainForm : Form
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<MainForm> _logger;
     private readonly AppUpdateManager _updateManager;
+    private readonly Dictionary<string, AuditSourceRow> _auditRows = new();
+    private readonly PublishControl? _publishControl;
+    private bool _isSyncRunning;
 
     public MainForm(Orcestrator orcestrator, IServiceProvider serviceProvider, ILogger<MainForm> logger, RichTextBox logControl, AppUpdateManager updateManager)
     {
@@ -22,19 +26,35 @@ public partial class MainForm : Form
 
         InitializeComponent();
         uiLogsTabPage.Controls.Add(logControl);
+
+        // TODO: Сомнительно
+        _publishControl = _serviceProvider.GetRequiredService<PublishControl>();
+        _publishControl.Dock = DockStyle.Fill;
+        _publishControl.MediaPublished += OnMediaPublished;
+        uiPublishTabPage.Controls.Add(_publishControl);
     }
 
     private void MainForm_Load(object sender, EventArgs e)
     {
         Text = $"Медиа оркестратор v{_updateManager.CurrentVersion}";
+        uiAuditSourcesPanel.SizeChanged += (_, _) => ResizeAuditRows();
+        uiRelationsGraphControl.InvertRequested += OnGraphInvertRequested;
+        uiRelationsGraphControl.DeleteRequested += OnGraphDeleteRequested;
+        uiRelationsGraphControl.CreateRequested += OnGraphCreateRequested;
+        uiRelationsGraphControl.RefreshRequested += (_, _) => DrawRelations();
         DrawSources();
         DrawRelations();
         // TODO: SetZalupaV2
-        uiMediaMatrixGridControl.Initialize(_orcestrator,
+        uiMediaMatrixGridControl.Initialize(new(_orcestrator,
+            _serviceProvider.GetRequiredService<SyncRetryRunner>(),
             _serviceProvider.GetRequiredService<ILogger<MediaMatrixGridControl>>(),
             _serviceProvider.GetRequiredService<SettingsManager>(),
             _serviceProvider.GetRequiredService<BatchRenameService>(),
-            _serviceProvider.GetRequiredService<BatchPreviewService>());
+            _serviceProvider.GetRequiredService<BatchPreviewService>(),
+            _serviceProvider.GetRequiredService<CoverGenerator>(),
+            _serviceProvider.GetRequiredService<CoverTemplateStore>(),
+            _serviceProvider.GetRequiredService<MediaMergeService>(),
+            _serviceProvider.GetRequiredService<ILoggerFactory>()));
 
         uiMediaMatrixGridControl.RefreshData();
 
@@ -44,7 +64,10 @@ public partial class MainForm : Form
         }
 
         var planner = _serviceProvider.GetRequiredService<SyncPlanner>();
-        uiSyncTreeControl.Initialize(planner, _orcestrator, _serviceProvider.GetRequiredService<ILogger<SyncTreeControl>>());
+        uiSyncTreeControl.Initialize(planner,
+            _orcestrator,
+            _serviceProvider.GetRequiredService<SyncRetryRunner>(),
+            _serviceProvider.GetRequiredService<ILogger<SyncTreeControl>>());
 
         CheckToolUpdatesInBackground();
         CheckAppUpdateInBackground();
@@ -52,17 +75,22 @@ public partial class MainForm : Form
 
     private async void uiSyncButton_Click(object sender, EventArgs e)
     {
-        await RunSyncAsync("Пользователь нажал кнопку полной синхронизации.", true);
+        await RunSyncAsync(null, AuditSyncMode.Full);
     }
 
     private async void uiQuickSyncButton_Click(object sender, EventArgs e)
     {
-        await RunSyncAsync("Пользователь нажал кнопку быстрой синхронизации.", false, GetSelectedSyncSource());
+        await RunSyncAsync(null, AuditSyncMode.Quick);
     }
 
     private async void uiSyncNewButton_Click(object sender, EventArgs e)
     {
-        await RunSyncAsync("Пользователь нажал кнопку синхронизации новых.", false, GetSelectedSyncSource(), true);
+        await RunSyncAsync(null, AuditSyncMode.New);
+    }
+
+    private async void OnAuditRowSyncRequested(object? sender, AuditSyncRequestedEventArgs e)
+    {
+        await RunSyncAsync(e.Source, e.Mode);
     }
 
     private void uiAddSourceButton_Click(object sender, EventArgs e)
@@ -72,8 +100,11 @@ public partial class MainForm : Form
             return;
         }
 
+        // TODO: Немного шляпная тема мне кажется
+        var newSourceId = Guid.NewGuid().ToString();
         using var settingsForm = new SourceSettingsForm();
         settingsForm.SetSettings(selectedPlugin.SettingsKeys, selectedPlugin, _logger);
+        settingsForm.SetSystemContext(_serviceProvider.GetRequiredService<StateManager>(), newSourceId);
         if (settingsForm.ShowDialog() != DialogResult.OK || settingsForm.Settings == null)
         {
             return;
@@ -85,7 +116,7 @@ public partial class MainForm : Form
             return;
         }
 
-        _orcestrator.AddSource(selectedPlugin.Name, settingsForm.Settings);
+        _orcestrator.AddSource(newSourceId, selectedPlugin.Name, settingsForm.Settings);
         DrawSources();
     }
 
@@ -227,43 +258,162 @@ public partial class MainForm : Form
         form.ShowDialog(this);
     }
 
+    private void uiOpenSettingsButton_Click(object sender, EventArgs e)
+    {
+        var settingsManager = _serviceProvider.GetRequiredService<SettingsManager>();
+        using var form = new SettingsForm();
+        form.SetSettingsManager(settingsManager);
+
+        if (form.ShowDialog(this) != DialogResult.OK)
+        {
+            return;
+        }
+
+        if (form.RestartRequested)
+        {
+            Application.Restart();
+        }
+    }
+
     private void uiCheckUpdatesButton_Click(object? sender, EventArgs e)
     {
         CheckAppUpdateInBackground();
     }
 
-    private Source? GetSelectedSyncSource()
+    private void uiReportIssueButton_Click(object? sender, EventArgs e)
     {
-        foreach (var control in uiSyncSourcePanel.Controls)
-        {
-            if (control is CheckBox { Checked: true, Tag: Source source })
-            {
-                return source;
-            }
-        }
-
-        return null;
+        var errorReportService = _serviceProvider.GetRequiredService<ErrorReportService>();
+        using var form = new ErrorReportForm(errorReportService);
+        form.ShowDialog(this);
     }
 
-    private async Task RunSyncAsync(string logMessage, bool isFull, Source? filterSource = null, bool onlyNew = false)
+    private void OnGraphInvertRequested(object? sender, RelationGraphEdgeEventArgs e)
     {
-        _logger.LogInformation(logMessage);
-        uiSyncButton.Enabled = false;
+        _orcestrator.InvertRelation(e.FromSourceId, e.ToSourceId);
+        DrawRelations();
+    }
+
+    private void OnGraphCreateRequested(object? sender, RelationGraphEdgeEventArgs e)
+    {
+        _orcestrator.AddRelation(e.FromSourceId, e.ToSourceId);
+        DrawRelations();
+    }
+
+    private void OnGraphDeleteRequested(object? sender, RelationGraphEdgeEventArgs e)
+    {
+        var confirm = MessageBox.Show("Удалить выбранную связь?",
+            "Подтверждение",
+            MessageBoxButtons.OKCancel,
+            MessageBoxIcon.Question);
+
+        if (confirm != DialogResult.OK)
+        {
+            return;
+        }
+
+        _orcestrator.RemoveRelation(e.FromSourceId, e.ToSourceId);
+        DrawRelations();
+    }
+
+    private async Task RunSyncAsync(Source? filterSource, AuditSyncMode mode)
+    {
+        if (_isSyncRunning)
+        {
+            return;
+        }
+
+        var (isFull, onlyNew) = mode switch
+        {
+            AuditSyncMode.Full => (true, false),
+            AuditSyncMode.Quick => (false, false),
+            AuditSyncMode.New => (false, true),
+            _ => (false, false),
+        };
+
+        var modeName = mode switch
+        {
+            AuditSyncMode.Full => "полной",
+            AuditSyncMode.Quick => "быстрой",
+            AuditSyncMode.New => "новых",
+            _ => "",
+        };
+
+        var scope = filterSource != null ? $"источника «{filterSource.TitleFull}»" : "всех источников";
+        _logger.LogInformation("Запуск {Mode} синхронизации {Scope}.", modeName, scope);
+
+        _isSyncRunning = true;
+        SetAllSyncControlsBusy(true);
+
+        var targetRow = filterSource != null && _auditRows.TryGetValue(filterSource.Id, out var row) ? row : null;
+        targetRow?.ReportProgress("Старт...");
+        if (targetRow == null)
+        {
+            uiBulkProgressLabel.Text = "Старт...";
+        }
+
+        var progress = new Progress<string>(message =>
+        {
+            if (targetRow != null)
+            {
+                targetRow.ReportProgress(message);
+            }
+            else
+            {
+                uiBulkProgressLabel.Text = message;
+            }
+        });
+
         try
         {
-            await _orcestrator.GetStorageFullInfo(isFull, filterSource, onlyNew);
+            await _orcestrator.GetStorageFullInfo(isFull, filterSource, onlyNew, progress);
             _logger.LogInformation("Синхронизация через UI завершена.");
-            DrawSources();
             uiMediaMatrixGridControl.RefreshData();
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Ошибка при синхронизации через UI.");
+            if (targetRow != null)
+            {
+                targetRow.ReportProgress($"Ошибка: {ex.Message}");
+            }
+            else
+            {
+                uiBulkProgressLabel.Text = $"Ошибка: {ex.Message}";
+            }
+
             MessageBox.Show($"Ошибка при синхронизации: {ex.Message}");
         }
         finally
         {
-            uiSyncButton.Enabled = true;
+            _isSyncRunning = false;
+            SetAllSyncControlsBusy(false);
+            DrawSources();
+        }
+    }
+
+    private void SetAllSyncControlsBusy(bool busy)
+    {
+        uiSyncButton.Enabled = !busy;
+        uiQuickSyncButton.Enabled = !busy;
+        uiSyncNewButton.Enabled = !busy;
+
+        foreach (var row in _auditRows.Values)
+        {
+            row.SetBusy(busy);
+        }
+    }
+
+    private void ResizeAuditRows()
+    {
+        var width = uiAuditSourcesPanel.ClientSize.Width - 6;
+        if (width <= 0)
+        {
+            return;
+        }
+
+        foreach (var row in _auditRows.Values)
+        {
+            row.Width = width;
         }
     }
 
@@ -342,7 +492,8 @@ public partial class MainForm : Form
     {
         uiRelationFromComboBox.Items.Clear();
         uiRelationToComboBox.Items.Clear();
-        uiSyncSourcePanel.Controls.Clear();
+        uiAuditSourcesPanel.Controls.Clear();
+        _auditRows.Clear();
         uiRelationFromComboBox.DisplayMember = "TitleFull";
         uiRelationToComboBox.DisplayMember = "TitleFull";
 
@@ -381,34 +532,27 @@ public partial class MainForm : Form
             uiRelationFromComboBox.Items.Add(source);
             uiRelationToComboBox.Items.Add(source);
 
-            var toggle = new CheckBox
+            var row = new AuditSourceRow
             {
-                Text = source.TitleFull,
-                Tag = source,
-                //Appearance = Appearance.Button,
-                AutoSize = true,
-                MinimumSize = new(120, 28),
-                TextAlign = ContentAlignment.MiddleCenter,
+                Width = uiAuditSourcesPanel.ClientSize.Width - 6,
+                Margin = new(3),
             };
 
-            toggle.CheckedChanged += (s, _) =>
-            {
-                if (s is CheckBox { Checked: true } clicked)
-                {
-                    foreach (var other in uiSyncSourcePanel.Controls.OfType<CheckBox>())
-                    {
-                        if (other != clicked)
-                        {
-                            other.Checked = false;
-                        }
-                    }
-                }
-            };
+            row.SetSource(source);
+            row.SetBusy(_isSyncRunning);
+            row.SyncRequested += OnAuditRowSyncRequested;
 
-            uiSyncSourcePanel.Controls.Add(toggle);
+            uiAuditSourcesPanel.Controls.Add(row);
+            _auditRows[source.Id] = row;
         }
 
         DrawRelations();
+        _publishControl?.ReloadSources();
+    }
+
+    private void OnMediaPublished(object? sender, EventArgs e)
+    {
+        uiMediaMatrixGridControl.RefreshData();
     }
 
     private async void CheckToolUpdatesInBackground()
@@ -453,45 +597,34 @@ public partial class MainForm : Form
         }
     }
 
-    private async void ShowUpdateDialog(AppUpdateInfo update)
+    private void ShowUpdateDialog(AppUpdateInfo update)
     {
-        using var infoForm = new UpdateInfoForm(update);
+        using var form = new UpdateForm(update, (progress, ct) => _updateManager.DownloadUpdateAsync(update, progress, ct));
 
-        if (infoForm.ShowDialog(this) != DialogResult.Yes)
+        switch (form.ShowDialog(this))
         {
-            return;
-        }
+            case DialogResult.OK:
+                MessageBox.Show("Обновление скачано. Приложение будет перезапущено.",
+                    "Обновление", MessageBoxButtons.OK, MessageBoxIcon.Information);
 
-        using var progressForm = new UpdateProgressForm();
-        var progress = new Progress<double>(progressForm.UpdateProgress);
+                _updateManager.ApplyUpdate(form.DownloadedZipPath!);
+                break;
 
-        progressForm.Show(this);
+            case DialogResult.Abort:
+                _logger.LogError(form.DownloadError, "Не удалось скачать обновление");
 
-        try
-        {
-            var zipPath = await Task.Run(() => _updateManager.DownloadUpdateAsync(update, progress, progressForm.CancellationToken));
+                MessageBox.Show($"""
+                                 Не удалось скачать обновление:
 
-            progressForm.Close();
+                                 {form.DownloadError?.Message}
+                                 """,
+                    "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
 
-            MessageBox.Show("Обновление скачано. Приложение будет перезапущено.",
-                "Обновление", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                break;
 
-            _updateManager.ApplyUpdate(zipPath);
-        }
-        catch (OperationCanceledException)
-        {
-            _logger.LogInformation("Скачивание обновления отменено пользователем");
-        }
-        catch (Exception ex)
-        {
-            progressForm.Close();
-            _logger.LogError(ex, "Не удалось скачать обновление");
-            MessageBox.Show($"""
-                             Не удалось скачать обновление:
-
-                             {ex.Message}
-                             """,
-                "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            case DialogResult.Cancel:
+                _logger.LogInformation("Скачивание обновления отменено пользователем");
+                break;
         }
     }
 
@@ -512,6 +645,7 @@ public partial class MainForm : Form
             control.SendToBack();
         }
 
+        uiRelationsGraphControl.SetRelations(relations);
         uiMediaMatrixGridControl.PopulateRelationsFilter();
     }
 }

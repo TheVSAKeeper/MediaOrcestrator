@@ -1,5 +1,4 @@
 ﻿using MediaOrcestrator.Domain;
-using MediaOrcestrator.Modules;
 using Microsoft.Extensions.Logging;
 
 namespace MediaOrcestrator.Runner;
@@ -13,6 +12,7 @@ public partial class SyncTreeControl : UserControl
     private readonly Dictionary<SyncIntent, TreeNode> _intentNodeMap = new();
 
     private Orcestrator? _orcestrator;
+    private SyncRetryRunner? _retryRunner;
     private SyncPlanner _planner;
     private ILogger<SyncTreeControl>? _logger;
     private List<SyncIntent>? _rootIntents;
@@ -32,10 +32,11 @@ public partial class SyncTreeControl : UserControl
         uiFilterControl.FilterChanged += (_, _) => ApplyTreeFilter();
     }
 
-    public void Initialize(SyncPlanner planner, Orcestrator orcestrator, ILogger<SyncTreeControl> logger)
+    public void Initialize(SyncPlanner planner, Orcestrator orcestrator, SyncRetryRunner retryRunner, ILogger<SyncTreeControl> logger)
     {
         // TODO: DI
         _orcestrator = orcestrator;
+        _retryRunner = retryRunner;
         _planner = planner;
         _logger = logger;
     }
@@ -188,12 +189,9 @@ public partial class SyncTreeControl : UserControl
                 var node = _intentNodeMap.GetValueOrDefault(intent);
                 UpdateStatusLabel($"Обработка: {intent.Media.Title}");
 
-                UpdateNodeState(node, IconWorking, Color.Orange,
-                    $"[В работе] {intent.From.TitleFull} -> {intent.To.TitleFull}");
+                var progress = new Progress<SyncAttemptStatus>(status => ApplyAttemptStatusToNode(intent, node, status));
 
-                LogToUi($"Выполнение: {intent.Media.Title} ({intent.From.TypeId} -> {intent.To.TypeId})");
-
-                await TransferWithRetryAsync(intent, node, _cts!.Token);
+                await _retryRunner!.RunAsync(intent.Media, intent.Relation, progress, cancellationToken: _cts!.Token);
             }, _cts.Token, (intent, ex) =>
             {
                 var node = _intentNodeMap.GetValueOrDefault(intent);
@@ -349,58 +347,65 @@ public partial class SyncTreeControl : UserControl
         }
     }
 
-    private async Task TransferWithRetryAsync(SyncIntent intent, TreeNode? node, CancellationToken ct)
+    private void ApplyAttemptStatusToNode(SyncIntent intent, TreeNode? node, SyncAttemptStatus status)
     {
-        var tryCount = 50;
-        for (var i = 1; i <= tryCount; i++)
-        {
-            try
-            {
-                await _orcestrator!.TransferByRelation(intent.Media, intent.Relation, ct);
-                ct.ThrowIfCancellationRequested();
+        var route = $"{intent.From.TitleFull} -> {intent.To.TitleFull}";
 
-                UpdateNodeState(node, IconOk, Color.Green, $"[OK] {intent.From.TitleFull} -> {intent.To.TitleFull}");
+        switch (status.Kind)
+        {
+            case SyncAttemptKind.Started:
+                var startedLabel = status.AttemptNumber > 1
+                    ? $"[В работе, попытка {status.AttemptNumber}/{status.MaxAttempts}] {route}"
+                    : $"[В работе] {route}";
+
+                UpdateNodeState(node, IconWorking, Color.Orange, startedLabel);
+
+                if (status.AttemptNumber == 1)
+                {
+                    LogToUi($"Выполнение: {intent.Media.Title} ({intent.From.TypeId} -> {intent.To.TypeId})");
+                }
+
+                break;
+
+            case SyncAttemptKind.Succeeded:
+                UpdateNodeState(node, IconOk, Color.Green, $"[OK] {route}");
+
                 if (node != null)
                 {
                     node.Checked = false;
                 }
 
                 LogToUi($"[Успех] {intent.Media.Title} передан в {intent.To.Title}", Color.LightGreen);
-                return;
-            }
-            catch (NonRetriableException ex)
-            {
-                LogToUi($"[Не ретраим] {intent.Media.Title}: {ex.Message}", Color.Red);
-                throw;
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                if (i == tryCount)
-                {
-                    UpdateNodeState(node, IconError, Color.Red, $"[Ошибка] {intent.From.TitleFull} -> {intent.To.TitleFull}");
-                    throw;
-                }
+                break;
 
-                _logger!.LogError(ex, "Ошибка при выполнении синхронизации для {Intent}", intent);
-                LogToUi($"Ошибка для {intent.Media.Title}: {ex.Message}", Color.Red);
-                var nextTryDelay = i switch
-                {
-                    1 => TimeSpan.FromMinutes(1),
-                    <= 3 => TimeSpan.FromMinutes(5),
-                    <= 8 => TimeSpan.FromMinutes(30),
-                    _ => TimeSpan.FromHours(1),
-                };
+            case SyncAttemptKind.FailedRetrying:
+                var nextAttempt = status.AttemptNumber + 1;
+                var delayMinutes = status.NextDelay?.TotalMinutes ?? 0;
+                var nextAt = status.NextAttemptAt?.LocalDateTime;
 
-                var nextTryDate = DateTime.Now.Add(nextTryDelay);
-                LogToUi($"Попытка №{i + 1} через {nextTryDelay.TotalMinutes} мин (запланирована на {nextTryDate:dd.MM HH:mm:ss})");
+                _logger?.LogError(status.Error, "Ошибка при выполнении синхронизации для {Intent}", intent);
+                LogToUi($"Ошибка для {intent.Media.Title}: {status.Error?.Message}", Color.Red);
+                LogToUi($"Попытка №{nextAttempt} через {delayMinutes:F0} мин (запланирована на {nextAt:dd.MM HH:mm:ss})");
+
                 UpdateNodeState(node,
                     IconError,
                     Color.Red,
-                    $"[В работе. Ожидание {nextTryDelay.TotalMinutes} мин перед попыткой {i + 1}/{tryCount}]"
-                    + $" {intent.From.TitleFull} -> {intent.To.TitleFull}");
+                    $"[В работе. Ожидание {delayMinutes:F0} мин перед попыткой {nextAttempt}/{status.MaxAttempts}] {route}");
 
-                await Task.Delay(nextTryDelay, ct);
-            }
+                break;
+
+            case SyncAttemptKind.FailedFinal:
+                UpdateNodeState(node, IconError, Color.Red, $"[Ошибка] {route}");
+                break;
+
+            case SyncAttemptKind.NonRetriable:
+                LogToUi($"[Не ретраим] {intent.Media.Title}: {status.Error?.Message}", Color.Red);
+                break;
+
+            case SyncAttemptKind.Joined:
+                UpdateNodeState(node, IconWorking, Color.Orange, $"[Ожидание: операция уже запущена] {route}");
+                LogToUi($"[Ожидание] {intent.Media.Title} — операция уже выполняется", Color.Orange);
+                break;
         }
     }
 
