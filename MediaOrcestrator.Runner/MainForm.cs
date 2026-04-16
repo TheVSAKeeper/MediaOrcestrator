@@ -54,6 +54,7 @@ public partial class MainForm : Form
             _serviceProvider.GetRequiredService<CoverGenerator>(),
             _serviceProvider.GetRequiredService<CoverTemplateStore>(),
             _serviceProvider.GetRequiredService<MediaMergeService>(),
+            _serviceProvider.GetRequiredService<ActionHolder>(),
             _serviceProvider.GetRequiredService<ILoggerFactory>()));
 
         uiMediaMatrixGridControl.RefreshData();
@@ -67,6 +68,7 @@ public partial class MainForm : Form
         uiSyncTreeControl.Initialize(planner,
             _orcestrator,
             _serviceProvider.GetRequiredService<SyncRetryRunner>(),
+            _serviceProvider.GetRequiredService<ActionHolder>(),
             _serviceProvider.GetRequiredService<ILogger<SyncTreeControl>>());
 
         CheckToolUpdatesInBackground();
@@ -647,5 +649,38 @@ public partial class MainForm : Form
 
         uiRelationsGraphControl.SetRelations(relations);
         uiMediaMatrixGridControl.PopulateRelationsFilter();
+    }
+
+    private void button1_Click(object sender, EventArgs e)
+    {
+        uiRunningActionsFlowLayoutPanel.Controls.Clear();
+        // todo shlyapa
+        var xxx = _serviceProvider.GetRequiredService<ActionHolder>();
+        var i = -1;
+        //for(var i1 = 0; i1 < 10; i1++)
+        //{
+        //    i++;
+        //    var btn = new Button(); var prg = "";
+        //    btn.Text = "фыфффффффффффффффффффффффффффффффф фыфффффффффффффффффффффффффффффффф  фыфффффффффффффффффффффффффффффффф ";
+        //    btn.Width = uiRelationFromComboBox.Width - 10;
+        //    btn.Left = 5;
+        //    btn.Top = 5 + i * (btn.Height + 5);
+        //    uiRunningActionsFlowLayoutPanel.Controls.Add(btn);
+        //}
+        foreach (var action in xxx.Actions)
+        {
+            i++;
+            var btn = new Button(); var prg = "";
+            if (action.Value.ProgressMax > 0)
+            {
+                prg = " " + action.Value.ProgressValue + "/" + action.Value.ProgressMax;
+            }
+            btn.Text = action.Value.Name + " " + action.Value.Status + prg;
+            btn.Click += (s, e) => { xxx.Cancel(action.Value.Id); };
+            btn.Width = uiRelationFromComboBox.Width - 10;
+            btn.Left = 5;
+            btn.Top = 5 + i * (btn.Height + 5);
+            uiRunningActionsFlowLayoutPanel.Controls.Add(btn);
+        }
     }
 }

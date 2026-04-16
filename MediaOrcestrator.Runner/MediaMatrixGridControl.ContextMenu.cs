@@ -1,4 +1,4 @@
-using MediaOrcestrator.Domain;
+﻿using MediaOrcestrator.Domain;
 using MediaOrcestrator.Modules;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
@@ -545,12 +545,14 @@ public partial class MediaMatrixGridControl
 
         _logger?.LogInformation("Запуск пакетной синхронизации {Count} медиа: {From} → {To}",
             mediaList.Count, rel.From.TitleFull, rel.To.TitleFull);
-
+        var ctx = new CancellationTokenSource();
+        var actionId = _actionHolder.Register("Синхронизация цепочки", "В процессе", mediaList.Count, ctx);
         return RunBatchOperationAsync("Синхронизировано", "Пакетная синхронизация завершена с ошибками", mediaList, async media =>
         {
-            await _retryRunner!.RunAsync(media, rel, maxAttempts: BatchSyncMaxAttempts);
+            await _retryRunner!.RunAsync(media, rel, maxAttempts: BatchSyncMaxAttempts, cancellationToken: ctx.Token);
+            _actionHolder.ProgressPlus(actionId);
             _logger?.LogInformation("Синхронизировано: '{Title}'", media.Title);
-        });
+        }, ctx);
     }
 
     private Task HandleBatchDeleteAsync(List<Media> mediaList, Source source)
@@ -905,7 +907,7 @@ public partial class MediaMatrixGridControl
         }
     }
 
-    private async Task RunBatchOperationAsync(string bodyPrefix, string errorTitle, List<Media> mediaList, Func<Media, Task> action)
+    private async Task RunBatchOperationAsync(string bodyPrefix, string errorTitle, List<Media> mediaList, Func<Media, Task> action, CancellationTokenSource? ctx = null)
     {
         UpdateLoadingIndicator(true);
         var errors = new List<(Media media, Exception ex)>();
@@ -914,8 +916,13 @@ public partial class MediaMatrixGridControl
         {
             foreach (var media in mediaList)
             {
+                if (ctx != null)
+                {
+                    ctx.Token.ThrowIfCancellationRequested();
+                }
                 try
                 {
+                    // todo поидее тут можно передавать, а не там, ну да и ладон
                     await action(media);
                 }
                 catch (Exception ex)

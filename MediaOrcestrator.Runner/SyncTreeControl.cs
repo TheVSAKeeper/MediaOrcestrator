@@ -14,6 +14,7 @@ public partial class SyncTreeControl : UserControl
     private Orcestrator? _orcestrator;
     private SyncRetryRunner? _retryRunner;
     private SyncPlanner _planner;
+    private ActionHolder _actionHolder;
     private ILogger<SyncTreeControl>? _logger;
     private List<SyncIntent>? _rootIntents;
     private CancellationTokenSource? _cts;
@@ -32,12 +33,17 @@ public partial class SyncTreeControl : UserControl
         uiFilterControl.FilterChanged += (_, _) => ApplyTreeFilter();
     }
 
-    public void Initialize(SyncPlanner planner, Orcestrator orcestrator, SyncRetryRunner retryRunner, ILogger<SyncTreeControl> logger)
+    public void Initialize(SyncPlanner planner,
+        Orcestrator orcestrator,
+        SyncRetryRunner retryRunner,
+        ActionHolder actionHolder,
+        ILogger<SyncTreeControl> logger)
     {
         // TODO: DI
         _orcestrator = orcestrator;
         _retryRunner = retryRunner;
         _planner = planner;
+        _actionHolder = actionHolder;
         _logger = logger;
     }
 
@@ -179,6 +185,8 @@ public partial class SyncTreeControl : UserControl
 
         LogToUi($"Запуск синхронизации для {filteredRootIntents.Count} цепочек...", Color.Yellow);
 
+        var actionId = _actionHolder.Register("Синхронизация цепочки", "В процессе", filteredRootIntents.Count, _cts);
+        var processed = 0;
         try
         {
             var relations = _orcestrator.GetRelations();
@@ -192,6 +200,8 @@ public partial class SyncTreeControl : UserControl
                 var progress = new Progress<SyncAttemptStatus>(status => ApplyAttemptStatusToNode(intent, node, status));
 
                 await _retryRunner!.RunAsync(intent.Media, intent.Relation, progress, cancellationToken: _cts!.Token);
+                processed++;
+                _actionHolder.ProgressPlus(actionId);
             }, _cts.Token, (intent, ex) =>
             {
                 var node = _intentNodeMap.GetValueOrDefault(intent);

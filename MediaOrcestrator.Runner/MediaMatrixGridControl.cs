@@ -14,6 +14,7 @@ public partial class MediaMatrixGridControl : UserControl
     private CoverGenerator? _coverGenerator;
     private CoverTemplateStore? _coverTemplateStore;
     private MediaMergeService? _mergeService;
+    private ActionHolder _actionHolder;
     private ILoggerFactory? _loggerFactory;
     private CancellationTokenSource? _convertCts;
 
@@ -34,6 +35,7 @@ public partial class MediaMatrixGridControl : UserControl
         _coverGenerator = context.CoverGenerator;
         _coverTemplateStore = context.CoverTemplateStore;
         _mergeService = context.MergeService;
+        _actionHolder = context.ActionHolder;
         _loggerFactory = context.LoggerFactory;
         uiFilterControl.SetSettingsManager(context.SettingsManager);
         uiFilterControl.PopulateRelationsFilter(context.Orcestrator);
