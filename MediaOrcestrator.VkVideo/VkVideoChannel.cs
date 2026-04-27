@@ -65,7 +65,7 @@ public sealed class VkVideoChannel(
     public async IAsyncEnumerable<MediaDto> GetMedia(Dictionary<string, string> settings, bool isFull, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var service = await CreateServiceAsync(settings);
-        var groupId = long.Parse(settings["group_id"]);
+        var groupId = ParseGroupId(settings["group_id"]);
         await foreach (var video in service.GetMediaAsync(groupId, cancellationToken))
         {
             yield return CreateMediaDto(video);
@@ -196,7 +196,7 @@ public sealed class VkVideoChannel(
         var isShorts = frameSize.IsPortrait;
 
         var service = await CreateServiceAsync(settings);
-        var groupId = long.Parse(settings["group_id"]);
+        var groupId = ParseGroupId(settings["group_id"]);
         var fileExt = Path.GetExtension(filePath).TrimStart('.').ToLowerInvariant();
 
         // TODO: Копипаста с RutubeChannel, но плагины жи
@@ -454,6 +454,28 @@ public sealed class VkVideoChannel(
             IsDeleted = item.Deleted,
             Raw = raw,
         };
+    }
+
+    private static long ParseGroupId(string raw)
+    {
+        var trimmed = raw.Trim();
+
+        if (long.TryParse(trimmed, NumberStyles.Integer, CultureInfo.InvariantCulture, out var direct))
+        {
+            return direct;
+        }
+
+        string[] prefixes = ["club", "public", "event"];
+        foreach (var prefix in prefixes)
+        {
+            if (trimmed.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+                && long.TryParse(trimmed.AsSpan(prefix.Length), NumberStyles.Integer, CultureInfo.InvariantCulture, out var prefixed))
+            {
+                return prefixed;
+            }
+        }
+
+        throw new FormatException($"Не удалось распарсить group_id '{raw}'. Ожидается число или формат club<id>/public<id>/event<id>.");
     }
 
     private static ExternalVideoId ParseExternalId(string externalId)
