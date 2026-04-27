@@ -2,6 +2,7 @@
 using Microsoft.Extensions.Logging;
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 
 namespace MediaOrcestrator.VkVideo;
@@ -10,7 +11,7 @@ public sealed class VkVideoService : IDisposable
 {
     private const string ApiBase = "https://api.vkvideo.ru/method/";
     private const string ApiVkBase = "https://api.vk.com/method/";
-    private const string ApiVersion = "5.274";
+    private const string ApiVersion = "5.275";
     private const string ClientId = "52461373";
     private const string OwnerIdKey = "owner_id";
     private const string VideoIdKey = "video_id";
@@ -29,136 +30,34 @@ public sealed class VkVideoService : IDisposable
         var handler = new HttpClientHandler { UseCookies = false };
         HttpClient = new(handler);
         HttpClient.Timeout = TimeSpan.FromHours(8);
-        HttpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36");
+        HttpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36");
     }
 
     public HttpClient HttpClient { get; }
-
-    private async Task<string> GetAccessTokenAsync()
-    {
-        if (_accessToken != null && DateTimeOffset.UtcNow < _tokenExpires.AddMinutes(-1))
-        {
-            return _accessToken;
-        }
-
-        for (var attempt = 0; attempt < 2; attempt++)
-        {
-            _logger.LogInformation("Запрос нового access_token через web_token");
-
-            using var request = new HttpRequestMessage(HttpMethod.Post, "https://cabinet.vkvideo.ru/al_video.php?act=web_token");
-            request.Headers.Add("Cookie", _cookieString);
-            request.Headers.Add("Origin", "https://cabinet.vkvideo.ru");
-            request.Headers.Add("Referer", "https://cabinet.vkvideo.ru/");
-            request.Content = new FormUrlEncodedContent(new Dictionary<string, string>
-            {
-                ["version"] = "1",
-                ["app_id"] = ClientId,
-            });
-
-            var response = await HttpClient.SendAsync(request);
-            var body = await response.Content.ReadAsStringAsync();
-
-            if (!IsHtmlResponse(body))
-            {
-                return ParseWebTokenResponse(body, response.StatusCode);
-            }
-
-            _logger.LogWarning("Ответ web_token — HTML (попытка {Attempt}/2). Статус: {StatusCode}", attempt + 1, response.StatusCode);
-
-            if (attempt == 0 && await TrySolveChallengeAsync(response, body))
-            {
-                _logger.LogInformation("Повторяем запрос web_token после решения challenge...");
-                continue;
-            }
-
-            ThrowHtmlResponseError(body, "web_token");
-        }
-
-        throw new InvalidOperationException("Не удалось получить access_token после решения challenge.");
-    }
-
-    private Task<T> CallApiAsync<T>(string method, Dictionary<string, string> parameters)
-    {
-        return CallApiInternalAsync<T>(ApiBase, method, parameters);
-    }
-
-    private Task<T> CallVkApiAsync<T>(string method, Dictionary<string, string> parameters)
-    {
-        return CallApiInternalAsync<T>(ApiVkBase, method, parameters);
-    }
 
     public void Dispose()
     {
         HttpClient.Dispose();
     }
 
-    public async Task<(List<VideoItem> Videos, string? SectionId, string? NextFrom)> GetCatalogFirstPageAsync(long groupId)
+    public async IAsyncEnumerable<VideoItem> GetMediaAsync(
+        long groupId,
+        [EnumeratorCancellation] CancellationToken cancel = default)
     {
-        var catalogUrl = $"https://vkvideo.ru/@club{groupId}/all";
-        _logger.LogDebug("Запрос каталога: {Url}", catalogUrl);
+        _logger.LogInformation("Получение списка медиа для VkVideo");
 
-        CatalogResponse response;
+        var firstPage = await GetCatalogFirstPageAsync(groupId);
+        var videos = GetCatalogVideosAsync(firstPage, cancel);
+        var clips = GetCatalogClipsAsync(firstPage, cancel);
+        var yieldedIds = new HashSet<string>();
 
-        try
+        await foreach (var video in MergeByDateDescending(videos, clips, cancel))
         {
-            response = await CallApiAsync<CatalogResponse>("catalog.getVideo", new()
+            if (yieldedIds.Add(video.GetVideoKey()))
             {
-                ["need_blocks"] = "1",
-                [OwnerIdKey] = "0",
-                ["url"] = catalogUrl,
-            });
-        }
-        catch (VkApiException ex) when (ex.ErrorCode == 104)
-        {
-            _logger.LogWarning(ex, "Каталог видео пуст или не найден для группы {GroupId}", groupId);
-            return ([], null, null);
-        }
-
-        var (sectionId, nextFrom) = FindVideosSectionBlock(response.Catalog.Sections);
-
-        return (response.Videos, sectionId, nextFrom);
-    }
-
-    public async Task<(List<VideoItem> Videos, string? NextFrom)> GetCatalogNextPageAsync(string sectionId, string startFrom)
-    {
-        _logger.LogDebug("Запрос следующей страницы каталога: section={SectionId}, from={StartFrom}", sectionId, startFrom);
-
-        var response = await CallApiAsync<CatalogSectionResponse>("catalog.getSection", new()
-        {
-            ["section_id"] = sectionId,
-            ["start_from"] = startFrom,
-        });
-
-        string? nextFrom = null;
-        if (response.Section.Blocks == null)
-        {
-            return (response.Videos, nextFrom);
-        }
-
-        foreach (var block in response.Section.Blocks)
-        {
-            if (block.DataType != "videos")
-            {
-                continue;
+                yield return video;
             }
-
-            nextFrom = block.NextFrom;
-            break;
         }
-
-        return (response.Videos, nextFrom);
-    }
-
-    public Task<VideoGetResponse> GetVideosAsync(long ownerId, int count = 200, int offset = 0)
-    {
-        _logger.LogDebug("Запрос списка видео: owner_id={OwnerId}, count={Count}, offset={Offset}", ownerId, count, offset);
-
-        return CallApiAsync<VideoGetResponse>("video.get", new()
-        {
-            [OwnerIdKey] = ownerId.ToString(),
-            ["count"] = count.ToString(),
-            ["offset"] = offset.ToString(),
-        });
     }
 
     public async Task<VideoItem?> GetVideoByIdAsync(long ownerId, long videoId)
@@ -352,6 +251,7 @@ public sealed class VkVideoService : IDisposable
                 ["ord_info"] = "{\"is_ads\":false,\"advertisers\":[]}",
                 //["thumb_id"] = thumbId != null ? thumbId.PhotoId.ToString() : "united:0_-232164160",
             };
+
             if (thumbId != null)
             {
                 editParams["thumb_id"] = thumbId.PhotoId.ToString();
@@ -378,7 +278,7 @@ public sealed class VkVideoService : IDisposable
 
             for (var i = 0; i < 10; i++)
             {
-            // todo mb nastroyku? ili checkat?:)
+                // todo mb nastroyku? ili checkat?:)
                 await Task.Delay(60000, cancellationToken);
                 // todo retry helper
                 try
@@ -407,7 +307,7 @@ public sealed class VkVideoService : IDisposable
                 }
             }
 
-            throw new Exception("такого не должно быть");
+            throw new("такого не должно быть");
         }
         else
         {
@@ -448,23 +348,70 @@ public sealed class VkVideoService : IDisposable
         return string.IsNullOrWhiteSpace(body) || body.TrimStart().StartsWith('<');
     }
 
-    private static (string? SectionId, string? NextFrom) FindVideosSectionBlock(List<CatalogSection>? sections)
+    private static CatalogSectionsResult FindMediaSections(List<CatalogSection>? sections)
     {
         if (sections == null)
         {
-            return (null, null);
+            return new(null, null, null);
         }
+
+        string? videoSectionId = null;
+        string? videoNextFrom = null;
+        string? clipsSectionId = null;
 
         foreach (var section in sections)
         {
-            var nextFrom = section.NextFrom ?? FindVideosBlockNextFrom(section.Blocks);
-            if (nextFrom != null)
+            if (IsClipsSection(section))
             {
-                return (section.Id, nextFrom);
+                clipsSectionId ??= section.Id;
+            }
+
+            if (videoSectionId == null && IsVideosSection(section))
+            {
+                videoSectionId = section.Id;
+                videoNextFrom = FindSectionNextFrom(section);
             }
         }
 
-        return (null, null);
+        if (videoSectionId == null)
+        {
+            foreach (var section in sections)
+            {
+                if (IsClipsSection(section))
+                {
+                    continue;
+                }
+
+                var nextFrom = FindSectionNextFrom(section);
+                if (nextFrom == null)
+                {
+                    continue;
+                }
+
+                videoSectionId = section.Id;
+                videoNextFrom = nextFrom;
+                break;
+            }
+        }
+
+        return new(videoSectionId, videoNextFrom, clipsSectionId);
+    }
+
+    private static bool IsVideosSection(CatalogSection section)
+    {
+        return string.Equals(section.Title, "Видео", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(section.Title, "Videos", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsClipsSection(CatalogSection section)
+    {
+        return string.Equals(section.Title, "Клипы", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(section.Title, "Clips", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string? FindSectionNextFrom(CatalogSection? section)
+    {
+        return section?.NextFrom ?? FindVideosBlockNextFrom(section?.Blocks);
     }
 
     private static string? FindVideosBlockNextFrom(List<CatalogBlock>? blocks)
@@ -483,6 +430,263 @@ public sealed class VkVideoService : IDisposable
         }
 
         return null;
+    }
+
+    private static async IAsyncEnumerable<VideoItem> MergeByDateDescending(
+        IAsyncEnumerable<VideoItem> videos,
+        IAsyncEnumerable<VideoItem> clips,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        await using var videoEnumerator = videos.GetAsyncEnumerator(cancellationToken);
+        await using var clipEnumerator = clips.GetAsyncEnumerator(cancellationToken);
+
+        var hasVideo = await videoEnumerator.MoveNextAsync();
+        var hasClip = await clipEnumerator.MoveNextAsync();
+
+        while (hasVideo || hasClip)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (!hasClip || hasVideo && IsSameOrNewer(videoEnumerator.Current, clipEnumerator.Current))
+            {
+                yield return videoEnumerator.Current;
+
+                hasVideo = await videoEnumerator.MoveNextAsync();
+            }
+            else
+            {
+                yield return clipEnumerator.Current;
+
+                hasClip = await clipEnumerator.MoveNextAsync();
+            }
+        }
+    }
+
+    private static bool IsSameOrNewer(VideoItem left, VideoItem right)
+    {
+        var dateComparison = left.Date.CompareTo(right.Date);
+        if (dateComparison != 0)
+        {
+            return dateComparison > 0;
+        }
+
+        var idComparison = left.Id.CompareTo(right.Id);
+        if (idComparison != 0)
+        {
+            return idComparison >= 0;
+        }
+
+        return left.OwnerId.CompareTo(right.OwnerId) >= 0;
+    }
+
+    private async IAsyncEnumerable<VideoItem> GetCatalogSectionVideosAsync(
+        string sectionId,
+        string? nextFrom,
+        bool fetchFirstPage,
+        HashSet<string> yieldedIds,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        if (fetchFirstPage)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var firstPage = await GetCatalogSectionFirstPageAsync(sectionId);
+
+            foreach (var video in firstPage.Videos)
+            {
+                if (yieldedIds.Add(video.GetVideoKey()))
+                {
+                    yield return video;
+                }
+            }
+
+            nextFrom = firstPage.NextFrom;
+        }
+
+        while (nextFrom != null)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var previousNextFrom = nextFrom;
+            var nextPage = await GetCatalogNextPageAsync(sectionId, nextFrom);
+
+            foreach (var video in nextPage.Videos)
+            {
+                if (yieldedIds.Add(video.GetVideoKey()))
+                {
+                    yield return video;
+                }
+            }
+
+            nextFrom = nextPage.NextFrom != previousNextFrom ? nextPage.NextFrom : null;
+        }
+    }
+
+    private async IAsyncEnumerable<VideoItem> GetCatalogVideosAsync(
+        CatalogFirstPageResult firstPage,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        var yieldedIds = new HashSet<string>();
+
+        foreach (var video in firstPage.Videos)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (yieldedIds.Add(video.GetVideoKey()))
+            {
+                yield return video;
+            }
+        }
+
+        if (firstPage is { VideoSectionId: not null, VideoNextFrom: not null })
+        {
+            var videos = GetCatalogSectionVideosAsync(firstPage.VideoSectionId, firstPage.VideoNextFrom, false, yieldedIds, cancellationToken);
+            await foreach (var video in videos)
+            {
+                yield return video;
+            }
+        }
+    }
+
+    private async IAsyncEnumerable<VideoItem> GetCatalogClipsAsync(
+        CatalogFirstPageResult firstPage,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        if (firstPage.ClipsSectionId == null)
+        {
+            yield break;
+        }
+
+        _logger.LogInformation("Получение списка клипов для VkVideo");
+        var yieldedIds = new HashSet<string>();
+        var clips = GetCatalogSectionVideosAsync(firstPage.ClipsSectionId, null, true, yieldedIds, cancellationToken);
+
+        await foreach (var clip in clips)
+        {
+            yield return clip;
+        }
+    }
+
+    private async Task<CatalogFirstPageResult> GetCatalogFirstPageAsync(long groupId)
+    {
+        var screenName = await GetGroupScreenNameAsync(groupId);
+        var catalogUrl = $"https://vkvideo.ru/@{Uri.EscapeDataString(screenName)}/all";
+        _logger.LogDebug("Запрос каталога: {Url}", catalogUrl);
+
+        CatalogResponse response;
+
+        try
+        {
+            response = await CallApiAsync<CatalogResponse>("catalog.getVideo", new()
+            {
+                ["need_blocks"] = "1",
+                [OwnerIdKey] = "0",
+                ["url"] = catalogUrl,
+            });
+        }
+        catch (VkApiException ex) when (ex.ErrorCode == 104)
+        {
+            _logger.LogWarning(ex, "Каталог видео пуст или не найден для группы {GroupId}", groupId);
+            return new([], null, null, null);
+        }
+
+        var sections = FindMediaSections(response.Catalog.Sections);
+        return new(response.Videos, sections.VideoSectionId, sections.VideoNextFrom, sections.ClipsSectionId);
+    }
+
+    private async Task<CatalogSectionPageResult> GetCatalogSectionFirstPageAsync(string sectionId)
+    {
+        _logger.LogDebug("Запрос первой страницы секции каталога: section={SectionId}", sectionId);
+
+        var response = await CallApiAsync<CatalogSectionResponse>("catalog.getSection", new()
+        {
+            ["section_id"] = sectionId,
+        });
+
+        return new(response.Videos, FindSectionNextFrom(response.Section));
+    }
+
+    private async Task<CatalogSectionPageResult> GetCatalogNextPageAsync(string sectionId, string startFrom)
+    {
+        _logger.LogDebug("Запрос следующей страницы каталога: section={SectionId}, from={StartFrom}", sectionId, startFrom);
+
+        var response = await CallApiAsync<CatalogSectionResponse>("catalog.getSection", new()
+        {
+            ["section_id"] = sectionId,
+            ["start_from"] = startFrom,
+        });
+
+        return new(response.Videos, FindSectionNextFrom(response.Section));
+    }
+
+    private async Task<string> GetAccessTokenAsync()
+    {
+        if (_accessToken != null && DateTimeOffset.UtcNow < _tokenExpires.AddMinutes(-1))
+        {
+            return _accessToken;
+        }
+
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            _logger.LogInformation("Запрос нового access_token через web_token");
+
+            using var request = new HttpRequestMessage(HttpMethod.Post, "https://cabinet.vkvideo.ru/al_video.php?act=web_token");
+            request.Headers.Add("Cookie", _cookieString);
+            request.Headers.Add("Origin", "https://cabinet.vkvideo.ru");
+            request.Headers.Add("Referer", "https://cabinet.vkvideo.ru/");
+            request.Content = new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                ["version"] = "1",
+                ["app_id"] = ClientId,
+            });
+
+            var response = await HttpClient.SendAsync(request);
+            var body = await response.Content.ReadAsStringAsync();
+
+            if (!IsHtmlResponse(body))
+            {
+                return ParseWebTokenResponse(body, response.StatusCode);
+            }
+
+            _logger.LogWarning("Ответ web_token — HTML (попытка {Attempt}/2). Статус: {StatusCode}", attempt + 1, response.StatusCode);
+
+            if (attempt == 0 && await TrySolveChallengeAsync(response, body))
+            {
+                _logger.LogInformation("Повторяем запрос web_token после решения challenge...");
+                continue;
+            }
+
+            ThrowHtmlResponseError(body, "web_token");
+        }
+
+        throw new InvalidOperationException("Не удалось получить access_token после решения challenge.");
+    }
+
+    private Task<T> CallApiAsync<T>(string method, Dictionary<string, string> parameters)
+    {
+        return CallApiInternalAsync<T>(ApiBase, method, parameters);
+    }
+
+    private Task<T> CallVkApiAsync<T>(string method, Dictionary<string, string> parameters)
+    {
+        return CallApiInternalAsync<T>(ApiVkBase, method, parameters);
+    }
+
+    private async Task<string> GetGroupScreenNameAsync(long groupId)
+    {
+        var response = await CallApiAsync<GroupsGetByIdResponse>("groups.getById", new()
+        {
+            ["fields"] = "counters",
+            ["group_ids"] = groupId.ToString(),
+        });
+
+        var group = response.Groups.FirstOrDefault(g => g.Id == groupId) ?? response.Groups.FirstOrDefault();
+        var screenName = group?.ScreenName;
+
+        if (string.IsNullOrWhiteSpace(screenName))
+        {
+            screenName = $"club{groupId}";
+        }
+
+        _logger.LogDebug("VK group {GroupId} screen_name={ScreenName}", groupId, screenName);
+        return screenName;
     }
 
     private string ParseWebTokenResponse(string body, HttpStatusCode statusCode)
@@ -675,4 +879,9 @@ public sealed class VkVideoService : IDisposable
 
         throw new InvalidOperationException($"Не удалось выполнить {context}: {reason}.");
     }
+
+    private sealed record CatalogSectionsResult(
+        string? VideoSectionId,
+        string? VideoNextFrom,
+        string? ClipsSectionId);
 }

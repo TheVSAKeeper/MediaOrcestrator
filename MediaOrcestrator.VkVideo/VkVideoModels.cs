@@ -1,4 +1,4 @@
-using System.Text.Json.Serialization;
+﻿using System.Text.Json.Serialization;
 
 namespace MediaOrcestrator.VkVideo;
 
@@ -77,6 +77,16 @@ public sealed class CatalogSectionResponse
     public List<VideoItem> Videos { get; set; } = [];
 }
 
+public sealed record CatalogFirstPageResult(
+    List<VideoItem> Videos,
+    string? VideoSectionId,
+    string? VideoNextFrom,
+    string? ClipsSectionId);
+
+public sealed record CatalogSectionPageResult(
+    List<VideoItem> Videos,
+    string? NextFrom);
+
 public sealed class VideoItem
 {
     [JsonPropertyName("id")]
@@ -90,6 +100,9 @@ public sealed class VideoItem
 
     [JsonPropertyName("description")]
     public string Description { get; set; } = string.Empty;
+
+    [JsonPropertyName("type")]
+    public string? Type { get; set; }
 
     [JsonPropertyName("duration")]
     public int Duration { get; set; }
@@ -129,6 +142,11 @@ public sealed class VideoItem
 
     [JsonPropertyName("can_download")]
     public int CanDownload { get; set; }
+
+    public string GetVideoKey()
+    {
+        return $"{OwnerId}_{Id}";
+    }
 }
 
 public sealed class VideoImage
@@ -197,6 +215,12 @@ public sealed class GroupItem
 
     [JsonPropertyName("screen_name")]
     public string? ScreenName { get; set; }
+}
+
+public sealed class GroupsGetByIdResponse
+{
+    [JsonPropertyName("groups")]
+    public List<GroupItem> Groups { get; set; } = [];
 }
 
 public sealed class VideoGetResponse
