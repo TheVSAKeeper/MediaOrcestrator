@@ -51,6 +51,16 @@ public sealed class CommentDto
     public bool IsDeleted { get; set; }
 
     /// <summary>
+    /// Комментарий написан владельцем медиа (автором канала, владельцем группы и т. п.).
+    /// </summary>
+    public bool IsAuthor { get; set; }
+
+    /// <summary>
+    /// Лайк/сердечко от автора медиа. Источники, у которых такого признака нет, всегда оставляют <see langword="false" />.
+    /// </summary>
+    public bool LikedByAuthor { get; set; }
+
+    /// <summary>
     /// Дополнительные поля, специфичные для источника.
     /// </summary>
     public Dictionary<string, string>? Raw { get; set; }

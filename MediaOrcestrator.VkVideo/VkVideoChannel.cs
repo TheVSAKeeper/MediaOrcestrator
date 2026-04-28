@@ -417,7 +417,7 @@ public sealed class VkVideoChannel(
 
             foreach (var item in response.Items)
             {
-                yield return MapComment(item, parentCommentId, authors);
+                yield return MapComment(item, parentCommentId, ownerId, authors);
             }
 
             offset += response.Items.Count;
@@ -428,7 +428,7 @@ public sealed class VkVideoChannel(
         }
     }
 
-    private static CommentDto MapComment(VkCommentItem item, long? parentCommentId, Dictionary<long, AuthorInfo> authors)
+    private static CommentDto MapComment(VkCommentItem item, long? parentCommentId, long ownerId, Dictionary<long, AuthorInfo> authors)
     {
         authors.TryGetValue(item.FromId, out var author);
 
@@ -442,10 +442,29 @@ public sealed class VkVideoChannel(
             raw["thread_count"] = thread.Count.ToString(CultureInfo.InvariantCulture);
         }
 
+        if (item.ReplyToUser is { } replyToUser)
+        {
+            raw["reply_to_user"] = replyToUser.ToString(CultureInfo.InvariantCulture);
+        }
+
+        long? parentId;
+        if (item.ReplyToComment is { } replyToComment)
+        {
+            parentId = replyToComment;
+        }
+        else if (item.ParentsStack.Count > 0)
+        {
+            parentId = item.ParentsStack[^1];
+        }
+        else
+        {
+            parentId = parentCommentId;
+        }
+
         return new()
         {
             ExternalId = item.Id.ToString(CultureInfo.InvariantCulture),
-            ParentExternalId = parentCommentId?.ToString(CultureInfo.InvariantCulture),
+            ParentExternalId = parentId?.ToString(CultureInfo.InvariantCulture),
             AuthorName = author.Name ?? string.Empty,
             AuthorExternalId = item.FromId.ToString(CultureInfo.InvariantCulture),
             AuthorAvatarUrl = author.AvatarUrl,
@@ -453,6 +472,8 @@ public sealed class VkVideoChannel(
             PublishedAt = DateTimeOffset.FromUnixTimeSeconds(item.Date).UtcDateTime,
             LikeCount = item.Likes?.Count,
             IsDeleted = item.Deleted,
+            IsAuthor = item.FromId == ownerId,
+            LikedByAuthor = false,
             Raw = raw,
         };
     }

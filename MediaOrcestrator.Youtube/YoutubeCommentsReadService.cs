@@ -10,6 +10,7 @@ public sealed class YoutubeCommentsReadService(ILogger logger, YoutubeAuthServic
 {
     private const string ThreadParts = "snippet,replies";
     private const string CommentParts = "snippet";
+    private const string VideoOwnerParts = "snippet";
     private const long PageSize = 100L;
 
     public async IAsyncEnumerable<CommentDto> GetCommentsAsync(
@@ -23,6 +24,8 @@ public sealed class YoutubeCommentsReadService(ILogger logger, YoutubeAuthServic
         }
 
         using var service = await authService.CreateServiceAsync(settings, cancellationToken);
+
+        var ownerChannelId = await GetVideoOwnerChannelIdAsync(service, videoId, cancellationToken);
 
         string? pageToken = null;
         var totalThreads = 0;
@@ -47,7 +50,7 @@ public sealed class YoutubeCommentsReadService(ILogger logger, YoutubeAuthServic
                 var topComment = thread.Snippet?.TopLevelComment;
                 if (topComment is not null)
                 {
-                    yield return MapComment(topComment, null);
+                    yield return MapComment(topComment, null, ownerChannelId);
 
                     totalThreads++;
                 }
@@ -64,14 +67,14 @@ public sealed class YoutubeCommentsReadService(ILogger logger, YoutubeAuthServic
                 {
                     foreach (var reply in inline)
                     {
-                        yield return MapComment(reply, thread.Id);
+                        yield return MapComment(reply, thread.Id, ownerChannelId);
 
                         totalReplies++;
                     }
                 }
                 else
                 {
-                    await foreach (var reply in FetchAllRepliesAsync(service, thread.Id, cancellationToken))
+                    await foreach (var reply in FetchAllRepliesAsync(service, thread.Id, ownerChannelId, cancellationToken))
                     {
                         yield return reply;
 
@@ -90,6 +93,7 @@ public sealed class YoutubeCommentsReadService(ILogger logger, YoutubeAuthServic
     private static async IAsyncEnumerable<CommentDto> FetchAllRepliesAsync(
         YouTubeService service,
         string parentId,
+        string? ownerChannelId,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         string? pageToken = null;
@@ -109,28 +113,33 @@ public sealed class YoutubeCommentsReadService(ILogger logger, YoutubeAuthServic
 
             foreach (var reply in response.Items)
             {
-                yield return MapComment(reply, parentId);
+                yield return MapComment(reply, parentId, ownerChannelId);
             }
 
             pageToken = response.NextPageToken;
         } while (pageToken is not null);
     }
 
-    private static CommentDto MapComment(Comment comment, string? parentExternalId)
+    private static CommentDto MapComment(Comment comment, string? parentExternalId, string? ownerChannelId)
     {
         var snippet = comment.Snippet;
+        var authorChannelId = ExtractAuthorChannelId(snippet);
 
         return new()
         {
             ExternalId = comment.Id,
             ParentExternalId = parentExternalId ?? snippet?.ParentId,
             AuthorName = snippet?.AuthorDisplayName ?? string.Empty,
-            AuthorExternalId = ExtractAuthorChannelId(snippet),
+            AuthorExternalId = authorChannelId,
             AuthorAvatarUrl = snippet?.AuthorProfileImageUrl,
             Text = snippet?.TextDisplay ?? snippet?.TextOriginal ?? string.Empty,
             PublishedAt = snippet?.PublishedAtDateTimeOffset?.UtcDateTime ?? DateTime.UtcNow,
             LikeCount = snippet?.LikeCount is { } likes ? (int)likes : null,
             IsDeleted = false,
+            IsAuthor = ownerChannelId is not null
+                       && authorChannelId is not null
+                       && string.Equals(ownerChannelId, authorChannelId, StringComparison.Ordinal),
+            LikedByAuthor = false,
         };
     }
 
@@ -139,5 +148,25 @@ public sealed class YoutubeCommentsReadService(ILogger logger, YoutubeAuthServic
         var holder = snippet?.AuthorChannelId;
         var valueProp = holder?.GetType().GetProperty("Value");
         return valueProp?.GetValue(holder) as string;
+    }
+
+    private async Task<string?> GetVideoOwnerChannelIdAsync(
+        YouTubeService service,
+        string videoId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var request = service.Videos.List(VideoOwnerParts);
+            request.Id = videoId;
+
+            var response = await request.ExecuteAsync(cancellationToken);
+            return response.Items?.FirstOrDefault()?.Snippet?.ChannelId;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Не удалось определить владельца видео {VideoId} для разметки авторских комментариев", videoId);
+            return null;
+        }
     }
 }

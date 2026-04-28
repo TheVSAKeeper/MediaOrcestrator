@@ -44,6 +44,8 @@ public sealed class CommentRecord
     public DateTime PublishedAt { get; set; }
     public int? LikeCount { get; set; }
     public bool IsDeleted { get; set; }
+    public bool IsAuthor { get; set; }
+    public bool LikedByAuthor { get; set; }
 
     /// <summary>
     /// Дополнительные поля, специфичные для источника.

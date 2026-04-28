@@ -408,6 +408,12 @@ public sealed class VkCommentItem
     [JsonPropertyName("parents_stack")]
     public List<long> ParentsStack { get; set; } = [];
 
+    [JsonPropertyName("reply_to_comment")]
+    public long? ReplyToComment { get; set; }
+
+    [JsonPropertyName("reply_to_user")]
+    public long? ReplyToUser { get; set; }
+
     [JsonPropertyName("likes")]
     public VkCommentLikes? Likes { get; set; }
 

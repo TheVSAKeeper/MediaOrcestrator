@@ -9,7 +9,7 @@ public sealed class CommentsService(
     CommentsRepository repository,
     ILogger<CommentsService> logger)
 {
-    private static readonly TimeSpan DefaultCacheTtl = TimeSpan.FromHours(int.MaxValue); // TimeSpan.FromHours(24);
+    private static readonly TimeSpan DefaultCacheTtl = TimeSpan.MaxValue; // TimeSpan.FromHours(24);
 
     public List<CommentRecord> GetCached(MediaSourceLink link)
     {
@@ -94,6 +94,8 @@ public sealed class CommentsService(
             PublishedAt = dto.PublishedAt,
             LikeCount = dto.LikeCount,
             IsDeleted = dto.IsDeleted,
+            IsAuthor = dto.IsAuthor,
+            LikedByAuthor = dto.LikedByAuthor,
             Raw = dto.Raw,
         };
     }
