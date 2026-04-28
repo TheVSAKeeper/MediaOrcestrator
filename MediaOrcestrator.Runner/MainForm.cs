@@ -1,4 +1,5 @@
 ﻿using MediaOrcestrator.Domain;
+using MediaOrcestrator.Domain.Comments;
 using MediaOrcestrator.Domain.Merging;
 using MediaOrcestrator.Modules;
 using Microsoft.Extensions.DependencyInjection;
@@ -55,9 +56,20 @@ public partial class MainForm : Form
             _serviceProvider.GetRequiredService<CoverTemplateStore>(),
             _serviceProvider.GetRequiredService<MediaMergeService>(),
             _serviceProvider.GetRequiredService<ActionHolder>(),
+            _serviceProvider.GetRequiredService<CommentsService>(),
             _serviceProvider.GetRequiredService<ILoggerFactory>()));
 
         uiMediaMatrixGridControl.RefreshData();
+
+        uiCommentsViewControl.Initialize(_orcestrator,
+            _serviceProvider.GetRequiredService<CommentsService>(),
+            _serviceProvider.GetRequiredService<ActionHolder>(),
+            _serviceProvider.GetRequiredService<ILogger<CommentsViewControl>>());
+
+        uiCommentsHtmlControl.Initialize(_orcestrator,
+            _serviceProvider.GetRequiredService<CommentsService>(),
+            _serviceProvider.GetRequiredService<ActionHolder>(),
+            _serviceProvider.GetRequiredService<ILogger<CommentsHtmlControl>>());
 
         if (uiClearTypeComboBox.Items.Count > 0)
         {
@@ -107,6 +119,7 @@ public partial class MainForm : Form
         using var settingsForm = new SourceSettingsForm();
         settingsForm.SetSettings(selectedPlugin.SettingsKeys, selectedPlugin, _logger);
         settingsForm.SetSystemContext(_serviceProvider.GetRequiredService<StateManager>(), newSourceId);
+        settingsForm.SetAvailableSources(_orcestrator.GetSources());
         if (settingsForm.ShowDialog() != DialogResult.OK || settingsForm.Settings == null)
         {
             return;
@@ -315,6 +328,33 @@ public partial class MainForm : Form
 
         _orcestrator.RemoveRelation(e.FromSourceId, e.ToSourceId);
         DrawRelations();
+    }
+
+    private void OnMediaPublished(object? sender, EventArgs e)
+    {
+        uiMediaMatrixGridControl.RefreshData();
+    }
+
+    private void button1_Click(object sender, EventArgs e)
+    {
+        uiRunningActionsFlowLayoutPanel.Controls.Clear();
+        // todo shlyapa
+        var actionHolder = _serviceProvider.GetRequiredService<ActionHolder>();
+        //actionHolder.Register("Синкаем пипку коня Никиты " + actionHolder.Actions.Count, "в процессе", 10, new CancellationTokenSource());
+        var i = -1;
+        foreach (var action in actionHolder.Actions)
+        {
+            action.Value.ProgressPlus();
+            i++;
+            var btn = new ActionUserControl();
+            btn.SetAction(action.Value);
+
+            btn.AutoSize = false;
+            btn.Width = uiRunningActionsFlowLayoutPanel.Width - 10;
+            btn.Left = 5;
+            btn.Top = 5 + i * (btn.Height + 5);
+            uiRunningActionsFlowLayoutPanel.Controls.Add(btn);
+        }
     }
 
     private async Task RunSyncAsync(Source? filterSource, AuditSyncMode mode)
@@ -552,11 +592,6 @@ public partial class MainForm : Form
         _publishControl?.ReloadSources();
     }
 
-    private void OnMediaPublished(object? sender, EventArgs e)
-    {
-        uiMediaMatrixGridControl.RefreshData();
-    }
-
     private async void CheckToolUpdatesInBackground()
     {
         try
@@ -649,27 +684,5 @@ public partial class MainForm : Form
 
         uiRelationsGraphControl.SetRelations(relations);
         uiMediaMatrixGridControl.PopulateRelationsFilter();
-    }
-
-    private void button1_Click(object sender, EventArgs e)
-    {
-        uiRunningActionsFlowLayoutPanel.Controls.Clear();
-        // todo shlyapa
-        var actionHolder = _serviceProvider.GetRequiredService<ActionHolder>();
-        //actionHolder.Register("Синкаем пипку коня Никиты " + actionHolder.Actions.Count, "в процессе", 10, new CancellationTokenSource());
-        var i = -1;
-        foreach (var action in actionHolder.Actions)
-        {
-            action.Value.ProgressPlus();
-            i++;
-            var btn = new ActionUserControl();
-            btn.SetAction(action.Value);
-
-            btn.AutoSize = false;
-            btn.Width = uiRunningActionsFlowLayoutPanel.Width - 10;
-            btn.Left = 5;
-            btn.Top = 5 + i * (btn.Height + 5);
-            uiRunningActionsFlowLayoutPanel.Controls.Add(btn);
-        }
     }
 }

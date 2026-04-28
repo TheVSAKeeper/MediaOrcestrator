@@ -69,6 +69,10 @@
             uiLogsTabPage = new TabPage();
             uiLogsToolbarPanel = new Panel();
             uiReportIssueButton = new Button();
+            uiCommentsTabPage = new TabPage();
+            uiCommentsViewControl = new CommentsViewControl();
+            uiCommentsHtmlTabPage = new TabPage();
+            uiCommentsHtmlControl = new CommentsHtmlControl();
             uiToolsTabPage = new TabPage();
             groupBox3 = new GroupBox();
             uiVkVideoAuthStatePathTextBox = new TextBox();
@@ -94,6 +98,8 @@
             uiSyncTreeTabPage.SuspendLayout();
             uiLogsTabPage.SuspendLayout();
             uiLogsToolbarPanel.SuspendLayout();
+            uiCommentsTabPage.SuspendLayout();
+            uiCommentsHtmlTabPage.SuspendLayout();
             uiToolsTabPage.SuspendLayout();
             groupBox3.SuspendLayout();
             groupBox2.SuspendLayout();
@@ -206,6 +212,8 @@
             uiMainTabControl.Controls.Add(uiRelationsGraphTabPage);
             uiMainTabControl.Controls.Add(uiAuditTabPage);
             uiMainTabControl.Controls.Add(uiSyncTreeTabPage);
+            uiMainTabControl.Controls.Add(uiCommentsTabPage);
+            uiMainTabControl.Controls.Add(uiCommentsHtmlTabPage);
             uiMainTabControl.Controls.Add(uiLogsTabPage);
             uiMainTabControl.Controls.Add(uiToolsTabPage);
             uiMainTabControl.Location = new Point(12, 12);
@@ -495,9 +503,47 @@
             uiSyncTreeControl.Name = "uiSyncTreeControl";
             uiSyncTreeControl.Size = new Size(1212, 757);
             uiSyncTreeControl.TabIndex = 0;
-            // 
+            //
+            // uiCommentsTabPage
+            //
+            uiCommentsTabPage.Controls.Add(uiCommentsViewControl);
+            uiCommentsTabPage.Location = new Point(4, 24);
+            uiCommentsTabPage.Name = "uiCommentsTabPage";
+            uiCommentsTabPage.Padding = new Padding(3);
+            uiCommentsTabPage.Size = new Size(1212, 757);
+            uiCommentsTabPage.TabIndex = 9;
+            uiCommentsTabPage.Text = "Комментарии";
+            uiCommentsTabPage.UseVisualStyleBackColor = true;
+            //
+            // uiCommentsViewControl
+            //
+            uiCommentsViewControl.Dock = DockStyle.Fill;
+            uiCommentsViewControl.Location = new Point(3, 3);
+            uiCommentsViewControl.Name = "uiCommentsViewControl";
+            uiCommentsViewControl.Size = new Size(1206, 751);
+            uiCommentsViewControl.TabIndex = 0;
+            //
+            // uiCommentsHtmlTabPage
+            //
+            uiCommentsHtmlTabPage.Controls.Add(uiCommentsHtmlControl);
+            uiCommentsHtmlTabPage.Location = new Point(4, 24);
+            uiCommentsHtmlTabPage.Name = "uiCommentsHtmlTabPage";
+            uiCommentsHtmlTabPage.Padding = new Padding(3);
+            uiCommentsHtmlTabPage.Size = new Size(1212, 757);
+            uiCommentsHtmlTabPage.TabIndex = 11;
+            uiCommentsHtmlTabPage.Text = "Комментарии (HTML)";
+            uiCommentsHtmlTabPage.UseVisualStyleBackColor = true;
+            //
+            // uiCommentsHtmlControl
+            //
+            uiCommentsHtmlControl.Dock = DockStyle.Fill;
+            uiCommentsHtmlControl.Location = new Point(3, 3);
+            uiCommentsHtmlControl.Name = "uiCommentsHtmlControl";
+            uiCommentsHtmlControl.Size = new Size(1206, 751);
+            uiCommentsHtmlControl.TabIndex = 0;
+            //
             // uiLogsTabPage
-            // 
+            //
             uiLogsTabPage.Controls.Add(uiLogsToolbarPanel);
             uiLogsTabPage.Location = new Point(4, 24);
             uiLogsTabPage.Name = "uiLogsTabPage";
@@ -679,6 +725,8 @@
             uiAuditBulkPanel.PerformLayout();
             uiAuditSourcesPanel.ResumeLayout(false);
             uiSyncTreeTabPage.ResumeLayout(false);
+            uiCommentsTabPage.ResumeLayout(false);
+            uiCommentsHtmlTabPage.ResumeLayout(false);
             uiLogsTabPage.ResumeLayout(false);
             uiLogsToolbarPanel.ResumeLayout(false);
             uiToolsTabPage.ResumeLayout(false);
@@ -720,6 +768,10 @@
         private TabPage uiLogsTabPage;
         private Panel uiLogsToolbarPanel;
         private Button uiReportIssueButton;
+        private TabPage uiCommentsTabPage;
+        private CommentsViewControl uiCommentsViewControl;
+        private TabPage uiCommentsHtmlTabPage;
+        private CommentsHtmlControl uiCommentsHtmlControl;
         private TabPage uiToolsTabPage;
         private GroupBox groupBox1;
         private Button uiRubuteAuthStateOpenBrowserButton;

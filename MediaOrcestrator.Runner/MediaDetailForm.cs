@@ -1,4 +1,5 @@
 ﻿using MediaOrcestrator.Domain;
+using MediaOrcestrator.Domain.Comments;
 using MediaOrcestrator.Modules;
 using Microsoft.Extensions.Logging;
 using SixLabors.ImageSharp.Formats.Bmp;
@@ -11,15 +12,23 @@ namespace MediaOrcestrator.Runner;
 public partial class MediaDetailForm : Form
 {
     private readonly ILogger? _logger;
+    private readonly CommentsService? _commentsService;
+    private readonly Orcestrator _orcestrator;
+    private readonly ActionHolder _actionHolder;
+    private readonly Media _media;
     private readonly Font _titleFont;
     private readonly Font _headerFont;
     private readonly Font _groupFont;
     private readonly Font _boldFont;
     private readonly Font _regularFont;
 
-    public MediaDetailForm(Media media, List<Source> sources, ILogger? logger = null)
+    public MediaDetailForm(Media media, Orcestrator orcestrator, ActionHolder actionHolder, CommentsService? commentsService = null, ILogger? logger = null)
     {
         _logger = logger;
+        _commentsService = commentsService;
+        _orcestrator = orcestrator;
+        _actionHolder = actionHolder;
+        _media = media;
         InitializeComponent();
 
         _titleFont = new(Font.FontFamily, 11, FontStyle.Bold);
@@ -35,11 +44,18 @@ public partial class MediaDetailForm : Form
         uiTitleLabel.Text = media.Title ?? "";
         uiTitleLabel.Font = _titleFont;
         uiDescriptionLabel.Text = media.Description ?? "";
-        uiSourcesHeaderLabel.Font = _headerFont;
 
-        var sourceDict = sources.ToDictionary(s => s.Id);
+        var sourceDict = orcestrator.GetSources().ToDictionary(s => s.Id);
         TryLoadPreview(media);
         PopulateSources(media, sourceDict);
+
+        uiCommentsBrowser.FetchRequested += async (_, req) =>
+        {
+            await FetchForLinkAsync(req.SourceId, req.ExternalId);
+            RenderComments();
+        };
+
+        RenderComments();
 
         uiTitleLabel.ContextMenuStrip = CreateCopyMenu(uiTitleLabel);
         uiDescriptionLabel.ContextMenuStrip = CreateCopyMenu(uiDescriptionLabel);
@@ -172,6 +188,71 @@ public partial class MediaDetailForm : Form
         }
 
         return $"{bitsPerSecond / 1_000_000.0:F2} Мбит/с";
+    }
+
+    private void RenderComments()
+    {
+        if (_commentsService == null)
+        {
+            uiCommentsBrowser.Render(_orcestrator, []);
+            return;
+        }
+
+        var aggregated = new List<CommentRecord>();
+        foreach (var link in _media.Sources)
+        {
+            if (link is { SourceId: not null, ExternalId: not null })
+            {
+                aggregated.AddRange(_commentsService.GetCached(link));
+            }
+        }
+
+        var ordered = aggregated.OrderByDescending(r => r.PublishedAt).ToList();
+        uiCommentsBrowser.Render(_orcestrator, ordered);
+    }
+
+    private async Task FetchForLinkAsync(string sourceId, string externalId)
+    {
+        if (_commentsService == null)
+        {
+            return;
+        }
+
+        var source = _orcestrator.GetSources().FirstOrDefault(s => s.Id == sourceId);
+        if (source is not { Type: ISupportsComments })
+        {
+            return;
+        }
+
+        var link = _media.Sources.FirstOrDefault(l => l.SourceId == sourceId && l.ExternalId == externalId);
+        if (link == null)
+        {
+            return;
+        }
+
+        var cts = new CancellationTokenSource();
+        var action = _actionHolder.Register($"Комментарии: «{_media.Title}»", "Запущена", 1, cts);
+
+        try
+        {
+            await Task.Run(async () =>
+            {
+                var count = await _commentsService.RefreshAsync(source, _media, link, null, cts.Token);
+                action.Status = $"{source.TitleFull}: {count}";
+            }, cts.Token);
+        }
+        catch (OperationCanceledException) when (cts.Token.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Не удалось загрузить комментарии для «{Title}»", _media.Title);
+        }
+        finally
+        {
+            action.ProgressPlus();
+            action.Finish();
+        }
     }
 
     private void AdjustPreviewSize()

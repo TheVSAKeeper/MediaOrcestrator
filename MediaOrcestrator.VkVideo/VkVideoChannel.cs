@@ -10,7 +10,7 @@ public sealed class VkVideoChannel(
     ILogger<VkVideoChannel> logger,
     ILogger<VkVideoService> serviceLogger,
     VideoTranscoder videoTranscoder)
-    : ISourceType, IAuthenticatable
+    : ISourceType, IAuthenticatable, ISupportsComments
 {
     private readonly SemaphoreSlim _serviceLock = new(1, 1);
     private VkVideoService? _cachedService;
@@ -64,61 +64,11 @@ public sealed class VkVideoChannel(
 
     public async IAsyncEnumerable<MediaDto> GetMedia(Dictionary<string, string> settings, bool isFull, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        if (false)
+        var service = await CreateServiceAsync(settings);
+        var groupId = ParseGroupId(settings["group_id"]);
+        await foreach (var video in service.GetMediaAsync(groupId, cancellationToken))
         {
-            logger.LogInformation("Получение списка медиа для VkVideo");
-            var service = await CreateServiceAsync(settings);
-            var groupId = long.Parse(settings["group_id"]);
-
-            var (videos, sectionId, nextFrom) = await service.GetCatalogFirstPageAsync(groupId);
-
-            foreach (var video in videos)
-            {
-                yield return CreateMediaDto(video);
-            }
-
-            while (sectionId != null && nextFrom != null)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                var (nextVideos, newNextFrom) = await service.GetCatalogNextPageAsync(sectionId, nextFrom);
-
-                foreach (var video in nextVideos)
-                {
-                    yield return CreateMediaDto(video);
-                }
-
-                nextFrom = newNextFrom;
-            }
-        }
-        else
-        {
-            // TODO: Альтернативный вариант. У меня оба вроде работают
-            logger.LogInformation("Получение списка медиа для VkVideo");
-            var service = await CreateServiceAsync(settings);
-            var ownerId = -long.Parse(settings["group_id"]);
-
-            const int PageSize = 200;
-            var offset = 0;
-
-            while (true)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                var response = await service.GetVideosAsync(ownerId, PageSize, offset);
-
-                foreach (var video in response.Items)
-                {
-                    yield return CreateMediaDto(video);
-                }
-
-                offset += response.Items.Count;
-
-                if (response.Items.Count < PageSize || offset >= response.Count)
-                {
-                    break;
-                }
-            }
+            yield return CreateMediaDto(video);
         }
     }
 
@@ -130,6 +80,36 @@ public sealed class VkVideoChannel(
 
         var video = await service.GetVideoByIdAsync(ownerId, videoId);
         return video != null ? CreateMediaDto(video) : null;
+    }
+
+    public async IAsyncEnumerable<CommentDto> GetCommentsAsync(
+        string externalId,
+        Dictionary<string, string> settings,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        var (ownerId, videoId) = ParseExternalId(externalId);
+        var service = await CreateServiceAsync(settings);
+
+        var authors = new Dictionary<long, AuthorInfo>();
+
+        await foreach (var comment in StreamCommentsAsync(service, ownerId, videoId, null, authors, cancellationToken))
+        {
+            yield return comment;
+
+            if (comment.Raw is not { } raw
+                || !raw.TryGetValue("thread_count", out var threadCountStr)
+                || !int.TryParse(threadCountStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var threadCount)
+                || threadCount <= 0
+                || !long.TryParse(comment.ExternalId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var commentIdValue))
+            {
+                continue;
+            }
+
+            await foreach (var reply in StreamCommentsAsync(service, ownerId, videoId, commentIdValue, authors, cancellationToken))
+            {
+                yield return reply;
+            }
+        }
     }
 
     // TODO: Переделать нормально
@@ -182,19 +162,14 @@ public sealed class VkVideoChannel(
             await previewStream.CopyToAsync(previewFile, cancellationToken);
         }
 
-        var metadata = BuildMetadata(video);
+        var mediaDto = CreateMediaDto(video);
+        var metadata = mediaDto.Metadata;
 
         // TODO: Может не добавлять вообще если null
-        metadata.Add(new()
-        {
-            Key = "PreviewUrl",
-            Value = previewUrl ?? string.Empty
-        });
-
         return new()
         {
             Id = videoId,
-            Title = video.Title,
+            Title = mediaDto.Title,
             Description = video.Description,
             DataPath = downloadUrl,
             PreviewPath = previewUrl ?? string.Empty,
@@ -221,7 +196,7 @@ public sealed class VkVideoChannel(
         var isShorts = frameSize.IsPortrait;
 
         var service = await CreateServiceAsync(settings);
-        var groupId = long.Parse(settings["group_id"]);
+        var groupId = ParseGroupId(settings["group_id"]);
         var fileExt = Path.GetExtension(filePath).TrimStart('.').ToLowerInvariant();
 
         // TODO: Копипаста с RutubeChannel, но плагины жи
@@ -251,8 +226,9 @@ public sealed class VkVideoChannel(
         try
         {
             var uploadBytesPerSecond = SpeedLimitHelper.ParseUploadBytesPerSecond(settings);
+            var uploadProgress = UploadProgressLogger.CreateBucketed(logger, media.Id);
             var result = await service.UploadVideoAsync(isShorts, groupId, filePath, media.Title, media.Description,
-                fileExt, media.TempPreviewPath, publishAtUnix, uploadBytesPerSecond, cancellationToken);
+                fileExt, media.TempPreviewPath, publishAtUnix, uploadBytesPerSecond, uploadProgress, cancellationToken);
 
             var externalId = $"{result.OwnerId}_{result.Id}";
             logger.LogInformation("Видео загружено на VK Video. ID: {ExternalId}", externalId);
@@ -345,7 +321,186 @@ public sealed class VkVideoChannel(
         logger.LogInformation("Видео {ExternalId} удалено", externalId);
     }
 
-    private static (long OwnerId, long VideoId) ParseExternalId(string externalId)
+    // TODO: Придумать более умный механизм
+    public bool IsAuthenticated(Dictionary<string, string> settings)
+    {
+        var authStatePath = GetAuthStatePath(settings);
+        if (!File.Exists(authStatePath))
+        {
+            return false;
+        }
+
+        try
+        {
+            var json = File.ReadAllText(authStatePath);
+            using var doc = JsonDocument.Parse(json);
+            var cookies = doc.RootElement.GetProperty("cookies");
+
+            return cookies.EnumerateArray()
+                .Any(c =>
+                {
+                    var domain = c.GetProperty("domain").GetString() ?? "";
+                    return domain.Contains("vkvideo.ru") || domain.Contains("vk.com");
+                });
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public async Task AuthenticateAsync(Dictionary<string, string> settings, IAuthUI ui, CancellationToken ct)
+    {
+        var authStatePath = GetAuthStatePath(settings);
+        var result = await ui.OpenBrowserAsync("https://cabinet.vkvideo.ru/", authStatePath);
+        if (result != null)
+        {
+            _cachedService?.Dispose();
+            _cachedService = null;
+            _cachedAuthStatePath = null;
+            logger.LogInformation("VK Video: авторизация сохранена в {Path}", result);
+            await ui.ShowMessageAsync("Авторизация VK Video сохранена!");
+        }
+    }
+
+    public ConvertType[] GetAvailableConvertTypes()
+    {
+        return [];
+    }
+
+    public Task ConvertAsync(int typeId, string externalId, Dictionary<string, string> settings, IProgress<ConvertProgress>? progress = null, CancellationToken cancellationToken = default)
+    {
+        throw new NotImplementedException();
+    }
+
+    private static async IAsyncEnumerable<CommentDto> StreamCommentsAsync(
+        VkVideoService service,
+        long ownerId,
+        long videoId,
+        long? parentCommentId,
+        Dictionary<long, AuthorInfo> authors,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        const int PageSize = 100;
+        var offset = 0;
+        var total = -1;
+
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var response = await service.GetVideoCommentsAsync(ownerId,
+                videoId,
+                PageSize,
+                offset,
+                parentCommentId);
+
+            foreach (var profile in response.Profiles)
+            {
+                authors.TryAdd(profile.Id, new($"{profile.FirstName} {profile.LastName}".Trim(), profile.Photo100));
+            }
+
+            foreach (var group in response.Groups)
+            {
+                authors.TryAdd(-group.Id, new(group.Name ?? string.Empty, group.Photo100));
+            }
+
+            if (total < 0)
+            {
+                total = response.Count;
+            }
+
+            if (response.Items.Count == 0)
+            {
+                yield break;
+            }
+
+            foreach (var item in response.Items)
+            {
+                yield return MapComment(item, parentCommentId, ownerId, authors);
+            }
+
+            offset += response.Items.Count;
+            if (offset >= total)
+            {
+                yield break;
+            }
+        }
+    }
+
+    private static CommentDto MapComment(VkCommentItem item, long? parentCommentId, long ownerId, Dictionary<long, AuthorInfo> authors)
+    {
+        authors.TryGetValue(item.FromId, out var author);
+
+        var raw = new Dictionary<string, string>
+        {
+            ["from_id"] = item.FromId.ToString(CultureInfo.InvariantCulture),
+        };
+
+        if (item.Thread is { Count: > 0 } thread)
+        {
+            raw["thread_count"] = thread.Count.ToString(CultureInfo.InvariantCulture);
+        }
+
+        if (item.ReplyToUser is { } replyToUser)
+        {
+            raw["reply_to_user"] = replyToUser.ToString(CultureInfo.InvariantCulture);
+        }
+
+        long? parentId;
+        if (item.ReplyToComment is { } replyToComment)
+        {
+            parentId = replyToComment;
+        }
+        else if (item.ParentsStack.Count > 0)
+        {
+            parentId = item.ParentsStack[^1];
+        }
+        else
+        {
+            parentId = parentCommentId;
+        }
+
+        return new()
+        {
+            ExternalId = item.Id.ToString(CultureInfo.InvariantCulture),
+            ParentExternalId = parentId?.ToString(CultureInfo.InvariantCulture),
+            AuthorName = author.Name ?? string.Empty,
+            AuthorExternalId = item.FromId.ToString(CultureInfo.InvariantCulture),
+            AuthorAvatarUrl = author.AvatarUrl,
+            Text = item.Text,
+            PublishedAt = DateTimeOffset.FromUnixTimeSeconds(item.Date).UtcDateTime,
+            LikeCount = item.Likes?.Count,
+            IsDeleted = item.Deleted,
+            IsAuthor = item.FromId == ownerId,
+            LikedByAuthor = false,
+            Raw = raw,
+        };
+    }
+
+    private static long ParseGroupId(string raw)
+    {
+        var trimmed = raw.Trim();
+
+        if (long.TryParse(trimmed, NumberStyles.Integer, CultureInfo.InvariantCulture, out var direct))
+        {
+            return direct;
+        }
+
+        string[] prefixes = ["club", "public", "event"];
+        foreach (var prefix in prefixes)
+        {
+            if (trimmed.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+                && long.TryParse(trimmed.AsSpan(prefix.Length), NumberStyles.Integer, CultureInfo.InvariantCulture, out var prefixed))
+            {
+                return prefixed;
+            }
+        }
+
+        throw new FormatException($"Не удалось распарсить group_id '{raw}'. Ожидается число или формат club<id>/public<id>/event<id>.");
+    }
+
+    private static ExternalVideoId ParseExternalId(string externalId)
     {
         var parts = externalId.Split('_', 2);
         if (parts.Length != 2 || !long.TryParse(parts[0], out var ownerId) || !long.TryParse(parts[1], out var videoId))
@@ -353,7 +508,7 @@ public sealed class VkVideoChannel(
             throw new ArgumentException($"Некорректный формат ID видео: {externalId}. Ожидается: {{owner_id}}_{{video_id}}");
         }
 
-        return (ownerId, videoId);
+        return new(ownerId, videoId);
     }
 
     private static MediaDto CreateMediaDto(VideoItem video)
@@ -372,8 +527,8 @@ public sealed class VkVideoChannel(
 
         return new()
         {
-            Id = $"{video.OwnerId}_{video.Id}",
-            Title = video.Title,
+            Id = video.GetVideoKey(),
+            Title = GetTitle(video),
             Description = video.Description,
             DataPath = video.Files?.GetBestQualityUrl() ?? string.Empty,
             PreviewPath = previewUrl,
@@ -381,7 +536,21 @@ public sealed class VkVideoChannel(
         };
     }
 
-    // TODO: Можно напихать другие. Апя модели вроде правильные
+    private static string GetTitle(VideoItem video)
+    {
+        if (IsClip(video) && !string.IsNullOrWhiteSpace(video.Description))
+        {
+            return video.Description;
+        }
+
+        return video.Title;
+    }
+
+    private static bool IsClip(VideoItem video)
+    {
+        return string.Equals(video.Type, "short_video", StringComparison.OrdinalIgnoreCase);
+    }
+
     private static List<MetadataItem> BuildMetadata(VideoItem video)
     {
         return
@@ -424,46 +593,9 @@ public sealed class VkVideoChannel(
         ];
     }
 
-    // TODO: Придумать более умный механизм
-    public bool IsAuthenticated(Dictionary<string, string> settings)
+    private static string GetAuthStatePath(Dictionary<string, string> settings)
     {
-        var authStatePath = GetAuthStatePath(settings);
-        if (!File.Exists(authStatePath))
-        {
-            return false;
-        }
-
-        try
-        {
-            var json = File.ReadAllText(authStatePath);
-            using var doc = JsonDocument.Parse(json);
-            var cookies = doc.RootElement.GetProperty("cookies");
-
-            return cookies.EnumerateArray()
-                .Any(c =>
-                {
-                    var domain = c.GetProperty("domain").GetString() ?? "";
-                    return domain.Contains("vkvideo.ru") || domain.Contains("vk.com");
-                });
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    public async Task AuthenticateAsync(Dictionary<string, string> settings, IAuthUI ui, CancellationToken ct)
-    {
-        var authStatePath = GetAuthStatePath(settings);
-        var result = await ui.OpenBrowserAsync("https://cabinet.vkvideo.ru/", authStatePath);
-        if (result != null)
-        {
-            _cachedService?.Dispose();
-            _cachedService = null;
-            _cachedAuthStatePath = null;
-            logger.LogInformation("VK Video: авторизация сохранена в {Path}", result);
-            await ui.ShowMessageAsync("Авторизация VK Video сохранена!");
-        }
+        return Path.Combine(settings["_system_state_path"], "auth_state");
     }
 
     private async Task<VkVideoService> CreateServiceAsync(Dictionary<string, string> settings)
@@ -513,18 +645,7 @@ public sealed class VkVideoChannel(
         }
     }
 
-    public ConvertType[] GetAvailableConvertTypes()
-    {
-        return [];
-    }
+    private readonly record struct AuthorInfo(string? Name, string? AvatarUrl);
 
-    private static string GetAuthStatePath(Dictionary<string, string> settings)
-    {
-        return Path.Combine(settings["_system_state_path"], "auth_state");
-    }
-
-    public Task ConvertAsync(int typeId, string externalId, Dictionary<string, string> settings, IProgress<ConvertProgress>? progress = null, CancellationToken cancellationToken = default)
-    {
-        throw new NotImplementedException();
-    }
+    private sealed record ExternalVideoId(long OwnerId, long VideoId);
 }

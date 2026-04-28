@@ -1,4 +1,4 @@
-using Google.Apis.Auth.OAuth2;
+﻿using Google.Apis.Auth.OAuth2;
 using Google.Apis.Util.Store;
 using Google.Apis.YouTube.v3;
 using Microsoft.Extensions.Logging;
@@ -11,6 +11,7 @@ public sealed class YoutubeAuthService(ILogger logger)
     [
         YouTubeService.Scope.YoutubeUpload,
         YouTubeService.Scope.Youtube,
+        YouTubeService.Scope.YoutubeForceSsl,
     ];
 
     private UserCredential? _cachedCredential;

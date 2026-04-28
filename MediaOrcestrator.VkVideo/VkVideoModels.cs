@@ -1,4 +1,4 @@
-using System.Text.Json.Serialization;
+﻿using System.Text.Json.Serialization;
 
 namespace MediaOrcestrator.VkVideo;
 
@@ -77,6 +77,16 @@ public sealed class CatalogSectionResponse
     public List<VideoItem> Videos { get; set; } = [];
 }
 
+public sealed record CatalogFirstPageResult(
+    List<VideoItem> Videos,
+    string? VideoSectionId,
+    string? VideoNextFrom,
+    string? ClipsSectionId);
+
+public sealed record CatalogSectionPageResult(
+    List<VideoItem> Videos,
+    string? NextFrom);
+
 public sealed class VideoItem
 {
     [JsonPropertyName("id")]
@@ -90,6 +100,9 @@ public sealed class VideoItem
 
     [JsonPropertyName("description")]
     public string Description { get; set; } = string.Empty;
+
+    [JsonPropertyName("type")]
+    public string? Type { get; set; }
 
     [JsonPropertyName("duration")]
     public int Duration { get; set; }
@@ -129,6 +142,11 @@ public sealed class VideoItem
 
     [JsonPropertyName("can_download")]
     public int CanDownload { get; set; }
+
+    public string GetVideoKey()
+    {
+        return $"{OwnerId}_{Id}";
+    }
 }
 
 public sealed class VideoImage
@@ -197,6 +215,12 @@ public sealed class GroupItem
 
     [JsonPropertyName("screen_name")]
     public string? ScreenName { get; set; }
+}
+
+public sealed class GroupsGetByIdResponse
+{
+    [JsonPropertyName("groups")]
+    public List<GroupItem> Groups { get; set; } = [];
 }
 
 public sealed class VideoGetResponse
@@ -316,6 +340,24 @@ public sealed class SaveThumbResponse
     public long PhotoOwnerId { get; set; }
 }
 
+public sealed class ShortVideoThumbUploadUrlResponse
+{
+    [JsonPropertyName("upload_url")]
+    public string UploadUrl { get; set; } = string.Empty;
+}
+
+public sealed class ShortVideoEncodeProgressResponse
+{
+    [JsonPropertyName("percents")]
+    public int Percents { get; set; }
+
+    [JsonPropertyName("is_claimed")]
+    public bool IsClaimed { get; set; }
+
+    [JsonPropertyName("is_ready")]
+    public bool IsReady { get; set; }
+}
+
 public sealed class VideoForEditResponse
 {
     [JsonPropertyName("item")]
@@ -332,4 +374,91 @@ public sealed class VideoForEditItem
 
     [JsonPropertyName("thumb_upload_url")]
     public string? ThumbUploadUrl { get; set; }
+}
+
+public sealed class VkCommentsResponse
+{
+    [JsonPropertyName("count")]
+    public int Count { get; set; }
+
+    [JsonPropertyName("items")]
+    public List<VkCommentItem> Items { get; set; } = [];
+
+    [JsonPropertyName("profiles")]
+    public List<VkCommentProfile> Profiles { get; set; } = [];
+
+    [JsonPropertyName("groups")]
+    public List<VkCommentGroup> Groups { get; set; } = [];
+}
+
+public sealed class VkCommentItem
+{
+    [JsonPropertyName("id")]
+    public long Id { get; set; }
+
+    [JsonPropertyName("from_id")]
+    public long FromId { get; set; }
+
+    [JsonPropertyName("date")]
+    public long Date { get; set; }
+
+    [JsonPropertyName("text")]
+    public string Text { get; set; } = string.Empty;
+
+    [JsonPropertyName("parents_stack")]
+    public List<long> ParentsStack { get; set; } = [];
+
+    [JsonPropertyName("reply_to_comment")]
+    public long? ReplyToComment { get; set; }
+
+    [JsonPropertyName("reply_to_user")]
+    public long? ReplyToUser { get; set; }
+
+    [JsonPropertyName("likes")]
+    public VkCommentLikes? Likes { get; set; }
+
+    [JsonPropertyName("thread")]
+    public VkCommentThread? Thread { get; set; }
+
+    [JsonPropertyName("deleted")]
+    public bool Deleted { get; set; }
+}
+
+public sealed class VkCommentLikes
+{
+    [JsonPropertyName("count")]
+    public int Count { get; set; }
+}
+
+public sealed class VkCommentThread
+{
+    [JsonPropertyName("count")]
+    public int Count { get; set; }
+}
+
+public sealed class VkCommentProfile
+{
+    [JsonPropertyName("id")]
+    public long Id { get; set; }
+
+    [JsonPropertyName("first_name")]
+    public string? FirstName { get; set; }
+
+    [JsonPropertyName("last_name")]
+    public string? LastName { get; set; }
+
+    [JsonPropertyName("photo_100")]
+    public string? Photo100 { get; set; }
+}
+
+public sealed class VkCommentGroup
+{
+    [JsonPropertyName("id")]
+    public long Id { get; set; }
+
+    [JsonPropertyName("name")]
+    public string? Name { get; set; }
+
+    [JsonPropertyName("photo_100")]
+    public string? Photo100 { get; set; }
 }
