@@ -194,6 +194,24 @@
             color: #888;
         }
 
+        .permalink {
+            font-size: 11px;
+            display: inline-block;
+            margin-left: 6px;
+            padding: 1px 8px;
+            text-decoration: none;
+            color: #1a4f9b;
+            border: 1px solid #cfdbec;
+            border-radius: 9px;
+            background: #eef3fb;
+        }
+
+        .permalink:hover {
+            color: #fff;
+            border-color: #1a4f9b;
+            background: #1a4f9b;
+        }
+
         .likes {
             font-size: 11px;
             display: inline-block;
@@ -419,6 +437,18 @@
                 date.appendChild(text(c.date));
                 head.appendChild(date);
 
+                if (c.hasPermalink) {
+                    var permalink = el("a", "permalink");
+                    permalink.setAttribute("href",
+                        "app://comment/"
+                        + encodeURIComponent(c.sourceId)
+                        + "/" + encodeURIComponent(c.externalMediaId)
+                        + "/" + encodeURIComponent(c.externalCommentId));
+                    permalink.setAttribute("title", "Открыть комментарий в источнике");
+                    permalink.appendChild(text("перейти"));
+                    head.appendChild(permalink);
+                }
+
                 if (c.likes > 0) {
                     var likes = el("span", "likes");
                     likes.appendChild(text("♥ " + c.likes));
@@ -470,9 +500,18 @@
                 var multipleSources = sources.length > 1;
                 for (var si = 0; si < sources.length; si++) {
                     var s = sources[si];
+                    if (s.hasExternalLink) {
+                        var open = el("a");
+                        open.setAttribute("href",
+                            "app://open/" + encodeURIComponent(s.sourceId) + "/" + encodeURIComponent(s.externalId));
+                        open.setAttribute("title", "Открыть медиа в источнике " + s.sourceTitle);
+                        open.appendChild(text(multipleSources ? "открыть " + s.sourceTitle : "открыть"));
+                        actions.appendChild(open);
+                    }
                     var refresh = el("a");
                     refresh.setAttribute("href",
                         "app://fetch/" + encodeURIComponent(s.sourceId) + "/" + encodeURIComponent(s.externalId));
+                    refresh.setAttribute("title", "Перезагрузить комментарии из " + s.sourceTitle);
                     refresh.appendChild(text(multipleSources ? "обновить " + s.sourceTitle : "обновить"));
                     actions.appendChild(refresh);
                 }

@@ -16,6 +16,11 @@ public sealed class CommentsService(
         return repository.GetByMedia(link.SourceId, link.ExternalId);
     }
 
+    public List<CommentRecord> GetByMedia(string sourceId, string externalMediaId)
+    {
+        return repository.GetByMedia(sourceId, externalMediaId);
+    }
+
     public List<CommentRecord> Query(
         string? sourceId = null,
         DateTime? from = null,

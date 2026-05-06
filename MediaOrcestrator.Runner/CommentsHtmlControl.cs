@@ -2,6 +2,7 @@
 using MediaOrcestrator.Domain.Comments;
 using MediaOrcestrator.Modules;
 using Microsoft.Extensions.Logging;
+using System.Diagnostics;
 using Timer = System.Windows.Forms.Timer;
 
 namespace MediaOrcestrator.Runner;
@@ -42,6 +43,9 @@ public partial class CommentsHtmlControl : UserControl
                     req.SourceId, req.ExternalId);
             }
         };
+
+        uiBrowserView.OpenExternalRequested += (_, req) => OpenExternal(req.SourceId, req.ExternalId);
+        uiBrowserView.OpenCommentExternalRequested += (_, req) => OpenCommentExternal(req.SourceId, req.ExternalMediaId, req.ExternalCommentId);
     }
 
     public void Initialize(
@@ -134,6 +138,32 @@ public partial class CommentsHtmlControl : UserControl
         }
 
         await FetchAllForSourceAsync(source);
+    }
+
+    private static string? FindRootCommentId(IReadOnlyList<CommentRecord> comments, string externalCommentId)
+    {
+        var byId = comments.ToDictionary(c => c.ExternalCommentId);
+        if (!byId.TryGetValue(externalCommentId, out var current))
+        {
+            return null;
+        }
+
+        if (string.IsNullOrEmpty(current.ParentExternalCommentId))
+        {
+            return null;
+        }
+
+        var visited = new HashSet<string>(StringComparer.Ordinal);
+        var rootId = current.ParentExternalCommentId;
+
+        while (byId.TryGetValue(rootId!, out var parent)
+               && !string.IsNullOrEmpty(parent.ParentExternalCommentId)
+               && visited.Add(rootId!))
+        {
+            rootId = parent.ParentExternalCommentId;
+        }
+
+        return rootId;
     }
 
     private void PopulateSortCombos()
@@ -294,6 +324,79 @@ public partial class CommentsHtmlControl : UserControl
 
         var detail = new MediaDetailForm(media, _orcestrator, _actionHolder, _commentsService, _logger);
         detail.Show(this);
+    }
+
+    private void OpenExternal(string sourceId, string externalId)
+    {
+        if (_orcestrator == null)
+        {
+            return;
+        }
+
+        var source = _orcestrator.GetSources().FirstOrDefault(s => s.Id == sourceId);
+        if (source?.Type == null)
+        {
+            return;
+        }
+
+        try
+        {
+            var uri = source.Type.GetExternalUri(externalId, source.Settings);
+            if (uri == null)
+            {
+                return;
+            }
+
+            Process.Start(new ProcessStartInfo(uri.ToString())
+            {
+                UseShellExecute = true,
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Не удалось открыть медиа в источнике ({Source}/{External})",
+                sourceId, externalId);
+        }
+    }
+
+    private void OpenCommentExternal(string sourceId, string externalMediaId, string externalCommentId)
+    {
+        if (_orcestrator == null || _commentsService == null)
+        {
+            return;
+        }
+
+        var source = _orcestrator.GetSources().FirstOrDefault(s => s.Id == sourceId);
+        if (source?.Type is not ISupportsCommentPermalinks permalinks)
+        {
+            return;
+        }
+
+        var allComments = _commentsService.GetByMedia(sourceId, externalMediaId);
+        var rootCommentId = FindRootCommentId(allComments, externalCommentId);
+
+        try
+        {
+            var uri = permalinks.GetCommentExternalUri(externalMediaId,
+                externalCommentId,
+                rootCommentId,
+                source.Settings);
+
+            if (uri == null)
+            {
+                return;
+            }
+
+            Process.Start(new ProcessStartInfo(uri.ToString())
+            {
+                UseShellExecute = true,
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Не удалось открыть комментарий в источнике ({Source}/{Media}/{Comment})",
+                sourceId, externalMediaId, externalCommentId);
+        }
     }
 
     private async Task FetchForExternalAsync(string sourceId, string externalId)

@@ -10,7 +10,10 @@ public sealed class VkVideoChannel(
     ILogger<VkVideoChannel> logger,
     ILogger<VkVideoService> serviceLogger,
     VideoTranscoder videoTranscoder)
-    : ISourceType, IAuthenticatable, ISupportsComments
+    : ISourceType,
+        IAuthenticatable,
+        ISupportsComments,
+        ISupportsCommentPermalinks
 {
     private readonly SemaphoreSlim _serviceLock = new(1, 1);
     private readonly Dictionary<string, VkVideoService> _cachedServices = new(StringComparer.OrdinalIgnoreCase);
@@ -59,6 +62,24 @@ public sealed class VkVideoChannel(
     public Uri? GetExternalUri(string externalId, Dictionary<string, string> settings)
     {
         return new($"https://vkvideo.ru/video{externalId}");
+    }
+
+    public Uri? GetCommentExternalUri(
+        string externalMediaId,
+        string externalCommentId,
+        string? rootExternalCommentId,
+        Dictionary<string, string> settings)
+    {
+        if (string.IsNullOrEmpty(externalMediaId) || string.IsNullOrEmpty(externalCommentId))
+        {
+            return null;
+        }
+
+        var query = string.IsNullOrEmpty(rootExternalCommentId)
+            ? $"?reply={externalCommentId}"
+            : $"?thread={rootExternalCommentId}&reply={externalCommentId}";
+
+        return new($"https://vkvideo.ru/video{externalMediaId}{query}");
     }
 
     public async IAsyncEnumerable<MediaDto> GetMedia(Dictionary<string, string> settings, bool isFull, [EnumeratorCancellation] CancellationToken cancellationToken = default)
@@ -470,7 +491,7 @@ public sealed class VkVideoChannel(
             LikeCount = item.Likes?.Count,
             IsDeleted = item.Deleted,
             IsAuthor = item.FromId == ownerId,
-            LikedByAuthor = false,
+            LikedByAuthor = item.Likes?.GroupLiked ?? false,
             Raw = raw,
         };
     }

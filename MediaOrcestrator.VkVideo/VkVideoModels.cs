@@ -428,6 +428,9 @@ public sealed class VkCommentLikes
 {
     [JsonPropertyName("count")]
     public int Count { get; set; }
+
+    [JsonPropertyName("group_liked")]
+    public bool GroupLiked { get; set; }
 }
 
 public sealed class VkCommentThread

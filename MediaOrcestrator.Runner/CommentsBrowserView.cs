@@ -1,5 +1,6 @@
 ﻿using MediaOrcestrator.Domain;
 using MediaOrcestrator.Domain.Comments;
+using MediaOrcestrator.Modules;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -33,6 +34,8 @@ public sealed record CommentsRenderOptions
 
 public sealed record CommentsBrowserFetchRequest(string SourceId, string ExternalId);
 
+public sealed record CommentsBrowserCommentRequest(string SourceId, string ExternalMediaId, string ExternalCommentId);
+
 public sealed partial class CommentsBrowserView : UserControl
 {
     private const string TemplateResourceName = "MediaOrcestrator.Runner.Resources.comments.template.html";
@@ -55,6 +58,10 @@ public sealed partial class CommentsBrowserView : UserControl
 
     public event EventHandler<string>? MediaRequested;
 
+    public event EventHandler<CommentsBrowserCommentRequest>? OpenCommentExternalRequested;
+
+    public event EventHandler<CommentsBrowserFetchRequest>? OpenExternalRequested;
+
     public void Render(
         Orcestrator orcestrator,
         IReadOnlyList<CommentRecord> records,
@@ -62,7 +69,8 @@ public sealed partial class CommentsBrowserView : UserControl
     {
         options ??= new();
 
-        var sourceTitles = orcestrator.GetSources().ToDictionary(x => x.Id, x => x.TitleFull);
+        var sourcesById = orcestrator.GetSources().ToDictionary(x => x.Id);
+        var sourceTitles = sourcesById.ToDictionary(x => x.Key, x => x.Value.TitleFull);
         var linkByKey = new Dictionary<(string SourceId, string ExternalId), (Media Media, int SortNumber)>();
 
         foreach (var media in orcestrator.GetMedias())
@@ -115,12 +123,20 @@ public sealed partial class CommentsBrowserView : UserControl
                         r.IsDeleted ? null : r.Text,
                         r.IsAuthor,
                         r.LikedByAuthor,
-                        sourceTitles.GetValueOrDefault(r.SourceId) ?? r.SourceId))
+                        sourceTitles.GetValueOrDefault(r.SourceId) ?? r.SourceId,
+                        r.SourceId,
+                        r.ExternalMediaId,
+                        r.ExternalCommentId,
+                        HasCommentPermalink(sourcesById, r)))
                     .ToList();
 
                 var sources = grp
                     .OrderBy(s => s.SourceTitle, StringComparer.OrdinalIgnoreCase)
-                    .Select(s => new MediaSourceDto(s.SourceId, s.ExternalMediaId, s.SourceTitle, s.Records.Count))
+                    .Select(s => new MediaSourceDto(s.SourceId,
+                        s.ExternalMediaId,
+                        s.SourceTitle,
+                        s.Records.Count,
+                        HasExternalLink(sourcesById, s.SourceId, s.ExternalMediaId)))
                     .ToList();
 
                 var dto = new GroupDto(media?.Id,
@@ -183,7 +199,48 @@ public sealed partial class CommentsBrowserView : UserControl
             case "fetch" when segments.Length >= 2:
                 FetchRequested?.Invoke(this, new(segments[0], segments[1]));
                 break;
+
+            case "open" when segments.Length >= 2:
+                OpenExternalRequested?.Invoke(this, new(segments[0], segments[1]));
+                break;
+
+            case "comment" when segments.Length >= 3:
+                OpenCommentExternalRequested?.Invoke(this, new(segments[0], segments[1], segments[2]));
+                break;
         }
+    }
+
+    private static bool HasExternalLink(Dictionary<string, Source> sourcesById, string sourceId, string externalId)
+    {
+        if (string.IsNullOrEmpty(externalId))
+        {
+            return false;
+        }
+
+        if (!sourcesById.TryGetValue(sourceId, out var source) || source.Type == null)
+        {
+            return false;
+        }
+
+        try
+        {
+            return source.Type.GetExternalUri(externalId, source.Settings) != null;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool HasCommentPermalink(Dictionary<string, Source> sourcesById, CommentRecord record)
+    {
+        if (string.IsNullOrEmpty(record.ExternalMediaId) || string.IsNullOrEmpty(record.ExternalCommentId))
+        {
+            return false;
+        }
+
+        return sourcesById.TryGetValue(record.SourceId, out var source)
+               && source.Type is ISupportsCommentPermalinks;
     }
 
     private static string? ComposedParentId(CommentRecord r)
@@ -343,7 +400,8 @@ public sealed partial class CommentsBrowserView : UserControl
         string SourceId,
         string ExternalId,
         string SourceTitle,
-        int Count);
+        int Count,
+        bool HasExternalLink);
 
     private sealed record CommentDto(
         string Id,
@@ -356,5 +414,9 @@ public sealed partial class CommentsBrowserView : UserControl
         string? Text,
         bool IsAuthor,
         bool LikedByAuthor,
-        string? Source);
+        string? Source,
+        string SourceId,
+        string ExternalMediaId,
+        string ExternalCommentId,
+        bool HasPermalink);
 }
