@@ -422,6 +422,12 @@ public sealed class VkCommentItem
 
     [JsonPropertyName("deleted")]
     public bool Deleted { get; set; }
+
+    [JsonPropertyName("can_edit")]
+    public int CanEdit { get; set; }
+
+    [JsonPropertyName("can_delete")]
+    public int CanDelete { get; set; }
 }
 
 public sealed class VkCommentLikes
@@ -431,6 +437,18 @@ public sealed class VkCommentLikes
 
     [JsonPropertyName("group_liked")]
     public bool GroupLiked { get; set; }
+
+    [JsonPropertyName("user_likes")]
+    public int UserLikes { get; set; }
+
+    [JsonPropertyName("can_like")]
+    public int CanLike { get; set; }
+}
+
+public sealed class VkLikesAddResponse
+{
+    [JsonPropertyName("likes")]
+    public int Likes { get; set; }
 }
 
 public sealed class VkCommentThread

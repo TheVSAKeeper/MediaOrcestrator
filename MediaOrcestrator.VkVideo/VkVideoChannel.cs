@@ -13,7 +13,9 @@ public sealed class VkVideoChannel(
     : ISourceType,
         IAuthenticatable,
         ISupportsComments,
-        ISupportsCommentPermalinks
+        ISupportsCommentPermalinks,
+        ISupportsCommentMutations,
+        ISupportsCommentLikes
 {
     private readonly SemaphoreSlim _serviceLock = new(1, 1);
     private readonly Dictionary<string, VkVideoService> _cachedServices = new(StringComparer.OrdinalIgnoreCase);
@@ -130,6 +132,98 @@ public sealed class VkVideoChannel(
                 yield return reply;
             }
         }
+    }
+
+    public async Task<CommentDto> CreateCommentAsync(
+        string externalMediaId,
+        string? parentExternalCommentId,
+        string text,
+        Dictionary<string, string> settings,
+        CancellationToken cancellationToken = default)
+    {
+        var (ownerId, videoId) = ParseExternalId(externalMediaId);
+        var service = await CreateServiceAsync(settings);
+
+        long? parentId = null;
+        if (!string.IsNullOrEmpty(parentExternalCommentId)
+            && long.TryParse(parentExternalCommentId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed))
+        {
+            parentId = parsed;
+        }
+
+        var newCommentId = await service.CreateVideoCommentAsync(ownerId, videoId, parentId, text);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        return await FetchSingleCommentAsync(service, ownerId, newCommentId, parentId);
+    }
+
+    public async Task<CommentDto?> EditCommentAsync(
+        string externalMediaId,
+        string externalCommentId,
+        string text,
+        Dictionary<string, string> settings,
+        CancellationToken cancellationToken = default)
+    {
+        var (ownerId, _) = ParseExternalId(externalMediaId);
+        var commentId = long.Parse(externalCommentId, CultureInfo.InvariantCulture);
+
+        var service = await CreateServiceAsync(settings);
+        await service.EditVideoCommentAsync(ownerId, commentId, text);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        return await FetchSingleCommentAsync(service, ownerId, commentId, null);
+    }
+
+    public async Task DeleteCommentAsync(
+        string externalMediaId,
+        string externalCommentId,
+        Dictionary<string, string> settings,
+        CancellationToken cancellationToken = default)
+    {
+        var (ownerId, _) = ParseExternalId(externalMediaId);
+        var commentId = long.Parse(externalCommentId, CultureInfo.InvariantCulture);
+
+        var service = await CreateServiceAsync(settings);
+        await service.DeleteVideoCommentAsync(ownerId, commentId);
+    }
+
+    public async Task RestoreCommentAsync(
+        string externalMediaId,
+        string externalCommentId,
+        Dictionary<string, string> settings,
+        CancellationToken cancellationToken = default)
+    {
+        var (ownerId, _) = ParseExternalId(externalMediaId);
+        var commentId = long.Parse(externalCommentId, CultureInfo.InvariantCulture);
+
+        var service = await CreateServiceAsync(settings);
+        await service.RestoreVideoCommentAsync(ownerId, commentId);
+    }
+
+    public async Task<int> LikeCommentAsync(
+        string externalMediaId,
+        string externalCommentId,
+        Dictionary<string, string> settings,
+        CancellationToken cancellationToken = default)
+    {
+        var (ownerId, _) = ParseExternalId(externalMediaId);
+        var commentId = long.Parse(externalCommentId, CultureInfo.InvariantCulture);
+
+        var service = await CreateServiceAsync(settings);
+        return await service.LikeVideoCommentAsync(ownerId, commentId);
+    }
+
+    public async Task<int> UnlikeCommentAsync(
+        string externalMediaId,
+        string externalCommentId,
+        Dictionary<string, string> settings,
+        CancellationToken cancellationToken = default)
+    {
+        var (ownerId, _) = ParseExternalId(externalMediaId);
+        var commentId = long.Parse(externalCommentId, CultureInfo.InvariantCulture);
+
+        var service = await CreateServiceAsync(settings);
+        return await service.UnlikeVideoCommentAsync(ownerId, commentId);
     }
 
     // TODO: Переделать нормально
@@ -391,6 +485,36 @@ public sealed class VkVideoChannel(
         throw new NotImplementedException();
     }
 
+    private static async Task<CommentDto> FetchSingleCommentAsync(
+        VkVideoService service,
+        long ownerId,
+        long commentId,
+        long? parentCommentId)
+    {
+        var response = await service.GetVideoCommentAsync(ownerId, commentId);
+
+        var item = response.Items.FirstOrDefault()
+                   ?? throw new InvalidOperationException($"VK не вернул комментарий {commentId} после операции");
+
+        var authors = new Dictionary<long, AuthorInfo>();
+        AppendAuthors(response, authors);
+
+        return MapComment(item, parentCommentId, ownerId, authors);
+    }
+
+    private static void AppendAuthors(VkCommentsResponse response, Dictionary<long, AuthorInfo> authors)
+    {
+        foreach (var profile in response.Profiles)
+        {
+            authors.TryAdd(profile.Id, new($"{profile.FirstName} {profile.LastName}".Trim(), profile.Photo100));
+        }
+
+        foreach (var group in response.Groups)
+        {
+            authors.TryAdd(-group.Id, new(group.Name ?? string.Empty, group.Photo100));
+        }
+    }
+
     private static async IAsyncEnumerable<CommentDto> StreamCommentsAsync(
         VkVideoService service,
         long ownerId,
@@ -413,15 +537,7 @@ public sealed class VkVideoChannel(
                 offset,
                 parentCommentId);
 
-            foreach (var profile in response.Profiles)
-            {
-                authors.TryAdd(profile.Id, new($"{profile.FirstName} {profile.LastName}".Trim(), profile.Photo100));
-            }
-
-            foreach (var group in response.Groups)
-            {
-                authors.TryAdd(-group.Id, new(group.Name ?? string.Empty, group.Photo100));
-            }
+            AppendAuthors(response, authors);
 
             if (total < 0)
             {
@@ -492,6 +608,9 @@ public sealed class VkVideoChannel(
             IsDeleted = item.Deleted,
             IsAuthor = item.FromId == ownerId,
             LikedByAuthor = item.Likes?.GroupLiked ?? false,
+            LikedByMe = item.Likes?.UserLikes == 1,
+            CanEdit = item.CanEdit == 1,
+            CanDelete = item.CanDelete == 1,
             Raw = raw,
         };
     }

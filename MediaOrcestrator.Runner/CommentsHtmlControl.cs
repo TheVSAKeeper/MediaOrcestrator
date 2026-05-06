@@ -46,6 +46,26 @@ public partial class CommentsHtmlControl : UserControl
 
         uiBrowserView.OpenExternalRequested += (_, req) => OpenExternal(req.SourceId, req.ExternalId);
         uiBrowserView.OpenCommentExternalRequested += (_, req) => OpenCommentExternal(req.SourceId, req.ExternalMediaId, req.ExternalCommentId);
+
+        uiBrowserView.MutationRequested += async (_, req) =>
+        {
+            try
+            {
+                await HandleMutationAsync(req);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Не удалось обработать операцию {Kind} ({Source}/{Media}/{Comment})",
+                    req.Kind, req.SourceId, req.ExternalMediaId, req.ExternalCommentId);
+
+                MessageBox.Show($"Не удалось выполнить операцию: {ex.Message}",
+                    "Ошибка",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+
+                ApplyFilters();
+            }
+        };
     }
 
     public void Initialize(
@@ -396,6 +416,157 @@ public partial class CommentsHtmlControl : UserControl
         {
             _logger?.LogError(ex, "Не удалось открыть комментарий в источнике ({Source}/{Media}/{Comment})",
                 sourceId, externalMediaId, externalCommentId);
+        }
+    }
+
+    private async Task HandleMutationAsync(CommentMutationRequest request)
+    {
+        if (_orcestrator == null || _commentsService == null || _actionHolder == null)
+        {
+            return;
+        }
+
+        var source = _orcestrator.GetSources().FirstOrDefault(s => s.Id == request.SourceId);
+        if (source == null)
+        {
+            return;
+        }
+
+        var isLikeOp = request.Kind is CommentMutationKind.Like or CommentMutationKind.Unlike;
+        var supportsRequiredFeature = isLikeOp
+            ? source.Type is ISupportsCommentLikes
+            : source.Type is ISupportsCommentMutations;
+
+        if (!supportsRequiredFeature)
+        {
+            MessageBox.Show(isLikeOp
+                    ? "Источник не поддерживает лайки на комментариях."
+                    : "Источник не поддерживает изменение комментариев.",
+                "Операция недоступна",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+
+            return;
+        }
+
+        var media = _orcestrator.GetMedias()
+            .FirstOrDefault(m => m.Sources.Any(l => l.SourceId == request.SourceId && l.ExternalId == request.ExternalMediaId));
+
+        var link = media?.Sources.FirstOrDefault(l => l.SourceId == request.SourceId && l.ExternalId == request.ExternalMediaId);
+        if (media == null || link == null)
+        {
+            MessageBox.Show("Медиа не найдено локально.",
+                "Операция недоступна",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+
+            return;
+        }
+
+        var label = request.Kind switch
+        {
+            CommentMutationKind.Create => "Отправка комментария",
+            CommentMutationKind.Edit => "Изменение комментария",
+            CommentMutationKind.Delete => "Удаление комментария",
+            CommentMutationKind.Restore => "Восстановление комментария",
+            CommentMutationKind.Like => "Лайк комментария",
+            CommentMutationKind.Unlike => "Снятие лайка",
+            _ => "Комментарий",
+        };
+
+        var cts = new CancellationTokenSource();
+        var action = _actionHolder.Register($"{label}: «{media.Title}»", "Запущена", 1, cts);
+
+        var patchedInPlace = false;
+
+        try
+        {
+            switch (request.Kind)
+            {
+                case CommentMutationKind.Create:
+                    {
+                        var record = await Task.Run(() =>
+                                _commentsService.CreateCommentAsync(source, link, request.ParentExternalCommentId, request.Text, cts.Token),
+                            cts.Token);
+
+                        var groupKey = CommentsBrowserView.BuildGroupKey(media, source.Id, link.ExternalId);
+                        var parentCompositeId = string.IsNullOrEmpty(request.ParentExternalCommentId)
+                            ? null
+                            : $"{source.Id}|{link.ExternalId}|{request.ParentExternalCommentId}";
+
+                        patchedInPlace = uiBrowserView.TryApplyCreate(_orcestrator, record, groupKey, parentCompositeId);
+                        break;
+                    }
+
+                case CommentMutationKind.Edit:
+                    {
+                        var commentId = request.ExternalCommentId
+                                        ?? throw new InvalidOperationException("Edit без commentId");
+
+                        var record = await Task.Run(() =>
+                                _commentsService.EditCommentAsync(source, link, commentId, request.Text, cts.Token),
+                            cts.Token);
+
+                        patchedInPlace = uiBrowserView.TryApplyEdit(record.Id, record.Text);
+                        break;
+                    }
+
+                case CommentMutationKind.Delete:
+                    {
+                        var commentId = request.ExternalCommentId
+                                        ?? throw new InvalidOperationException("Delete без commentId");
+
+                        await Task.Run(() =>
+                                _commentsService.DeleteCommentAsync(source, link, commentId, cts.Token),
+                            cts.Token);
+
+                        var recordId = $"{source.Id}|{link.ExternalId}|{commentId}";
+                        patchedInPlace = uiBrowserView.TryApplyDeleted(recordId, true);
+                        break;
+                    }
+
+                case CommentMutationKind.Restore:
+                    {
+                        var commentId = request.ExternalCommentId
+                                        ?? throw new InvalidOperationException("Restore без commentId");
+
+                        await Task.Run(() =>
+                                _commentsService.RestoreCommentAsync(source, link, commentId, cts.Token),
+                            cts.Token);
+
+                        var recordId = $"{source.Id}|{link.ExternalId}|{commentId}";
+                        patchedInPlace = uiBrowserView.TryApplyDeleted(recordId, false);
+                        break;
+                    }
+
+                case CommentMutationKind.Like:
+                case CommentMutationKind.Unlike:
+                    {
+                        var liked = request.Kind == CommentMutationKind.Like;
+                        var commentId = request.ExternalCommentId
+                                        ?? throw new InvalidOperationException($"{request.Kind} без commentId");
+
+                        var newCount = await Task.Run(() =>
+                                _commentsService.LikeCommentAsync(source, link, commentId, liked, cts.Token),
+                            cts.Token);
+
+                        var recordId = $"{source.Id}|{link.ExternalId}|{commentId}";
+                        patchedInPlace = uiBrowserView.TryApplyLikeUpdate(recordId, liked, newCount);
+                        break;
+                    }
+            }
+
+            action.Status = $"{source.TitleFull}: ок";
+        }
+        finally
+        {
+            action.ProgressPlus();
+            action.Finish();
+        }
+
+        if (!patchedInPlace)
+        {
+            ApplyFilters();
         }
     }
 
