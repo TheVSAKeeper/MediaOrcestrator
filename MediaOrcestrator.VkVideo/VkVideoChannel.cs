@@ -226,8 +226,9 @@ public sealed class VkVideoChannel(
         {
             var uploadBytesPerSecond = SpeedLimitHelper.ParseUploadBytesPerSecond(settings);
             var uploadProgress = UploadProgressLogger.CreateBucketed(logger, media.Id);
+            var previewPath = PreparePreviewForUpload(media.TempPreviewPath, isShorts);
             var result = await service.UploadVideoAsync(isShorts, groupId, filePath, media.Title, media.Description,
-                fileExt, media.TempPreviewPath, publishAtUnix, uploadBytesPerSecond, uploadProgress, cancellationToken);
+                fileExt, previewPath, publishAtUnix, uploadBytesPerSecond, uploadProgress, cancellationToken);
 
             var externalId = $"{result.OwnerId}_{result.Id}";
             logger.LogInformation("Видео загружено на VK Video. ID: {ExternalId}", externalId);
@@ -273,7 +274,8 @@ public sealed class VkVideoChannel(
             try
             {
                 var isShorts = await ResolveIsShortsAsync(tempMedia, service, ownerId, videoId, cancellationToken);
-                await service.UploadThumbnailAsync(isShorts, ownerId, videoId, tempMedia.TempPreviewPath);
+                var previewPath = PreparePreviewForUpload(tempMedia.TempPreviewPath, isShorts);
+                await service.UploadThumbnailAsync(isShorts, ownerId, videoId, previewPath);
             }
             catch (Exception ex)
             {
@@ -589,6 +591,30 @@ public sealed class VkVideoChannel(
     private static string GetAuthStatePath(Dictionary<string, string> settings)
     {
         return Path.Combine(settings["_system_state_path"], "auth_state");
+    }
+
+    private string PreparePreviewForUpload(string previewPath, bool isShorts)
+    {
+        if (!isShorts || string.IsNullOrEmpty(previewPath) || !File.Exists(previewPath))
+        {
+            return previewPath;
+        }
+
+        try
+        {
+            var croppedPath = ThumbnailCropper.CropToShortsIfNeeded(previewPath);
+            if (!ReferenceEquals(croppedPath, previewPath) && croppedPath != previewPath)
+            {
+                logger.LogInformation("Превью обрезано под клип VK: {CroppedPath}", croppedPath);
+            }
+
+            return croppedPath;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Не удалось обрезать превью под вертикальный формат, используется оригинал");
+            return previewPath;
+        }
     }
 
     private async Task<bool> ResolveIsShortsAsync(
