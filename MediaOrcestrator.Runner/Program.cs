@@ -110,6 +110,12 @@ file static class Program
 
             Log.Information("Приложение запускается...");
             CheckUpdaterLog();
+
+            var version = typeof(Program).Assembly.GetName().Version?.ToString() ?? "—";
+            const int TotalStartupSteps = 10;
+            using var splash = new SplashController(version, TotalStartupSteps, "Запуск...");
+
+            splash.Step("Подготовка сервисов...");
             var services = new ServiceCollection();
             services.AddSingleton(logControl);
             services.AddSingleton(settingsManager);
@@ -126,22 +132,29 @@ file static class Program
 
             using var serviceProvider = services.BuildServiceProvider();
             _runningServiceProvider = serviceProvider;
-            var mainForm = serviceProvider.GetRequiredService<MainForm>();
 
+            splash.Step("Загрузка плагинов...");
             var orcestrator = serviceProvider.GetRequiredService<Orcestrator>();
             orcestrator.Init(pluginPath);
 
+            splash.Step("Резервное копирование базы данных...");
             var backupService = serviceProvider.GetRequiredService<DatabaseBackupService>();
             backupService.ValidateLog();
             backupService.Backup(BackupTrigger.Startup);
             backupService.StartScheduled(TimeSpan.FromHours(6));
 
+            splash.Step("Подготовка временных файлов...");
             var tempManager = serviceProvider.GetRequiredService<TempManager>();
             tempManager.MigrateOldTempPaths();
             tempManager.CleanAll();
 
+            splash.Step("Подготовка состояния источников...");
             var stateManager = serviceProvider.GetRequiredService<StateManager>();
             stateManager.MigrateLegacyStatePaths();
+
+            var mainForm = serviceProvider.GetRequiredService<MainForm>();
+            mainForm.StartupStep = splash.Step;
+            mainForm.StartupCompleted = splash.Close;
 
             Task.Run(async () =>
             {

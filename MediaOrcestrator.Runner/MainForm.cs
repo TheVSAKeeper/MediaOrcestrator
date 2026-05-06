@@ -35,6 +35,18 @@ public partial class MainForm : Form
         uiPublishTabPage.Controls.Add(_publishControl);
     }
 
+    public Action<string>? StartupStep { get; set; }
+
+    public Action? StartupCompleted { get; set; }
+
+    protected override void OnShown(EventArgs e)
+    {
+        base.OnShown(e);
+
+        TopMost = true;
+        TopMost = false;
+    }
+
     private void MainForm_Load(object sender, EventArgs e)
     {
         Text = $"Медиа оркестратор v{_updateManager.CurrentVersion}";
@@ -43,8 +55,14 @@ public partial class MainForm : Form
         uiRelationsGraphControl.DeleteRequested += OnGraphDeleteRequested;
         uiRelationsGraphControl.CreateRequested += OnGraphCreateRequested;
         uiRelationsGraphControl.RefreshRequested += (_, _) => DrawRelations();
+
+        StartupStep?.Invoke("Подготовка списка источников...");
         DrawSources();
+
+        StartupStep?.Invoke("Подготовка связей между источниками...");
         DrawRelations();
+
+        StartupStep?.Invoke("Загрузка медиа-матрицы...");
         // TODO: SetZalupaV2
         uiMediaMatrixGridControl.Initialize(new(_orcestrator,
             _serviceProvider.GetRequiredService<SyncRetryRunner>(),
@@ -61,6 +79,7 @@ public partial class MainForm : Form
 
         uiMediaMatrixGridControl.RefreshData();
 
+        StartupStep?.Invoke("Подготовка комментариев...");
         uiCommentsViewControl.Initialize(_orcestrator,
             _serviceProvider.GetRequiredService<CommentsService>(),
             _serviceProvider.GetRequiredService<ActionHolder>(),
@@ -76,12 +95,16 @@ public partial class MainForm : Form
             uiClearTypeComboBox.SelectedIndex = 0;
         }
 
+        StartupStep?.Invoke("Подготовка плана синхронизации...");
         var planner = _serviceProvider.GetRequiredService<SyncPlanner>();
         uiSyncTreeControl.Initialize(planner,
             _orcestrator,
             _serviceProvider.GetRequiredService<SyncRetryRunner>(),
             _serviceProvider.GetRequiredService<ActionHolder>(),
             _serviceProvider.GetRequiredService<ILogger<SyncTreeControl>>());
+
+        StartupStep?.Invoke("Готово");
+        StartupCompleted?.Invoke();
 
         CheckToolUpdatesInBackground();
         CheckAppUpdateInBackground();
