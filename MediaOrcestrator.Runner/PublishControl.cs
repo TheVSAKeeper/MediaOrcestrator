@@ -17,7 +17,9 @@ public partial class PublishControl : UserControl
     private readonly ILogger<PublishControl>? _logger;
     private readonly List<string> _titleSuggestions = [];
     private readonly Dictionary<string, string> _titleToDescription = new(StringComparer.Ordinal);
+    private readonly List<Media> _mediasCache = [];
     private CancellationTokenSource? _publishCts;
+    private CancellationTokenSource? _suggestionsCts;
     private string? _videoPath;
     private string? _coverPath;
     private string? _autoFilledTitle;
@@ -25,6 +27,8 @@ public partial class PublishControl : UserControl
     private string? _videoDescription;
     private bool _isPublishing;
     private bool _suppressTitleFilter;
+    private bool _suspendSourceChange;
+    private bool _isMediasCacheValid;
 
     public PublishControl()
     {
@@ -54,34 +58,45 @@ public partial class PublishControl : UserControl
 
         var selectedId = (uiSourceComboBox.SelectedItem as Source)?.Id;
 
-        uiSourceComboBox.BeginUpdate();
-        uiSourceComboBox.Items.Clear();
-        uiSourceComboBox.DisplayMember = nameof(Source.TitleFull);
-
-        var sources = _orcestrator.GetSources()
-            .Where(x => x is { IsDisable: false, Type: not null } && x.Type.ChannelType != SyncDirection.OnlyDownload)
-            .ToList();
-
-        foreach (var source in sources)
+        _suspendSourceChange = true;
+        try
         {
-            uiSourceComboBox.Items.Add(source);
-        }
+            uiSourceComboBox.BeginUpdate();
+            uiSourceComboBox.Items.Clear();
+            uiSourceComboBox.DisplayMember = nameof(Source.TitleFull);
 
-        if (selectedId != null)
-        {
-            var restored = sources.FindIndex(x => x.Id == selectedId);
-            if (restored >= 0)
+            var sources = _orcestrator.GetSources()
+                .Where(x => x is { IsDisable: false, Type: not null } && x.Type.ChannelType != SyncDirection.OnlyDownload)
+                .ToList();
+
+            foreach (var source in sources)
             {
-                uiSourceComboBox.SelectedIndex = restored;
+                uiSourceComboBox.Items.Add(source);
             }
-        }
 
-        if (uiSourceComboBox.SelectedIndex < 0 && uiSourceComboBox.Items.Count > 0)
+            if (selectedId != null)
+            {
+                var restored = sources.FindIndex(x => x.Id == selectedId);
+                if (restored >= 0)
+                {
+                    uiSourceComboBox.SelectedIndex = restored;
+                }
+            }
+
+            if (uiSourceComboBox.SelectedIndex < 0 && uiSourceComboBox.Items.Count > 0)
+            {
+                uiSourceComboBox.SelectedIndex = 0;
+            }
+
+            uiSourceComboBox.EndUpdate();
+        }
+        finally
         {
-            uiSourceComboBox.SelectedIndex = 0;
+            _suspendSourceChange = false;
         }
 
-        uiSourceComboBox.EndUpdate();
+        InvalidateMediasCache();
+        ReloadSourceSuggestions();
         UpdatePublishButtonState();
     }
 
@@ -89,7 +104,6 @@ public partial class PublishControl : UserControl
     {
         base.OnLoad(e);
         ReloadSources();
-        ReloadSourceSuggestions();
         UpdateVideoLabel();
         UpdateCoverLabel();
         UpdateDescriptionCounter();
@@ -103,8 +117,10 @@ public partial class PublishControl : UserControl
         image?.Dispose();
 
         _publishCts?.Cancel();
-        _publishCts?.Dispose();
         _publishCts = null;
+
+        _suggestionsCts?.Cancel();
+        _suggestionsCts = null;
 
         base.OnHandleDestroyed(e);
     }
@@ -180,6 +196,11 @@ public partial class PublishControl : UserControl
 
     private void uiSourceComboBox_SelectedIndexChanged(object? sender, EventArgs e)
     {
+        if (_suspendSourceChange)
+        {
+            return;
+        }
+
         UpdatePublishButtonState();
         ReloadSourceSuggestions();
     }
@@ -324,9 +345,9 @@ public partial class PublishControl : UserControl
         }
 
         _isPublishing = true;
-        _publishCts?.Dispose();
-        _publishCts = new();
-        var token = _publishCts.Token;
+        var cts = new CancellationTokenSource();
+        _publishCts = cts;
+        var token = cts.Token;
 
         SetControlsBusy(true);
         SetStatus($"Публикация в «{source.TitleFull}»...", false);
@@ -341,6 +362,7 @@ public partial class PublishControl : UserControl
 
             SetStatus($"Опубликовано в «{source.TitleFull}».", false);
             _logger.LogInformation("Медиа «{Title}» опубликовано в {Source}", title, source.TitleFull);
+            InvalidateMediasCache();
             ResetForm();
             MediaPublished?.Invoke(this, EventArgs.Empty);
         }
@@ -359,6 +381,13 @@ public partial class PublishControl : UserControl
             _isPublishing = false;
             SetControlsBusy(false);
             UpdatePublishButtonState();
+
+            if (ReferenceEquals(_publishCts, cts))
+            {
+                _publishCts = null;
+            }
+
+            cts.Dispose();
         }
     }
 
@@ -688,7 +717,38 @@ public partial class PublishControl : UserControl
         ReloadSourceSuggestions();
     }
 
+    private void InvalidateMediasCache()
+    {
+        _isMediasCacheValid = false;
+        _mediasCache.Clear();
+    }
+
     private void ReloadSourceSuggestions()
+    {
+        _suggestionsCts?.Cancel();
+        _suggestionsCts = null;
+
+        ClearSuggestionUi();
+
+        if (_orcestrator == null || uiSourceComboBox.SelectedItem is not Source source)
+        {
+            return;
+        }
+
+        var sourceId = source.Id;
+
+        if (_isMediasCacheValid)
+        {
+            PopulateSuggestionsForSource(sourceId);
+            return;
+        }
+
+        var cts = new CancellationTokenSource();
+        _suggestionsCts = cts;
+        _ = LoadSuggestionsAsync(sourceId, cts);
+    }
+
+    private void ClearSuggestionUi()
     {
         _suppressTitleFilter = true;
         try
@@ -707,20 +767,75 @@ public partial class PublishControl : UserControl
                 uiDescriptionTemplateComboBox.Items.Add(new DescriptionTemplate(_videoDescription, DescriptionSource.VideoFile));
             }
 
-            if (_orcestrator == null || uiSourceComboBox.SelectedItem is not Source source)
+            uiTitleComboBox.Text = preservedTitle;
+            uiTitleComboBox.EndUpdate();
+            uiDescriptionTemplateComboBox.EndUpdate();
+            uiDescriptionTemplateComboBox.Enabled = !_isPublishing && uiDescriptionTemplateComboBox.Items.Count > 0;
+        }
+        finally
+        {
+            _suppressTitleFilter = false;
+        }
+    }
+
+    private async Task LoadSuggestionsAsync(string sourceId, CancellationTokenSource cts)
+    {
+        var token = cts.Token;
+        try
+        {
+            var orcestrator = _orcestrator;
+            if (orcestrator == null)
             {
-                uiTitleComboBox.Text = preservedTitle;
-                uiTitleComboBox.EndUpdate();
-                uiDescriptionTemplateComboBox.EndUpdate();
-                uiDescriptionTemplateComboBox.Enabled = !_isPublishing && uiDescriptionTemplateComboBox.Items.Count > 0;
                 return;
             }
 
-            var links = _orcestrator.GetMedias()
-                .SelectMany(x => x.Sources ?? [])
-                .Where(x => x.SourceId == source.Id)
-                .OrderByDescending(x => x.SortNumber)
-                .ToList();
+            var medias = await Task.Run(() => orcestrator.GetMedias(), token);
+
+            if (token.IsCancellationRequested || IsDisposed || !IsHandleCreated)
+            {
+                return;
+            }
+
+            _mediasCache.Clear();
+            _mediasCache.AddRange(medias);
+            _isMediasCacheValid = true;
+
+            if (uiSourceComboBox.SelectedItem is Source current && current.Id == sourceId)
+            {
+                PopulateSuggestionsForSource(sourceId);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception exception)
+        {
+            _logger?.LogWarning(exception, "Не удалось загрузить историю публикаций для источника {SourceId}", sourceId);
+        }
+        finally
+        {
+            if (ReferenceEquals(_suggestionsCts, cts))
+            {
+                _suggestionsCts = null;
+            }
+
+            cts.Dispose();
+        }
+    }
+
+    private void PopulateSuggestionsForSource(string sourceId)
+    {
+        var links = _mediasCache
+            .SelectMany(x => x.Sources ?? [])
+            .Where(x => x.SourceId == sourceId)
+            .OrderByDescending(x => x.SortNumber)
+            .ToList();
+
+        _suppressTitleFilter = true;
+        try
+        {
+            uiTitleComboBox.BeginUpdate();
+            var preservedTitle = uiTitleComboBox.Text;
 
             foreach (var title in links.Select(x => x.Title)
                          .Where(x => !string.IsNullOrEmpty(x))
@@ -744,6 +859,7 @@ public partial class PublishControl : UserControl
             uiTitleComboBox.Text = preservedTitle;
             uiTitleComboBox.EndUpdate();
 
+            uiDescriptionTemplateComboBox.BeginUpdate();
             foreach (var description in links.Select(x => x.Description)
                          .Where(x => !string.IsNullOrWhiteSpace(x))
                          .Where(x => !string.Equals(x, _videoDescription, StringComparison.Ordinal))
