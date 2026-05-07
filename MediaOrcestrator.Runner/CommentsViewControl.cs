@@ -32,8 +32,16 @@ public partial class CommentsViewControl : UserControl
         _actionHolder = actionHolder;
         _logger = logger;
 
-        ConfigureColumns();
-        ReloadSourcesCombo();
+        using (Splash.Current.StartSpan("Колонки таблицы"))
+        {
+            ConfigureColumns();
+        }
+
+        using (Splash.Current.StartSpan("Список источников"))
+        {
+            ReloadSourcesCombo();
+        }
+
         UpdateForceFetchButtonState();
     }
 

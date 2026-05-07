@@ -80,8 +80,16 @@ public partial class CommentsHtmlControl : UserControl
         _actionHolder = actionHolder;
         _logger = logger;
 
-        PopulateSortCombos();
-        ReloadSourcesCombo();
+        using (Splash.Current.StartSpan("Сортировки"))
+        {
+            PopulateSortCombos();
+        }
+
+        using (Splash.Current.StartSpan("Список источников"))
+        {
+            ReloadSourcesCombo();
+        }
+
         UpdateForceFetchButtonState();
     }
 

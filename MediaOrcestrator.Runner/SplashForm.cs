@@ -41,19 +41,15 @@ public sealed partial class SplashForm : Form
         uiProgressBar.Value = 0;
     }
 
-    public void Step(string message)
+    public void SetProgress(int value)
     {
         if (InvokeRequired)
         {
-            BeginInvoke(new Action<string>(Step), message);
+            BeginInvoke(new Action<int>(SetProgress), value);
             return;
         }
 
-        uiStatusLabel.Text = message;
-
-        if (uiProgressBar.Value < uiProgressBar.Maximum)
-        {
-            uiProgressBar.Value += 1;
-        }
+        var clamped = Math.Clamp(value, 0, uiProgressBar.Maximum);
+        uiProgressBar.Value = clamped;
     }
 }
