@@ -18,7 +18,7 @@ public partial class MainForm : Form
     private readonly PublishControl? _publishControl;
     private bool _isSyncRunning;
 
-    public MainForm(Orcestrator orcestrator, IServiceProvider serviceProvider, ILogger<MainForm> logger, RichTextBox logControl, AppUpdateManager updateManager)
+    public MainForm(Orcestrator orcestrator, IServiceProvider serviceProvider, ILogger<MainForm> logger, AppUpdateManager updateManager)
     {
         _orcestrator = orcestrator;
         _serviceProvider = serviceProvider;
@@ -26,7 +26,6 @@ public partial class MainForm : Form
         _updateManager = updateManager;
 
         InitializeComponent();
-        uiLogsTabPage.Controls.Add(logControl);
 
         // TODO: Сомнительно
         _publishControl = _serviceProvider.GetRequiredService<PublishControl>();
@@ -36,6 +35,11 @@ public partial class MainForm : Form
     }
 
     public Action? StartupCompleted { get; set; }
+
+    public void AttachLogControl(RichTextBox logControl)
+    {
+        uiLogsTabPage.Controls.Add(logControl);
+    }
 
     protected override void OnShown(EventArgs e)
     {

@@ -24,6 +24,8 @@ file static class Program
 
         RegisterGlobalExceptionHandlers();
 
+        SplashTransaction? splash = null;
+
         // TODO: Выглядит не очень
         var logControl = new RichTextBox();
         logControl.BackColor = SystemColors.Window;
@@ -45,6 +47,7 @@ file static class Program
                 encoding: Encoding.UTF8)
             .WriteTo.RichTextBox(logControl,
                 ThemePresets.Literate,
+                maxLogLines: 217,
                 outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{SourceContext}] {Message:lj}{NewLine}{Exception}")
             .CreateLogger();
 
@@ -113,13 +116,12 @@ file static class Program
 
             var version = typeof(Program).Assembly.GetName().Version?.ToString() ?? "—";
             const int ExpectedStartupSpans = 10;
-            using var splash = new SplashTransaction(version, "Запуск приложения", ExpectedStartupSpans, Log.ForContext<SplashTransaction>());
+            splash = new(version, "Запуск приложения", ExpectedStartupSpans, Log.ForContext<SplashTransaction>());
 
             var services = new ServiceCollection();
 
             using (splash.StartSpan("Подготовка сервисов..."))
             {
-                services.AddSingleton(logControl);
                 services.AddSingleton(settingsManager);
                 ConfigureServices(services, databasePath);
 
@@ -132,6 +134,10 @@ file static class Program
                     new StateManager(statePath,
                         sp.GetRequiredService<LiteDatabase>(),
                         sp.GetRequiredService<ILogger<StateManager>>()));
+
+                //  var path1 = "..\\..\\..\\..\\ModuleBuilds";
+                //  var path1 = "ModuleBuilds";
+                PluginLoader.Configure(services, pluginPath);
             }
 
             using var serviceProvider = services.BuildServiceProvider();
@@ -141,7 +147,7 @@ file static class Program
 
             using (splash.StartSpan("Загрузка плагинов..."))
             {
-                orcestrator.Init(pluginPath);
+                orcestrator.Init();
             }
 
             using (splash.StartSpan("Резервное копирование базы данных..."))
@@ -166,6 +172,7 @@ file static class Program
             }
 
             var mainForm = serviceProvider.GetRequiredService<MainForm>();
+            mainForm.AttachLogControl(logControl);
             mainForm.StartupCompleted = splash.Dispose;
 
             Task.Run(async () =>
@@ -182,6 +189,8 @@ file static class Program
         }
         finally
         {
+            splash?.Dispose();
+
             try
             {
                 Log.CloseAndFlush();
