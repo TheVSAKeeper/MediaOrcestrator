@@ -1,29 +1,22 @@
-using MediaOrcestrator.Modules;
-using Microsoft.Extensions.DependencyInjection;
+﻿using MediaOrcestrator.Modules;
 using Microsoft.Extensions.Logging;
 
 namespace MediaOrcestrator.Domain;
 
-public class PluginManager(IServiceProvider serviceProvider, ToolManager toolManager, ILogger<PluginManager> logger)
+public class PluginManager(
+    IEnumerable<ISourceType> sources,
+    ToolManager toolManager,
+    ILogger<PluginManager> logger)
 {
     public Dictionary<string, ISourceType> MediaSources { get; private set; } = new();
 
-    public void Init(string pluginPath)
+    public void Init()
     {
-        //  var path1 = "..\\..\\..\\..\\ModuleBuilds";
-        //  var path1 = "ModuleBuilds";
-        var implementations = InterfaceScanner.FindImplementations(pluginPath, typeof(ISourceType));
         MediaSources = new();
 
-        foreach (var type in implementations.Select(x => x.Type))
+        foreach (var instance in sources)
         {
-            var id = type.FullName ?? "UnknownType";
-
-            var instance = (ISourceType)ActivatorUtilities.CreateInstance(serviceProvider, type);
-
-            /*var instance = typeof(IToolConsumer).IsAssignableFrom(type)
-                ? (ISourceType)ActivatorUtilities.CreateInstance(serviceProvider, type, (IToolPathProvider)toolManager)
-                : (ISourceType)ActivatorUtilities.CreateInstance(serviceProvider, type);*/
+            var id = instance.GetType().FullName ?? "UnknownType";
 
             if (instance.SettingsKeys != null
                 && instance.SettingsKeys.Any(x => x.Key.StartsWith("_system", StringComparison.Ordinal)))

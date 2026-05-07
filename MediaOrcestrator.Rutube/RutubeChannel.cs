@@ -1,5 +1,6 @@
 ﻿using MediaOrcestrator.Modules;
 using Microsoft.Extensions.Logging;
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -7,14 +8,18 @@ using System.Text.Json;
 
 namespace MediaOrcestrator.Rutube;
 
-// TODO: Костыль с ILogger<RutubeService>. Желательно сделать полноценную регистрацию модулей в DI.
-public class RutubeChannel(
+public sealed class RutubeChannel(
     ILogger<RutubeChannel> logger,
-    ILogger<RutubeService> serviceLogger,
+    IRutubeServiceFactory rutubeServiceFactory,
     IToolPathProvider toolPathProvider,
     VideoTranscoder videoTranscoder)
-    : ISourceType, IAuthenticatable, IToolConsumer
+    : ISourceType,
+        IAuthenticatable,
+        IToolConsumer
 {
+    private readonly ConcurrentDictionary<string, CachedService> _serviceCache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly SemaphoreSlim _cacheLock = new(1, 1);
+
     public SyncDirection ChannelType => SyncDirection.Full;
 
     public IReadOnlyList<ToolDescriptor> RequiredTools { get; } =
@@ -59,12 +64,16 @@ public class RutubeChannel(
         },
     ];
 
-    public Uri? GetExternalUri(string externalId, Dictionary<string, string> settings)
+    public Uri? GetExternalUri(
+        string externalId,
+        Dictionary<string, string> settings)
     {
         return new($"https://rutube.ru/video/{externalId}/");
     }
 
-    public async Task<List<SettingOption>> GetSettingOptionsAsync(string settingKey, Dictionary<string, string> currentSettings)
+    public async Task<List<SettingOption>> GetSettingOptionsAsync(
+        string settingKey,
+        Dictionary<string, string> currentSettings)
     {
         if (settingKey != "category_id")
         {
@@ -73,8 +82,7 @@ public class RutubeChannel(
 
         try
         {
-            var rutubeService = await CreateRutubeServiceAsync(currentSettings);
-
+            var rutubeService = await CreateRutubeServiceAsync(currentSettings, CancellationToken.None);
             var categories = await rutubeService.GetCategoriesAsync();
 
             return categories.Select(x => new SettingOption
@@ -92,11 +100,14 @@ public class RutubeChannel(
         }
     }
 
-    public async IAsyncEnumerable<MediaDto> GetMedia(Dictionary<string, string> settings, bool isFull, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    public async IAsyncEnumerable<MediaDto> GetMedia(
+        Dictionary<string, string> settings,
+        bool isFull,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         logger.LogInformation("Получение списка медиа для хранища {Name}", Name);
-        var rutubeService = await CreateRutubeServiceAsync(settings);
-        var apiVideoItems = rutubeService.GetVideoAsync();
+        var rutubeService = await CreateRutubeServiceAsync(settings, cancellationToken);
+        var apiVideoItems = rutubeService.GetVideoAsync(cancellationToken);
         await foreach (var video in apiVideoItems)
         {
             logger.LogDebug("Обработка видео: '{VideoTitle}' (ID: {VideoId})", video.Title, video.Id);
@@ -104,16 +115,22 @@ public class RutubeChannel(
         }
     }
 
-    public async Task<MediaDto?> GetMediaByIdAsync(string externalId, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
+    public async Task<MediaDto?> GetMediaByIdAsync(
+        string externalId,
+        Dictionary<string, string> settings,
+        CancellationToken cancellationToken = default)
     {
         logger.LogInformation("Получение информации о видео RuTube. ID: {VideoId}", externalId);
-        var rutubeService = await CreateRutubeServiceAsync(settings);
-        var video = await rutubeService.GetVideoByIdAsync(externalId);
+        var rutubeService = await CreateRutubeServiceAsync(settings, cancellationToken);
+        var video = await rutubeService.GetVideoByIdAsync(externalId, cancellationToken);
         return CreateMediaDto(video);
     }
 
     // TODO: Дублирование с Youtube
-    public async Task<MediaDto> DownloadAsync(string videoId, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
+    public async Task<MediaDto> DownloadAsync(
+        string videoId,
+        Dictionary<string, string> settings,
+        CancellationToken cancellationToken = default)
     {
         logger.LogInformation("Начало скачивания видео с RuTube. ID: {VideoId}", videoId);
 
@@ -202,7 +219,10 @@ public class RutubeChannel(
         return media;
     }
 
-    public async Task<UploadResult> UploadAsync(MediaDto media, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
+    public async Task<UploadResult> UploadAsync(
+        MediaDto media,
+        Dictionary<string, string> settings,
+        CancellationToken cancellationToken = default)
     {
         logger.LogInformation("Начало загрузки видео на RuTube. Название: '{Title}'", media.Title);
 
@@ -266,7 +286,7 @@ public class RutubeChannel(
         logger.LogInformation("Кодек видео: {Codec}", codec);
 
         var rutubeCategoryId = settings["category_id"];
-        var rutubeService = await CreateRutubeServiceAsync(settings);
+        var rutubeService = await CreateRutubeServiceAsync(settings, cancellationToken);
 
         DateTime? publishAt = null;
         if (settings.TryGetValue("publish_at", out var publishAtRaw) && !string.IsNullOrWhiteSpace(publishAtRaw))
@@ -293,12 +313,24 @@ public class RutubeChannel(
         {
             var uploadBytesPerSecond = SpeedLimitHelper.ParseUploadBytesPerSecond(settings);
             var uploadProgress = UploadProgressLogger.CreateBucketed(logger, media.Id);
-            var result = await rutubeService.UploadVideoAsync(null, filePath, media.Title, media.Description, rutubeCategoryId, media.TempPreviewPath, publishAt, uploadBytesPerSecond,
-                uploadProgress);
+            var result = await rutubeService.UploadVideoAsync(null,
+                filePath,
+                media.Title,
+                media.Description,
+                rutubeCategoryId,
+                media.TempPreviewPath,
+                publishAt,
+                uploadBytesPerSecond,
+                uploadProgress,
+                cancellationToken);
 
             logger.LogInformation("Видео загружено на RuTube. Status: {Status}. Video ID: {SessionId}, Название: '{Title}'", result.Status.Id, result.Id, media.Title);
 
             return result;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -307,20 +339,35 @@ public class RutubeChannel(
         }
     }
 
-    public async Task<UploadResult> UpdateAsync(string externalId, MediaDto media, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
+    public async Task<UploadResult> UpdateAsync(
+        string externalId,
+        MediaDto media,
+        Dictionary<string, string> settings,
+        CancellationToken cancellationToken = default)
     {
         logger.LogInformation("Начало обновление данных видео на RuTube. Название: '{Title}'", media.Title);
 
         var rutubeCategoryId = settings["category_id"];
-        var rutubeService = await CreateRutubeServiceAsync(settings);
+        var rutubeService = await CreateRutubeServiceAsync(settings, cancellationToken);
 
         try
         {
             // пока тока превью обновляем
-            var result = await rutubeService.UploadVideoAsync(externalId, null, media.Title, media.Description, rutubeCategoryId, media.TempPreviewPath);
+            var result = await rutubeService.UploadVideoAsync(externalId,
+                null,
+                media.Title,
+                media.Description,
+                rutubeCategoryId,
+                media.TempPreviewPath,
+                cancellationToken: cancellationToken);
+
             logger.LogInformation("Видео загружено на RuTube. Status: {Status}. Video ID: {SessionId}, Название: '{Title}'", result.Status.Id, result.Id, media.Title);
 
             return result;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -329,15 +376,18 @@ public class RutubeChannel(
         }
     }
 
-    public async Task DeleteAsync(string externalId, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
+    public async Task DeleteAsync(
+        string externalId,
+        Dictionary<string, string> settings,
+        CancellationToken cancellationToken = default)
     {
         logger.LogInformation("Удаление медиа из RuTube. ID: {ExternalId}", externalId);
 
-        var rutubeService = await CreateRutubeServiceAsync(settings);
+        var rutubeService = await CreateRutubeServiceAsync(settings, cancellationToken);
 
         try
         {
-            await rutubeService.DeleteVideoAsync(externalId);
+            await rutubeService.DeleteVideoAsync(externalId, cancellationToken);
             logger.LogInformation("Медиа {ExternalId} успешно удалено из источника RuTube", externalId);
         }
         catch (HttpRequestException ex)
@@ -373,7 +423,10 @@ public class RutubeChannel(
         }
     }
 
-    public async Task AuthenticateAsync(Dictionary<string, string> settings, IAuthUI ui, CancellationToken ct)
+    public async Task AuthenticateAsync(
+        Dictionary<string, string> settings,
+        IAuthUI ui,
+        CancellationToken ct)
     {
         var authStatePath = GetAuthStatePath(settings);
         var result = await ui.OpenBrowserAsync("https://studio.rutube.ru/", authStatePath);
@@ -440,7 +493,9 @@ public class RutubeChannel(
     }
 
     // TODO: Дублирование с Youtube
-    private static void ConvertPlaywrightToNetscape(string playwrightJsonPath, string netscapePath)
+    private static void ConvertPlaywrightToNetscape(
+        string playwrightJsonPath,
+        string netscapePath)
     {
         var json = File.ReadAllText(playwrightJsonPath);
         using var doc = JsonDocument.Parse(json);
@@ -475,7 +530,9 @@ public class RutubeChannel(
         }
     }
 
-    private async Task<RutubeService> CreateRutubeServiceAsync(Dictionary<string, string> settings)
+    private async Task<RutubeService> CreateRutubeServiceAsync(
+        Dictionary<string, string> settings,
+        CancellationToken cancellationToken)
     {
         var authStatePath = GetAuthStatePath(settings);
         if (!File.Exists(authStatePath))
@@ -483,9 +540,39 @@ public class RutubeChannel(
             throw new FileNotFoundException($"Файл аутентификации RuTube не найден: {authStatePath}. Выполните авторизацию.", authStatePath);
         }
 
+        var lastWriteUtc = File.GetLastWriteTimeUtc(authStatePath);
+
+        if (_serviceCache.TryGetValue(authStatePath, out var cached) && cached.LastWriteUtc == lastWriteUtc)
+        {
+            return cached.Service;
+        }
+
+        await _cacheLock.WaitAsync(cancellationToken);
+
+        try
+        {
+            if (_serviceCache.TryGetValue(authStatePath, out cached) && cached.LastWriteUtc == lastWriteUtc)
+            {
+                return cached.Service;
+            }
+
+            var service = await BuildRutubeServiceAsync(authStatePath, cancellationToken);
+            _serviceCache[authStatePath] = new(service, lastWriteUtc);
+            return service;
+        }
+        finally
+        {
+            _cacheLock.Release();
+        }
+    }
+
+    private async Task<RutubeService> BuildRutubeServiceAsync(
+        string authStatePath,
+        CancellationToken cancellationToken)
+    {
         logger.LogDebug("Чтение данных аутентификации из: {AuthStatePath}", authStatePath);
 
-        var authStateBody = await File.ReadAllTextAsync(authStatePath);
+        var authStateBody = await File.ReadAllTextAsync(authStatePath, cancellationToken);
         using var authState = JsonDocument.Parse(authStateBody);
         var cookies = authState.RootElement.GetProperty("cookies");
 
@@ -516,6 +603,8 @@ public class RutubeChannel(
 
         logger.LogDebug("CSRF токен успешно получен");
 
-        return new(cookieStringBuilder.ToString(), csrfToken, serviceLogger);
+        return rutubeServiceFactory.Create(cookieStringBuilder.ToString(), csrfToken);
     }
+
+    private sealed record CachedService(RutubeService Service, DateTime LastWriteUtc);
 }

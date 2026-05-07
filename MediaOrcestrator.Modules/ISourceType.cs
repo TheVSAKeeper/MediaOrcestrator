@@ -1,4 +1,4 @@
-namespace MediaOrcestrator.Modules;
+﻿namespace MediaOrcestrator.Modules;
 
 /// <summary>
 /// Контракт плагина-источника медиа.
@@ -23,6 +23,7 @@ public interface ISourceType
     /// </summary>
     IEnumerable<SourceSettings> SettingsKeys { get; }
 
+    // TODO: CancellationToken
     /// <summary>
     /// Возвращает допустимые варианты для настройки типа <see cref="SettingType.Dropdown" />.
     /// </summary>
