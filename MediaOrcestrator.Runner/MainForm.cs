@@ -160,11 +160,10 @@ public partial class MainForm : Form
 
         // TODO: Немного шляпная тема мне кажется
         var newSourceId = Guid.NewGuid().ToString();
-        using var settingsForm = new SourceSettingsForm();
-        settingsForm.SetSettings(selectedPlugin.SettingsKeys, selectedPlugin, _logger);
-        settingsForm.SetSystemContext(_serviceProvider.GetRequiredService<StateManager>(), newSourceId);
-        settingsForm.SetAvailableSources(_orcestrator.GetSources());
-        if (settingsForm.ShowDialog() != DialogResult.OK || settingsForm.Settings == null)
+        var stateManager = _serviceProvider.GetRequiredService<StateManager>();
+        var settings = SourceSettingsForm.ShowAdd(selectedPlugin, stateManager, newSourceId, _orcestrator.GetSources(), _logger);
+
+        if (settings == null)
         {
             return;
         }
@@ -175,7 +174,7 @@ public partial class MainForm : Form
             return;
         }
 
-        _orcestrator.AddSource(newSourceId, selectedPlugin.Name, settingsForm.Settings);
+        _orcestrator.AddSource(newSourceId, selectedPlugin.Name, settings);
         DrawSources();
     }
 
