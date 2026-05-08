@@ -95,7 +95,7 @@ public sealed class RutubeChannel(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Ошибка при получении категорий RuTube");
+            logger.GetCategoriesFailed(ex);
             return [];
         }
     }
@@ -105,12 +105,12 @@ public sealed class RutubeChannel(
         bool isFull,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        logger.LogInformation("Получение списка медиа для хранища {Name}", Name);
+        logger.ListingMedia(Name);
         var rutubeService = await CreateRutubeServiceAsync(settings, cancellationToken);
         var apiVideoItems = rutubeService.GetVideoAsync(cancellationToken);
         await foreach (var video in apiVideoItems)
         {
-            logger.LogDebug("Обработка видео: '{VideoTitle}' (ID: {VideoId})", video.Title, video.Id);
+            logger.ProcessingVideo(video.Title, video.Id);
             yield return CreateMediaDto(video);
         }
     }
@@ -120,7 +120,7 @@ public sealed class RutubeChannel(
         Dictionary<string, string> settings,
         CancellationToken cancellationToken = default)
     {
-        logger.LogInformation("Получение информации о видео RuTube. ID: {VideoId}", externalId);
+        logger.RequestingChannelMedia(externalId);
         var rutubeService = await CreateRutubeServiceAsync(settings, cancellationToken);
         var video = await rutubeService.GetVideoByIdAsync(externalId, cancellationToken);
         return CreateMediaDto(video);
@@ -132,19 +132,19 @@ public sealed class RutubeChannel(
         Dictionary<string, string> settings,
         CancellationToken cancellationToken = default)
     {
-        logger.LogInformation("Начало скачивания видео с RuTube. ID: {VideoId}", videoId);
+        logger.DownloadStarting(videoId);
 
         var media = await GetMediaByIdAsync(videoId, settings, cancellationToken)
                     ?? throw new InvalidOperationException($"Видео не найдено: {videoId}");
 
-        logger.LogDebug("Получена информация о видео. Название: '{Title}'", media.Title);
+        logger.ChannelVideoInfoReceived(media.Title);
 
         var tempPath = settings["_system_temp_path"];
         var guid = Guid.NewGuid().ToString();
         var finalPath = Path.Combine(tempPath, guid, "media.mp4");
 
         Directory.CreateDirectory(Path.GetDirectoryName(finalPath)!);
-        logger.LogDebug("Создана временная директория: {TempPath}", Path.GetDirectoryName(finalPath));
+        logger.TempDirectoryCreated(Path.GetDirectoryName(finalPath));
 
         var ytDlpPath = toolPathProvider.GetToolPath(WellKnownTools.YtDlp)
                         ?? throw new InvalidOperationException("yt-dlp не установлен. Установите через панель управления инструментами.");
@@ -158,7 +158,7 @@ public sealed class RutubeChannel(
         {
             netscapeCookiePath = Path.Combine(Path.GetDirectoryName(finalPath)!, "cookies.txt");
             ConvertPlaywrightToNetscape(authStatePath, netscapeCookiePath);
-            logger.LogDebug("Cookies конвертированы в Netscape формат: {Path}", netscapeCookiePath);
+            logger.CookiesConvertedToNetscape(netscapeCookiePath);
         }
 
         var ytDlp = new YtDlp(ytDlpPath, ffmpegPath, netscapeCookiePath);
@@ -175,7 +175,7 @@ public sealed class RutubeChannel(
                 {
                     currentPart = p.PartNumber;
                     oldPercent = -1;
-                    logger.LogInformation("Скачивание части #{PartNumber}", currentPart);
+                    logger.DownloadPartStarted(currentPart);
                 }
 
                 if (Math.Abs(p.Progress - oldPercent) < double.Epsilon)
@@ -192,18 +192,18 @@ public sealed class RutubeChannel(
                     return;
                 }
 
-                logger.LogInformation("Прогресс скачивания [Часть {PartNumber}]: {Percent:P0}", p.PartNumber, p.Progress);
+                logger.DownloadProgress(p.PartNumber, p.Progress);
                 oldPercent = p.Progress;
             }
         });
 
-        logger.LogInformation("Запуск скачивания через yt-dlp. URL: https://rutube.ru/video/{VideoId}/", videoId);
+        logger.StartingYtDlpDownload(videoId);
 
         try
         {
             var rateLimitBytes = SpeedLimitHelper.ParseDownloadBytesPerSecond(settings);
             await ytDlp.DownloadAsync($"https://rutube.ru/video/{videoId}/", finalPath, progress, rateLimitBytes, cancellationToken);
-            logger.LogInformation("Видео успешно скачано. ID: {VideoId}, Путь: {FilePath}", videoId, finalPath);
+            logger.DownloadCompleted(videoId, finalPath);
         }
         catch (OperationCanceledException)
         {
@@ -211,7 +211,7 @@ public sealed class RutubeChannel(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Ошибка при скачивании видео через yt-dlp. ID: {VideoId}", videoId);
+            logger.DownloadFailed(videoId, ex);
             throw;
         }
 
@@ -224,22 +224,22 @@ public sealed class RutubeChannel(
         Dictionary<string, string> settings,
         CancellationToken cancellationToken = default)
     {
-        logger.LogInformation("Начало загрузки видео на RuTube. Название: '{Title}'", media.Title);
+        logger.UploadStarting(media.Title);
 
         var filePath = media.TempDataPath;
         if (!File.Exists(filePath))
         {
-            logger.LogError("Файл видео не найден: {FilePath}", filePath);
+            logger.VideoFileNotFound(filePath ?? "");
             throw new FileNotFoundException("Файл видео не найден", filePath);
         }
 
-        logger.LogDebug("Файл найден. Размер: {FileSize} байт", new FileInfo(filePath).Length);
+        logger.FileFound(new FileInfo(filePath).Length);
 
         var codec = media.Metadata?.FirstOrDefault(x => x.Key == "VideoCodec")?.Value;
 
         if (string.IsNullOrEmpty(codec))
         {
-            logger.LogInformation("Кодек не найден в метаданных, определяем через ffprobe: {FilePath}", filePath);
+            logger.DetectingCodec(filePath);
             codec = await videoTranscoder.GetVideoCodecAsync(filePath, cancellationToken);
         }
 
@@ -250,7 +250,7 @@ public sealed class RutubeChannel(
 
         if (string.Equals(codec, "vp9", StringComparison.OrdinalIgnoreCase))
         {
-            logger.LogInformation("Обнаружен VP9, запускаем транскодирование в H.264: {FilePath}", filePath);
+            logger.TranscodingVp9(filePath);
 
             var sourceDir = Path.GetDirectoryName(filePath)
                             ?? throw new InvalidOperationException($"Не удалось получить папку файла: {filePath}");
@@ -275,15 +275,14 @@ public sealed class RutubeChannel(
                 throw new NonRetriableException($"Не удалось транскодировать VP9 в H.264 для файла: {filePath}");
             }
 
-            logger.LogInformation("Транскодирование завершено. Размер: {Size} байт. Новый путь: {Path}",
-                new FileInfo(transcodedPath).Length, transcodedPath);
+            logger.TranscodingCompleted(new FileInfo(transcodedPath).Length, transcodedPath);
 
             filePath = transcodedPath;
             media.TempDataPath = transcodedPath;
             codec = "h264";
         }
 
-        logger.LogInformation("Кодек видео: {Codec}", codec);
+        logger.VideoCodec(codec);
 
         var rutubeCategoryId = settings["category_id"];
         var rutubeService = await CreateRutubeServiceAsync(settings, cancellationToken);
@@ -295,17 +294,17 @@ public sealed class RutubeChannel(
             if (publishAtTrimmed.StartsWith('+') && double.TryParse(publishAtTrimmed[1..], NumberStyles.Any, CultureInfo.InvariantCulture, out var relativeHours))
             {
                 publishAt = DateTime.Now.AddHours(relativeHours);
-                logger.LogInformation("Отложенная публикация запланирована через {Hours} ч. - на {PublishAt}", relativeHours, publishAt.Value);
+                logger.RelativePublicationScheduled(relativeHours, publishAt.Value);
             }
             else if (TimeOnly.TryParseExact(publishAtTrimmed, "HH:mm", out var timeOnly))
             {
                 var today = DateTime.Today.Add(timeOnly.ToTimeSpan());
                 publishAt = today > DateTime.Now ? today : today.AddDays(1);
-                logger.LogInformation("Отложенная публикация запланирована на {PublishAt}", publishAt.Value);
+                logger.PublicationScheduled(publishAt.Value);
             }
             else
             {
-                logger.LogWarning("Не удалось разобрать время публикации '{PublishAtRaw}'. Ожидается формат ЧЧ:ММ или +N (часов). Видео будет опубликовано немедленно", publishAtRaw);
+                logger.PublishAtParseFailed(publishAtRaw);
             }
         }
 
@@ -324,7 +323,7 @@ public sealed class RutubeChannel(
                 uploadProgress,
                 cancellationToken);
 
-            logger.LogInformation("Видео загружено на RuTube. Status: {Status}. Video ID: {SessionId}, Название: '{Title}'", result.Status.Id, result.Id, media.Title);
+            logger.VideoUploaded(result.Status.Id, result.Id, media.Title);
 
             return result;
         }
@@ -334,7 +333,7 @@ public sealed class RutubeChannel(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Ошибка при загрузке видео на RuTube. Название: '{Title}'", media.Title);
+            logger.UploadFailed(media.Title, ex);
             throw;
         }
     }
@@ -345,7 +344,7 @@ public sealed class RutubeChannel(
         Dictionary<string, string> settings,
         CancellationToken cancellationToken = default)
     {
-        logger.LogInformation("Начало обновление данных видео на RuTube. Название: '{Title}'", media.Title);
+        logger.UpdateStarting(media.Title);
 
         var rutubeCategoryId = settings["category_id"];
         var rutubeService = await CreateRutubeServiceAsync(settings, cancellationToken);
@@ -361,7 +360,7 @@ public sealed class RutubeChannel(
                 media.TempPreviewPath,
                 cancellationToken: cancellationToken);
 
-            logger.LogInformation("Видео загружено на RuTube. Status: {Status}. Video ID: {SessionId}, Название: '{Title}'", result.Status.Id, result.Id, media.Title);
+            logger.VideoUploaded(result.Status.Id, result.Id, media.Title);
 
             return result;
         }
@@ -371,7 +370,7 @@ public sealed class RutubeChannel(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Ошибка при загрузке видео на RuTube. Название: '{Title}'", media.Title);
+            logger.UploadFailed(media.Title, ex);
             throw;
         }
     }
@@ -381,18 +380,18 @@ public sealed class RutubeChannel(
         Dictionary<string, string> settings,
         CancellationToken cancellationToken = default)
     {
-        logger.LogInformation("Удаление медиа из RuTube. ID: {ExternalId}", externalId);
+        logger.DeletingMedia(externalId);
 
         var rutubeService = await CreateRutubeServiceAsync(settings, cancellationToken);
 
         try
         {
             await rutubeService.DeleteVideoAsync(externalId, cancellationToken);
-            logger.LogInformation("Медиа {ExternalId} успешно удалено из источника RuTube", externalId);
+            logger.MediaDeleted(externalId);
         }
         catch (HttpRequestException ex)
         {
-            logger.LogError(ex, "Ошибка HTTP при удалении из RuTube: {ExternalId}", externalId);
+            logger.DeleteHttpError(externalId, ex);
             throw new IOException($"Ошибка сети при удалении из RuTube: {ex.Message}", ex);
         }
     }
@@ -432,7 +431,7 @@ public sealed class RutubeChannel(
         var result = await ui.OpenBrowserAsync("https://studio.rutube.ru/", authStatePath);
         if (result != null)
         {
-            logger.LogInformation("RuTube: авторизация сохранена в {Path}", result);
+            logger.AuthSaved(result);
             await ui.ShowMessageAsync("Авторизация RuTube сохранена!");
         }
     }
@@ -570,7 +569,7 @@ public sealed class RutubeChannel(
         string authStatePath,
         CancellationToken cancellationToken)
     {
-        logger.LogDebug("Чтение данных аутентификации из: {AuthStatePath}", authStatePath);
+        logger.ReadingAuthState(authStatePath);
 
         var authStateBody = await File.ReadAllTextAsync(authStatePath, cancellationToken);
         using var authState = JsonDocument.Parse(authStateBody);
@@ -601,7 +600,7 @@ public sealed class RutubeChannel(
             throw new InvalidOperationException("CSRF токен не найден в файле аутентификации RuTube. Убедитесь, что вы авторизованы в RuTube Studio.");
         }
 
-        logger.LogDebug("CSRF токен успешно получен");
+        logger.CsrfTokenReceived();
 
         return rutubeServiceFactory.Create(cookieStringBuilder.ToString(), csrfToken);
     }

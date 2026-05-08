@@ -1,14 +1,19 @@
-namespace MediaOrcestrator.Rutube;
+﻿namespace MediaOrcestrator.Rutube;
 
 // TODO: Дублирование с Youtube
 public static class GenericExtensions
 {
-    public static TOut Pipe<TIn, TOut>(this TIn input, Func<TIn, TOut> transform)
+    public static TOut Pipe<TIn, TOut>(
+        this TIn input,
+        Func<TIn, TOut> transform)
     {
         return transform(input);
     }
 
-    public static T Clamp<T>(this T value, T min, T max)
+    public static T Clamp<T>(
+        this T value,
+        T min,
+        T max)
         where T : IComparable<T>
     {
         return value.CompareTo(min) <= 0

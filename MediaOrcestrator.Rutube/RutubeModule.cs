@@ -27,12 +27,16 @@ public sealed class RutubeModule : IPluginModule
         services.AddSingleton<ISourceType, RutubeChannel>();
     }
 
-    private static void ConfigureApiClient(IServiceProvider sp, HttpClient client)
+    private static void ConfigureApiClient(
+        IServiceProvider sp,
+        HttpClient client)
     {
         client.Timeout = Timeout.InfiniteTimeSpan;
     }
 
-    private static void ConfigureUploadClient(IServiceProvider sp, HttpClient client)
+    private static void ConfigureUploadClient(
+        IServiceProvider sp,
+        HttpClient client)
     {
         var options = sp.GetRequiredService<IOptions<RutubeOptions>>().Value;
         client.Timeout = options.UploadTimeout;
@@ -50,7 +54,9 @@ public sealed class RutubeModule : IPluginModule
         };
     }
 
-    private static void BuildResiliencePipeline(ResiliencePipelineBuilder<HttpResponseMessage> builder, ResilienceHandlerContext context)
+    private static void BuildResiliencePipeline(
+        ResiliencePipelineBuilder<HttpResponseMessage> builder,
+        ResilienceHandlerContext context)
     {
         var options = context.ServiceProvider.GetRequiredService<IOptions<RutubeOptions>>().Value;
 
