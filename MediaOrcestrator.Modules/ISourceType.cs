@@ -47,6 +47,21 @@ public interface ISourceType
     }
 
     /// <summary>
+    /// Расширенная форма <see cref="GetExternalUri(string, Dictionary{string, string})" />,
+    /// которой плагин может воспользоваться, чтобы выбрать формат ссылки на основе метаданных медиа
+    /// (например, отличить шортс от обычного видео в VK).
+    /// </summary>
+    /// <param name="externalId">Идентификатор медиа в источнике.</param>
+    /// <param name="settings">Конфигурация источника.</param>
+    /// <param name="metadata">
+    /// Метаданные медиа, относящиеся к этому источнику; <see langword="null" /> – контекст недоступен.
+    /// </param>
+    Uri? GetExternalUri(string externalId, Dictionary<string, string> settings, IReadOnlyList<MetadataItem>? metadata)
+    {
+        return GetExternalUri(externalId, settings);
+    }
+
+    /// <summary>
     /// Возвращает типы конвертации, которые поддерживает источник.
     /// </summary>
     /// <returns>Массив доступных типов; пустой – конвертация не поддерживается.</returns>

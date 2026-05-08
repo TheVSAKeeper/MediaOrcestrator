@@ -411,7 +411,7 @@ public partial class MediaMatrixGridControl
             .Where(s => s.Status != MediaStatus.Skipped && !string.IsNullOrEmpty(s.ExternalId))
             .ToList();
 
-        AddOpenExternalLinks(relevantSourceLinks, allSources);
+        AddOpenExternalLinks(media, relevantSourceLinks, allSources);
         await AddConvertMenuItemsAsync(media, relevantSourceLinks, allSources, currentMenu);
 
         if (currentMenu != _contextMenu)
@@ -617,7 +617,7 @@ public partial class MediaMatrixGridControl
         }
     }
 
-    private void AddOpenExternalLinks(IEnumerable<MediaSourceLink> relevantSourceLinks, List<Source> allSources)
+    private void AddOpenExternalLinks(Media media, IEnumerable<MediaSourceLink> relevantSourceLinks, List<Source> allSources)
     {
         foreach (var mediaSource in relevantSourceLinks)
         {
@@ -627,7 +627,8 @@ public partial class MediaMatrixGridControl
                 continue;
             }
 
-            var uri = source.Type.GetExternalUri(mediaSource.ExternalId, source.Settings);
+            var metadata = media.Metadata.ForSource(source.Id);
+            var uri = source.Type.GetExternalUri(mediaSource.ExternalId, source.Settings, metadata);
             if (uri == null)
             {
                 continue;
