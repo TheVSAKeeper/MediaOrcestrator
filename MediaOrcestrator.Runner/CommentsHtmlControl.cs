@@ -3,6 +3,7 @@ using MediaOrcestrator.Domain.Comments;
 using MediaOrcestrator.Modules;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
+using System.Globalization;
 using Timer = System.Windows.Forms.Timer;
 
 namespace MediaOrcestrator.Runner;
@@ -158,6 +159,16 @@ public partial class CommentsHtmlControl : UserControl
         ApplyFilters();
     }
 
+    private void uiFetchSinceCheckBox_CheckedChanged(object? sender, EventArgs e)
+    {
+        uiFetchSinceDaysNumeric.Enabled = uiFetchSinceCheckBox.Checked;
+    }
+
+    private void uiFetchOnlyRecentCheckBox_CheckedChanged(object? sender, EventArgs e)
+    {
+        uiFetchOnlyRecentNumeric.Enabled = uiFetchOnlyRecentCheckBox.Checked;
+    }
+
     private async void uiForceFetchAllButton_Click(object? sender, EventArgs e)
     {
         if (_orcestrator == null || _commentsService == null || _actionHolder == null)
@@ -177,6 +188,22 @@ public partial class CommentsHtmlControl : UserControl
         }
 
         await FetchAllForSourceAsync(source);
+    }
+
+    private static DateTime? TryGetCreationDate(Media media)
+    {
+        var raw = media.Metadata.FirstOrDefault(m => m.Key == "CreationDate")?.Value;
+        if (string.IsNullOrEmpty(raw))
+        {
+            return null;
+        }
+
+        return DateTime.TryParse(raw,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+            out var parsed)
+            ? parsed
+            : null;
     }
 
     private static string? FindRootCommentId(IReadOnlyList<CommentRecord> comments, string externalCommentId)
@@ -660,15 +687,37 @@ public partial class CommentsHtmlControl : UserControl
             return;
         }
 
-        var targets = _orcestrator.GetMedias()
+        var since = uiFetchSinceCheckBox.Checked
+            ? DateTime.UtcNow.AddDays(-(double)uiFetchSinceDaysNumeric.Value)
+            : (DateTime?)null;
+
+        var takeRecent = uiFetchOnlyRecentCheckBox.Checked
+            ? (int)uiFetchOnlyRecentNumeric.Value
+            : (int?)null;
+
+        var query = _orcestrator.GetMedias()
             .SelectMany(media => media.Sources
                 .Where(link => link.SourceId == source.Id && !string.IsNullOrEmpty(link.ExternalId))
-                .Select(link => (Media: media, Link: link)))
-            .ToList();
+                .Select(link => (Media: media, Link: link)));
+
+        if (since != null)
+        {
+            query = query.Where(t => TryGetCreationDate(t.Media) is { } d && d >= since.Value);
+        }
+
+        if (takeRecent != null)
+        {
+            query = query.OrderByDescending(t => t.Link.SortNumber).Take(takeRecent.Value);
+        }
+
+        var targets = query.ToList();
 
         if (targets.Count == 0)
         {
-            MessageBox.Show($"В источнике «{source.TitleFull}» нет медиа для загрузки.",
+            var hasFilters = since != null || takeRecent != null;
+            MessageBox.Show(hasFilters
+                    ? $"В источнике «{source.TitleFull}» нет подходящих медиа с учётом настроек загрузки."
+                    : $"В источнике «{source.TitleFull}» нет медиа для загрузки.",
                 "Нечего загружать",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);

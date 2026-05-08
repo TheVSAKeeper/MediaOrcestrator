@@ -35,6 +35,12 @@ partial class CommentsHtmlControl
     private ComboBox uiCommentSortComboBox;
     private Button uiCommentSortInvertButton;
     private Label uiCountLabel;
+    private CheckBox uiFetchSinceCheckBox;
+    private NumericUpDown uiFetchSinceDaysNumeric;
+    private Label uiFetchSinceDaysLabel;
+    private CheckBox uiFetchOnlyRecentCheckBox;
+    private NumericUpDown uiFetchOnlyRecentNumeric;
+    private Label uiFetchOnlyRecentLabel;
     private CommentsBrowserView uiBrowserView;
     private StatusStrip uiStatusStrip;
     private ToolStripStatusLabel uiStatusLabel;
@@ -60,16 +66,30 @@ partial class CommentsHtmlControl
         uiCommentSortComboBox = new ComboBox();
         uiCommentSortInvertButton = new Button();
         uiCountLabel = new Label();
+        uiFetchSinceCheckBox = new CheckBox();
+        uiFetchSinceDaysNumeric = new NumericUpDown();
+        uiFetchSinceDaysLabel = new Label();
+        uiFetchOnlyRecentCheckBox = new CheckBox();
+        uiFetchOnlyRecentNumeric = new NumericUpDown();
+        uiFetchOnlyRecentLabel = new Label();
         uiBrowserView = new CommentsBrowserView();
         uiStatusStrip = new StatusStrip();
         uiStatusLabel = new ToolStripStatusLabel();
         uiFiltersPanel.SuspendLayout();
         ((System.ComponentModel.ISupportInitialize)uiLimitNumeric).BeginInit();
+        ((System.ComponentModel.ISupportInitialize)uiFetchSinceDaysNumeric).BeginInit();
+        ((System.ComponentModel.ISupportInitialize)uiFetchOnlyRecentNumeric).BeginInit();
         uiStatusStrip.SuspendLayout();
         SuspendLayout();
         //
         // uiFiltersPanel
         //
+        uiFiltersPanel.Controls.Add(uiFetchOnlyRecentLabel);
+        uiFiltersPanel.Controls.Add(uiFetchOnlyRecentNumeric);
+        uiFiltersPanel.Controls.Add(uiFetchOnlyRecentCheckBox);
+        uiFiltersPanel.Controls.Add(uiFetchSinceDaysLabel);
+        uiFiltersPanel.Controls.Add(uiFetchSinceDaysNumeric);
+        uiFiltersPanel.Controls.Add(uiFetchSinceCheckBox);
         uiFiltersPanel.Controls.Add(uiCountLabel);
         uiFiltersPanel.Controls.Add(uiCommentSortInvertButton);
         uiFiltersPanel.Controls.Add(uiCommentSortComboBox);
@@ -91,7 +111,7 @@ partial class CommentsHtmlControl
         uiFiltersPanel.Location = new Point(0, 0);
         uiFiltersPanel.Name = "uiFiltersPanel";
         uiFiltersPanel.Padding = new Padding(8);
-        uiFiltersPanel.Size = new Size(1100, 76);
+        uiFiltersPanel.Size = new Size(1100, 110);
         uiFiltersPanel.TabIndex = 0;
         //
         // uiSourceLabel
@@ -258,12 +278,74 @@ partial class CommentsHtmlControl
         uiCountLabel.TabIndex = 16;
         uiCountLabel.Text = "Найдено: 0";
         //
+        // uiFetchSinceCheckBox
+        //
+        uiFetchSinceCheckBox.AutoSize = true;
+        uiFetchSinceCheckBox.Location = new Point(8, 80);
+        uiFetchSinceCheckBox.Name = "uiFetchSinceCheckBox";
+        uiFetchSinceCheckBox.Size = new Size(95, 19);
+        uiFetchSinceCheckBox.TabIndex = 17;
+        uiFetchSinceCheckBox.Text = "Не старше";
+        uiFetchSinceCheckBox.UseVisualStyleBackColor = true;
+        uiFetchSinceCheckBox.CheckedChanged += uiFetchSinceCheckBox_CheckedChanged;
+        //
+        // uiFetchSinceDaysNumeric
+        //
+        uiFetchSinceDaysNumeric.Enabled = false;
+        uiFetchSinceDaysNumeric.Location = new Point(110, 78);
+        uiFetchSinceDaysNumeric.Maximum = new decimal(new int[] { 3650, 0, 0, 0 });
+        uiFetchSinceDaysNumeric.Minimum = new decimal(new int[] { 1, 0, 0, 0 });
+        uiFetchSinceDaysNumeric.Name = "uiFetchSinceDaysNumeric";
+        uiFetchSinceDaysNumeric.Size = new Size(70, 23);
+        uiFetchSinceDaysNumeric.TabIndex = 18;
+        uiFetchSinceDaysNumeric.Value = new decimal(new int[] { 30, 0, 0, 0 });
+        //
+        // uiFetchSinceDaysLabel
+        //
+        uiFetchSinceDaysLabel.AutoSize = true;
+        uiFetchSinceDaysLabel.Location = new Point(184, 81);
+        uiFetchSinceDaysLabel.Name = "uiFetchSinceDaysLabel";
+        uiFetchSinceDaysLabel.Size = new Size(28, 15);
+        uiFetchSinceDaysLabel.TabIndex = 19;
+        uiFetchSinceDaysLabel.Text = "дн.";
+        //
+        // uiFetchOnlyRecentCheckBox
+        //
+        uiFetchOnlyRecentCheckBox.AutoSize = true;
+        uiFetchOnlyRecentCheckBox.Location = new Point(240, 80);
+        uiFetchOnlyRecentCheckBox.Name = "uiFetchOnlyRecentCheckBox";
+        uiFetchOnlyRecentCheckBox.Size = new Size(140, 19);
+        uiFetchOnlyRecentCheckBox.TabIndex = 20;
+        uiFetchOnlyRecentCheckBox.Text = "Только последние";
+        uiFetchOnlyRecentCheckBox.UseVisualStyleBackColor = true;
+        uiFetchOnlyRecentCheckBox.CheckedChanged += uiFetchOnlyRecentCheckBox_CheckedChanged;
+        //
+        // uiFetchOnlyRecentNumeric
+        //
+        uiFetchOnlyRecentNumeric.Enabled = false;
+        uiFetchOnlyRecentNumeric.Location = new Point(385, 78);
+        uiFetchOnlyRecentNumeric.Maximum = new decimal(new int[] { 100000, 0, 0, 0 });
+        uiFetchOnlyRecentNumeric.Minimum = new decimal(new int[] { 1, 0, 0, 0 });
+        uiFetchOnlyRecentNumeric.Name = "uiFetchOnlyRecentNumeric";
+        uiFetchOnlyRecentNumeric.Size = new Size(80, 23);
+        uiFetchOnlyRecentNumeric.TabIndex = 21;
+        uiFetchOnlyRecentNumeric.Value = new decimal(new int[] { 50, 0, 0, 0 });
+        //
+        // uiFetchOnlyRecentLabel
+        //
+        uiFetchOnlyRecentLabel.AutoSize = true;
+        uiFetchOnlyRecentLabel.Location = new Point(469, 81);
+        uiFetchOnlyRecentLabel.Name = "uiFetchOnlyRecentLabel";
+        uiFetchOnlyRecentLabel.Size = new Size(45, 15);
+        uiFetchOnlyRecentLabel.TabIndex = 22;
+        uiFetchOnlyRecentLabel.Text = "медиа";
+        //
         // uiBrowserView
         //
         uiBrowserView.Dock = DockStyle.Fill;
-        uiBrowserView.Location = new Point(0, 76);
+        uiBrowserView.Location = new Point(0, 110);
         uiBrowserView.Name = "uiBrowserView";
-        uiBrowserView.Size = new Size(1100, 552);
+        uiBrowserView.Size = new Size(1100, 518);
         uiBrowserView.TabIndex = 1;
         //
         // uiStatusStrip
@@ -294,6 +376,8 @@ partial class CommentsHtmlControl
         uiFiltersPanel.ResumeLayout(false);
         uiFiltersPanel.PerformLayout();
         ((System.ComponentModel.ISupportInitialize)uiLimitNumeric).EndInit();
+        ((System.ComponentModel.ISupportInitialize)uiFetchSinceDaysNumeric).EndInit();
+        ((System.ComponentModel.ISupportInitialize)uiFetchOnlyRecentNumeric).EndInit();
         uiStatusStrip.ResumeLayout(false);
         uiStatusStrip.PerformLayout();
         ResumeLayout(false);
