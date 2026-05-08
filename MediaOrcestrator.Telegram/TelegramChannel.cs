@@ -1,6 +1,8 @@
 ﻿using MediaOrcestrator.Modules;
 using Microsoft.Extensions.Logging;
+using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
@@ -11,14 +13,12 @@ namespace MediaOrcestrator.Telegram;
 
 public sealed class TelegramChannel(
     ILogger<TelegramChannel> logger,
-    ILogger<TelegramService> serviceLogger,
+    ITelegramServiceFactory telegramServiceFactory,
     IToolPathProvider toolPathProvider)
     : ISourceType, IAuthenticatable, IToolConsumer
 {
-    private readonly SemaphoreSlim _serviceLock = new(1, 1);
-    private TelegramService? _cachedService;
-    private string? _cachedApiId;
-    private string? _cachedApiHash;
+    private readonly ConcurrentDictionary<string, CachedService> _serviceCache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly SemaphoreSlim _cacheLock = new(1, 1);
 
     public string Name => "Telegram";
 
@@ -75,16 +75,21 @@ public sealed class TelegramChannel(
         WellKnownTools.FFmpegWithProbeDescriptor,
     ];
 
-    public Task<List<SettingOption>> GetSettingOptionsAsync(string settingKey, Dictionary<string, string> currentSettings)
+    public Task<List<SettingOption>> GetSettingOptionsAsync(
+        string settingKey,
+        Dictionary<string, string> currentSettings)
     {
         return Task.FromResult<List<SettingOption>>([]);
     }
 
-    public async IAsyncEnumerable<MediaDto> GetMedia(Dictionary<string, string> settings, bool isFull, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    public async IAsyncEnumerable<MediaDto> GetMedia(
+        Dictionary<string, string> settings,
+        bool isFull,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        logger.LogInformation("Получение списка видео из Telegram-канала");
-        var service = await CreateServiceAsync(settings);
-        var peer = await service.ResolveChannelAsync(settings["channel"]);
+        logger.ListingMedia();
+        var service = await CreateServiceAsync(settings, cancellationToken);
+        var peer = await service.ResolveChannelAsync(settings["channel"], cancellationToken);
 
         await foreach (var message in service.GetVideosAsync(peer, cancellationToken))
         {
@@ -92,25 +97,31 @@ public sealed class TelegramChannel(
         }
     }
 
-    public async Task<MediaDto?> GetMediaByIdAsync(string externalId, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
+    public async Task<MediaDto?> GetMediaByIdAsync(
+        string externalId,
+        Dictionary<string, string> settings,
+        CancellationToken cancellationToken = default)
     {
-        logger.LogInformation("Получение видео {ExternalId} из Telegram", externalId);
-        var service = await CreateServiceAsync(settings);
-        var peer = await service.ResolveChannelAsync(settings["channel"]);
+        logger.GettingMedia(externalId);
+        var service = await CreateServiceAsync(settings, cancellationToken);
+        var peer = await service.ResolveChannelAsync(settings["channel"], cancellationToken);
         var messageId = int.Parse(externalId);
 
-        var message = await service.GetVideoByIdAsync(peer, messageId);
+        var message = await service.GetVideoByIdAsync(peer, messageId, cancellationToken);
         return message != null ? CreateMediaDto(message) : null;
     }
 
-    public async Task<MediaDto> DownloadAsync(string videoId, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
+    public async Task<MediaDto> DownloadAsync(
+        string videoId,
+        Dictionary<string, string> settings,
+        CancellationToken cancellationToken = default)
     {
-        logger.LogInformation("Скачивание видео {VideoId} из Telegram", videoId);
-        var service = await CreateServiceAsync(settings);
-        var peer = await service.ResolveChannelAsync(settings["channel"]);
+        logger.StartingDownload(videoId);
+        var service = await CreateServiceAsync(settings, cancellationToken);
+        var peer = await service.ResolveChannelAsync(settings["channel"], cancellationToken);
         var messageId = int.Parse(videoId);
 
-        var message = await service.GetVideoByIdAsync(peer, messageId)
+        var message = await service.GetVideoByIdAsync(peer, messageId, cancellationToken)
                       ?? throw new InvalidOperationException($"Видео {videoId} не найдено");
 
         var doc = (Document)((MessageMediaDocument)message.media!).document!;
@@ -120,8 +131,18 @@ public sealed class TelegramChannel(
         var tempPreviewPath = Path.Combine(tempPath, guid, "preview.jpg");
 
         var downloadBytesPerSecond = SpeedLimitHelper.ParseDownloadBytesPerSecond(settings);
-        await service.DownloadFileAsync(doc, tempVideoPath, downloadBytesPerSecond, cancellationToken);
-        logger.LogInformation("Видео сохранено: {Path} ({Size} байт)", tempVideoPath, new FileInfo(tempVideoPath).Length);
+
+        try
+        {
+            await service.DownloadFileAsync(doc, tempVideoPath, downloadBytesPerSecond, cancellationToken);
+        }
+        catch
+        {
+            TryDeleteFile(tempVideoPath);
+            throw;
+        }
+
+        logger.MediaDownloaded(tempVideoPath, new FileInfo(tempVideoPath).Length);
 
         if (doc.thumbs?.Length > 0)
         {
@@ -133,8 +154,17 @@ public sealed class TelegramChannel(
             if (thumb != null)
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(tempPreviewPath)!);
-                await using var thumbStream = File.Create(tempPreviewPath);
-                await service.DownloadFileAsync(doc, thumbStream, thumb);
+
+                try
+                {
+                    await using var thumbStream = File.Create(tempPreviewPath);
+                    await service.DownloadFileAsync(doc, thumbStream, thumb, cancellationToken);
+                }
+                catch
+                {
+                    TryDeleteFile(tempPreviewPath);
+                    throw;
+                }
             }
         }
 
@@ -145,9 +175,12 @@ public sealed class TelegramChannel(
         return dto;
     }
 
-    public async Task<UploadResult> UploadAsync(MediaDto media, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
+    public async Task<UploadResult> UploadAsync(
+        MediaDto media,
+        Dictionary<string, string> settings,
+        CancellationToken cancellationToken = default)
     {
-        logger.LogInformation("Загрузка видео в Telegram-канал. Название: '{Title}'", media.Title);
+        logger.StartingUpload(media.Title);
 
         var filePath = media.TempDataPath;
         if (!File.Exists(filePath))
@@ -155,8 +188,8 @@ public sealed class TelegramChannel(
             throw new FileNotFoundException("Файл видео не найден", filePath);
         }
 
-        var service = await CreateServiceAsync(settings);
-        var peer = await service.ResolveChannelAsync(settings["channel"]);
+        var service = await CreateServiceAsync(settings, cancellationToken);
+        var peer = await service.ResolveChannelAsync(settings["channel"], cancellationToken);
 
         var caption = string.IsNullOrWhiteSpace(media.Description)
             ? media.Title
@@ -170,7 +203,7 @@ public sealed class TelegramChannel(
             var message = await service.UploadVideoAsync(peer, filePath, caption, videoInfo, uploadBytesPerSecond, uploadProgress, cancellationToken);
 
             var externalId = message.id.ToString();
-            logger.LogInformation("Видео загружено в Telegram. Message ID: {ExternalId}", externalId);
+            logger.MediaUploaded(externalId);
 
             return new()
             {
@@ -178,9 +211,13 @@ public sealed class TelegramChannel(
                 Id = externalId,
             };
         }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Ошибка загрузки видео в Telegram");
+            logger.UploadFailed(ex);
             return new()
             {
                 Status = MediaStatusHelper.GetById(MediaStatus.Error),
@@ -189,12 +226,16 @@ public sealed class TelegramChannel(
         }
     }
 
-    public async Task<UploadResult> UpdateAsync(string externalId, MediaDto tempMedia, Dictionary<string, string> settings, CancellationToken cancellationToken)
+    public async Task<UploadResult> UpdateAsync(
+        string externalId,
+        MediaDto tempMedia,
+        Dictionary<string, string> settings,
+        CancellationToken cancellationToken)
     {
-        logger.LogInformation("Обновление видео {ExternalId} в Telegram", externalId);
+        logger.StartingUpdate(externalId);
 
-        var service = await CreateServiceAsync(settings);
-        var peer = await service.ResolveChannelAsync(settings["channel"]);
+        var service = await CreateServiceAsync(settings, cancellationToken);
+        var peer = await service.ResolveChannelAsync(settings["channel"], cancellationToken);
         var messageId = int.Parse(externalId);
 
         var caption = string.IsNullOrWhiteSpace(tempMedia.Description)
@@ -203,7 +244,7 @@ public sealed class TelegramChannel(
 
         try
         {
-            await service.EditMessageAsync(peer, messageId, caption);
+            await service.EditMessageAsync(peer, messageId, caption, cancellationToken);
 
             return new()
             {
@@ -211,9 +252,13 @@ public sealed class TelegramChannel(
                 Id = externalId,
             };
         }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Ошибка обновления видео {ExternalId} в Telegram", externalId);
+            logger.UpdateFailed(externalId, ex);
             return new()
             {
                 Status = MediaStatusHelper.GetById(MediaStatus.Error),
@@ -222,20 +267,25 @@ public sealed class TelegramChannel(
         }
     }
 
-    public async Task DeleteAsync(string externalId, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
+    public async Task DeleteAsync(
+        string externalId,
+        Dictionary<string, string> settings,
+        CancellationToken cancellationToken = default)
     {
-        logger.LogInformation("Удаление видео {ExternalId} из Telegram", externalId);
+        logger.StartingDelete(externalId);
 
-        var service = await CreateServiceAsync(settings);
-        var peer = await service.ResolveChannelAsync(settings["channel"]);
+        var service = await CreateServiceAsync(settings, cancellationToken);
+        var peer = await service.ResolveChannelAsync(settings["channel"], cancellationToken);
         var messageId = int.Parse(externalId);
 
-        await service.DeleteMessageAsync(peer, messageId);
+        await service.DeleteMessageAsync(peer, messageId, cancellationToken);
 
-        logger.LogInformation("Видео {ExternalId} удалено из Telegram", externalId);
+        logger.MediaDeleted(externalId);
     }
 
-    public Uri? GetExternalUri(string externalId, Dictionary<string, string> settings)
+    public Uri? GetExternalUri(
+        string externalId,
+        Dictionary<string, string> settings)
     {
         var channel = settings.GetValueOrDefault("channel", "").Trim().TrimStart('@');
 
@@ -253,43 +303,49 @@ public sealed class TelegramChannel(
         return File.Exists(GetSessionPath(settings));
     }
 
-    public async Task AuthenticateAsync(Dictionary<string, string> settings, IAuthUI ui, CancellationToken ct)
+    public async Task AuthenticateAsync(
+        Dictionary<string, string> settings,
+        IAuthUI ui,
+        CancellationToken ct)
     {
         var apiId = int.Parse(settings["api_id"]);
         var apiHash = settings["api_hash"];
         var phoneNumber = settings["phone_number"];
         var sessionPath = GetSessionPath(settings);
 
-        await using var client = new Client(apiId, apiHash, sessionPath);
-
-        while (client.User == null)
+        await using (var client = new Client(apiId, apiHash, sessionPath))
         {
-            ct.ThrowIfCancellationRequested();
-
-            var what = await client.Login(phoneNumber);
-            if (what == null)
+            while (client.User == null)
             {
-                break;
+                ct.ThrowIfCancellationRequested();
+
+                var what = await client.Login(phoneNumber);
+                if (what == null)
+                {
+                    break;
+                }
+
+                var prompt = what switch
+                {
+                    "verification_code" => "Введите код подтверждения из Telegram:",
+                    "password" => "Введите пароль двухфакторной аутентификации:",
+                    _ => $"Telegram запрашивает: {what}",
+                };
+
+                var value = await ui.PromptInputAsync(prompt, what == "password");
+                if (value == null)
+                {
+                    throw new OperationCanceledException();
+                }
+
+                await client.Login(value);
             }
 
-            var prompt = what switch
-            {
-                "verification_code" => "Введите код подтверждения из Telegram:",
-                "password" => "Введите пароль двухфакторной аутентификации:",
-                _ => $"Telegram запрашивает: {what}",
-            };
-
-            var value = await ui.PromptInputAsync(prompt, what == "password");
-            if (value == null)
-            {
-                throw new OperationCanceledException();
-            }
-
-            await client.Login(value);
+            logger.AuthSucceeded(client.User!.first_name, client.User.id);
+            await ui.ShowMessageAsync($"Авторизация успешна!\nПользователь: {client.User.first_name} (ID: {client.User.id})");
         }
 
-        logger.LogInformation("Telegram: авторизация успешна. Пользователь: {Name} (ID: {Id})", client.User!.first_name, client.User.id);
-        await ui.ShowMessageAsync($"Авторизация успешна!\nПользователь: {client.User.first_name} (ID: {client.User.id})");
+        InvalidateCachedService(sessionPath);
     }
 
     public ConvertType[] GetAvailableConvertTypes()
@@ -297,7 +353,12 @@ public sealed class TelegramChannel(
         return [];
     }
 
-    public Task ConvertAsync(int typeId, string externalId, Dictionary<string, string> settings, IProgress<ConvertProgress>? progress = null, CancellationToken cancellationToken = default)
+    public Task ConvertAsync(
+        int typeId,
+        string externalId,
+        Dictionary<string, string> settings,
+        IProgress<ConvertProgress>? progress = null,
+        CancellationToken cancellationToken = default)
     {
         throw new NotImplementedException();
     }
@@ -398,43 +459,107 @@ public sealed class TelegramChannel(
         return Path.Combine(settings["_system_state_path"], "telegram.session");
     }
 
-    private async Task<TelegramService> CreateServiceAsync(Dictionary<string, string> settings)
+    private static void TryDeleteFile(string path)
     {
-        var apiId = int.Parse(settings["api_id"]);
-        var apiHash = settings["api_hash"];
-        var sessionPath = GetSessionPath(settings);
-
-        await _serviceLock.WaitAsync();
         try
         {
-            if (_cachedService != null && _cachedApiId == settings["api_id"] && _cachedApiHash == apiHash)
+            if (File.Exists(path))
             {
-                return _cachedService;
+                File.Delete(path);
             }
-
-            var oldService = _cachedService;
-            var phoneNumber = settings["phone_number"];
-            _cachedService = new(apiId, apiHash, phoneNumber, sessionPath, serviceLogger);
-            _cachedApiId = settings["api_id"];
-            _cachedApiHash = apiHash;
-            oldService?.Dispose();
-
-            await _cachedService.ConnectAsync();
-            return _cachedService;
         }
-        finally
+        catch (Exception)
         {
-            _serviceLock.Release();
+            // Частично записанный файл нельзя удалить - оставляем GC/юзеру.
         }
     }
 
-    private async Task<VideoInfo> ProbeVideoInfoAsync(string filePath, CancellationToken cancellationToken)
+    private async Task<TelegramService> CreateServiceAsync(
+        Dictionary<string, string> settings,
+        CancellationToken cancellationToken)
+    {
+        var sessionPath = GetSessionPath(settings);
+        var apiId = int.Parse(settings["api_id"]);
+        var apiHash = settings["api_hash"];
+        var phoneNumber = settings["phone_number"];
+
+        if (TryGetMatchingCached(sessionPath, apiId, apiHash, phoneNumber, out var cached))
+        {
+            return cached.Service;
+        }
+
+        await _cacheLock.WaitAsync(cancellationToken);
+
+        try
+        {
+            if (TryGetMatchingCached(sessionPath, apiId, apiHash, phoneNumber, out cached))
+            {
+                return cached.Service;
+            }
+
+            if (_serviceCache.TryRemove(sessionPath, out var stale))
+            {
+                stale.Service.Dispose();
+            }
+
+            var service = telegramServiceFactory.Create(apiId, apiHash, phoneNumber, sessionPath);
+
+            try
+            {
+                await service.ConnectAsync(cancellationToken);
+            }
+            catch
+            {
+                service.Dispose();
+                throw;
+            }
+
+            _serviceCache[sessionPath] = new(service, apiId, apiHash, phoneNumber);
+            return service;
+        }
+        finally
+        {
+            _cacheLock.Release();
+        }
+    }
+
+    private bool TryGetMatchingCached(
+        string sessionPath,
+        int apiId,
+        string apiHash,
+        string phoneNumber,
+        [NotNullWhen(true)] out CachedService? cached)
+    {
+        if (_serviceCache.TryGetValue(sessionPath, out var existing)
+            && existing.ApiId == apiId
+            && existing.ApiHash == apiHash
+            && existing.PhoneNumber == phoneNumber)
+        {
+            cached = existing;
+            return true;
+        }
+
+        cached = null;
+        return false;
+    }
+
+    private void InvalidateCachedService(string sessionPath)
+    {
+        if (_serviceCache.TryRemove(sessionPath, out var cached))
+        {
+            cached.Service.Dispose();
+        }
+    }
+
+    private async Task<VideoInfo> ProbeVideoInfoAsync(
+        string filePath,
+        CancellationToken cancellationToken)
     {
         var ffprobePath = toolPathProvider.GetCompanionPath(WellKnownTools.FFmpeg, "ffprobe");
 
         if (ffprobePath is null)
         {
-            logger.LogWarning("ffprobe не найден, видео будет загружено без метаданных");
+            logger.FfprobeNotFound();
             return new();
         }
 
@@ -465,7 +590,7 @@ public sealed class TelegramChannel(
                 return ParseFfprobeOutput(output);
             }
 
-            logger.LogWarning("ffprobe завершился с кодом {ExitCode} для файла: {FilePath}", process.ExitCode, filePath);
+            logger.FfprobeExited(process.ExitCode, filePath);
             return new();
         }
         catch (OperationCanceledException)
@@ -474,10 +599,12 @@ public sealed class TelegramChannel(
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Не удалось получить информацию о видео через ffprobe: {FilePath}", filePath);
+            logger.FfprobeFailed(filePath, ex);
             return new();
         }
     }
+
+    private sealed record CachedService(TelegramService Service, int ApiId, string ApiHash, string PhoneNumber);
 }
 
 public record VideoInfo

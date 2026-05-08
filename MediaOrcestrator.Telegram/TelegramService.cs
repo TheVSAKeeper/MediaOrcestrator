@@ -9,37 +9,48 @@ namespace MediaOrcestrator.Telegram;
 public sealed class TelegramService : IDisposable
 {
     private readonly Client _client;
-    private readonly ILogger _logger;
+    private readonly ILogger<TelegramService> _logger;
+    private readonly TelegramOptions _options;
     private readonly string _phoneNumber;
 
-    public TelegramService(int apiId, string apiHash, string phoneNumber, string sessionPath, ILogger logger)
+    public TelegramService(
+        int apiId,
+        string apiHash,
+        string phoneNumber,
+        string sessionPath,
+        TelegramOptions options,
+        ILogger<TelegramService> logger)
     {
         _logger = logger;
+        _options = options;
         _phoneNumber = phoneNumber;
         _client = new(apiId, apiHash, sessionPath);
     }
 
-    public async Task ConnectAsync()
+    public async Task ConnectAsync(CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Подключение к Telegram...");
-        await _client.Login(_phoneNumber);
+        _logger.ConnectingToTelegram();
+
+        await _client.Login(_phoneNumber).WaitAsync(_options.ConnectTimeout, cancellationToken);
 
         if (_client.User == null)
         {
             throw new InvalidOperationException("Не удалось подключиться к Telegram. Выполните авторизацию через настройки источника.");
         }
 
-        _logger.LogInformation("Подключено как {Name} (ID: {Id})", _client.User.first_name, _client.User.id);
+        _logger.ConnectedAs(_client.User.first_name, _client.User.id);
     }
 
-    public async Task<InputPeer> ResolveChannelAsync(string channel)
+    public async Task<InputPeer> ResolveChannelAsync(
+        string channel,
+        CancellationToken cancellationToken = default)
     {
         var trimmed = channel.Trim().TrimStart('@');
 
         if (long.TryParse(trimmed, out var numericId))
         {
-            _logger.LogDebug("Резолв канала по числовому ID: {Id}", numericId);
-            var chats = await _client.Messages_GetAllChats();
+            _logger.ResolvingChannelById(numericId);
+            var chats = await _client.Messages_GetAllChats().WaitAsync(cancellationToken);
 
             var chat = chats.chats.Values.FirstOrDefault(c => c.ID == numericId)
                        ?? throw new InvalidOperationException($"Канал с ID {numericId} не найден. Убедитесь, что аккаунт подписан на канал.");
@@ -47,8 +58,8 @@ public sealed class TelegramService : IDisposable
             return chat.ToInputPeer();
         }
 
-        _logger.LogDebug("Резолв канала по username: @{Username}", trimmed);
-        var resolved = await _client.Contacts_ResolveUsername(trimmed);
+        _logger.ResolvingChannelByUsername(trimmed);
+        var resolved = await _client.Contacts_ResolveUsername(trimmed).WaitAsync(cancellationToken);
 
         return resolved.peer switch
         {
@@ -57,15 +68,18 @@ public sealed class TelegramService : IDisposable
         };
     }
 
-    public async IAsyncEnumerable<Message> GetVideosAsync(InputPeer peer, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    public async IAsyncEnumerable<Message> GetVideosAsync(
+        InputPeer peer,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var offsetId = 0;
+        var pageSize = _options.HistoryPageSize;
 
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var history = await _client.Messages_GetHistory(peer, offsetId, limit: 100);
+            var history = await _client.Messages_GetHistory(peer, offsetId, limit: pageSize).WaitAsync(cancellationToken);
             var messages = history.Messages;
 
             if (messages.Length == 0)
@@ -88,7 +102,7 @@ public sealed class TelegramService : IDisposable
                 yield return message;
             }
 
-            if (messages.Length < 100)
+            if (messages.Length < pageSize)
             {
                 break;
             }
@@ -97,11 +111,14 @@ public sealed class TelegramService : IDisposable
         }
     }
 
-    public async Task<Message?> GetVideoByIdAsync(InputPeer peer, int messageId)
+    public async Task<Message?> GetVideoByIdAsync(
+        InputPeer peer,
+        int messageId,
+        CancellationToken cancellationToken = default)
     {
-        _logger.LogDebug("Запрос сообщения {MessageId}", messageId);
+        _logger.RequestingMessage(messageId);
 
-        var result = await _client.GetMessages(peer, new InputMessageID { id = messageId });
+        var result = await _client.GetMessages(peer, new InputMessageID { id = messageId }).WaitAsync(cancellationToken);
 
         if (result.Messages.Length == 0 || result.Messages[0] is not Message message)
         {
@@ -110,33 +127,48 @@ public sealed class TelegramService : IDisposable
 
         if (message.media is not MessageMediaDocument { document: Document doc } || !doc.mime_type.StartsWith("video/"))
         {
-            _logger.LogWarning("Сообщение {MessageId} не содержит видео", messageId);
+            _logger.MessageHasNoVideo(messageId);
             return null;
         }
 
         return message;
     }
 
-    public async Task DownloadFileAsync(Document document, string outputPath, long? bytesPerSecond = null, CancellationToken cancellationToken = default)
+    public async Task DownloadFileAsync(
+        Document document,
+        string outputPath,
+        long? bytesPerSecond = null,
+        CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Скачивание файла {Id} ({Size} байт)", document.id, document.size);
+        _logger.DownloadingFile(document.id, document.size);
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
 
         await using var fileStream = File.Create(outputPath);
         await using var throttled = new ThrottledStream(fileStream, bytesPerSecond);
-        await _client.DownloadFileAsync(document, throttled);
+        await _client.DownloadFileAsync(document, throttled).WaitAsync(cancellationToken);
 
-        _logger.LogInformation("Файл сохранён: {Path}", outputPath);
+        _logger.FileSaved(outputPath);
     }
 
-    public async Task DownloadFileAsync(Document document, Stream outputStream, PhotoSizeBase? thumbSize = null)
+    public async Task DownloadFileAsync(
+        Document document,
+        Stream outputStream,
+        PhotoSizeBase? thumbSize = null,
+        CancellationToken cancellationToken = default)
     {
-        await _client.DownloadFileAsync(document, outputStream, thumbSize);
+        await _client.DownloadFileAsync(document, outputStream, thumbSize).WaitAsync(cancellationToken);
     }
 
-    public async Task<Message> UploadVideoAsync(InputPeer peer, string filePath, string caption, VideoInfo videoInfo, long? bytesPerSecond = null, IProgress<double>? uploadProgress = null, CancellationToken cancellationToken = default)
+    public async Task<Message> UploadVideoAsync(
+        InputPeer peer,
+        string filePath,
+        string caption,
+        VideoInfo videoInfo,
+        long? bytesPerSecond = null,
+        IProgress<double>? uploadProgress = null,
+        CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Загрузка видео в Telegram: {Path} ({W}x{H}, {Duration:F1}с)", filePath, videoInfo.Width, videoInfo.Height, videoInfo.Duration);
+        _logger.UploadingVideo(filePath, videoInfo.Width, videoInfo.Height, videoInfo.Duration);
 
         await using var fileStream = File.OpenRead(filePath);
         var fileSize = fileStream.Length;
@@ -150,7 +182,7 @@ public sealed class TelegramService : IDisposable
             : null;
 
         await using var stream = new ProgressStream(sourceStream, byteProgress);
-        var inputFile = await _client.UploadFileAsync(stream, Path.GetFileName(filePath));
+        var inputFile = await _client.UploadFileAsync(stream, Path.GetFileName(filePath)).WaitAsync(cancellationToken);
 
         var mimeType = Path.GetExtension(filePath).ToLowerInvariant() switch
         {
@@ -182,24 +214,31 @@ public sealed class TelegramService : IDisposable
                 file_name = Path.GetFileName(filePath),
             });
 
-        var message = await _client.SendMessageAsync(peer, caption, media);
+        var message = await _client.SendMessageAsync(peer, caption, media).WaitAsync(cancellationToken);
 
-        _logger.LogInformation("Видео загружено. Message ID: {MessageId}", message.id);
+        _logger.VideoUploaded(message.id);
         return message;
     }
 
-    public async Task EditMessageAsync(InputPeer peer, int messageId, string caption)
+    public async Task EditMessageAsync(
+        InputPeer peer,
+        int messageId,
+        string caption,
+        CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Редактирование сообщения {MessageId}", messageId);
-        await _client.Messages_EditMessage(peer, messageId, caption);
-        _logger.LogInformation("Сообщение {MessageId} отредактировано", messageId);
+        _logger.EditingMessage(messageId);
+        await _client.Messages_EditMessage(peer, messageId, caption).WaitAsync(cancellationToken);
+        _logger.MessageEdited(messageId);
     }
 
-    public async Task DeleteMessageAsync(InputPeer peer, int messageId)
+    public async Task DeleteMessageAsync(
+        InputPeer peer,
+        int messageId,
+        CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Удаление сообщения {MessageId}", messageId);
-        await _client.DeleteMessages(peer, messageId);
-        _logger.LogInformation("Сообщение {MessageId} удалено", messageId);
+        _logger.DeletingMessage(messageId);
+        await _client.DeleteMessages(peer, messageId).WaitAsync(cancellationToken);
+        _logger.MessageDeleted(messageId);
     }
 
     public void Dispose()
