@@ -456,7 +456,7 @@
             uiClearTypeComboBox.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
             uiClearTypeComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
             uiClearTypeComboBox.FormattingEnabled = true;
-            uiClearTypeComboBox.Items.AddRange(new object[] { "medias", "sources", "source_relations" });
+            uiClearTypeComboBox.Items.AddRange(new object[] { "medias", "sources", "source_relations", "media_comments"});
             uiClearTypeComboBox.Location = new Point(232, 728);
             uiClearTypeComboBox.Name = "uiClearTypeComboBox";
             uiClearTypeComboBox.Size = new Size(180, 23);
