@@ -19,6 +19,10 @@ public sealed class VkVideoChannel(
         ISupportsCommentMutations,
         ISupportsCommentLikes
 {
+    private const string SubtypeMetadataKey = "_system_vk_subtype";
+    private const string ClipSubtype = "clip";
+    private const string VideoSubtype = "video";
+
     private readonly ConcurrentDictionary<string, CachedEntry> _serviceCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly SemaphoreSlim _cacheLock = new(1, 1);
 
@@ -69,7 +73,16 @@ public sealed class VkVideoChannel(
         string externalId,
         Dictionary<string, string> settings)
     {
-        return new($"https://vkvideo.ru/video{externalId}");
+        return GetExternalUri(externalId, settings, null);
+    }
+
+    public Uri? GetExternalUri(
+        string externalId,
+        Dictionary<string, string> settings,
+        IReadOnlyList<MetadataItem>? metadata)
+    {
+        var path = IsClipFromMetadata(metadata) ? "clip" : "video";
+        return new($"https://vkvideo.ru/{path}{externalId}");
     }
 
     public Uri? GetCommentExternalUri(
@@ -77,6 +90,16 @@ public sealed class VkVideoChannel(
         string externalCommentId,
         string? rootExternalCommentId,
         Dictionary<string, string> settings)
+    {
+        return GetCommentExternalUri(externalMediaId, externalCommentId, rootExternalCommentId, settings, null);
+    }
+
+    public Uri? GetCommentExternalUri(
+        string externalMediaId,
+        string externalCommentId,
+        string? rootExternalCommentId,
+        Dictionary<string, string> settings,
+        IReadOnlyList<MetadataItem>? metadata)
     {
         if (string.IsNullOrEmpty(externalMediaId) || string.IsNullOrEmpty(externalCommentId))
         {
@@ -87,7 +110,8 @@ public sealed class VkVideoChannel(
             ? $"?reply={externalCommentId}"
             : $"?thread={rootExternalCommentId}&reply={externalCommentId}";
 
-        return new($"https://vkvideo.ru/video{externalMediaId}{query}");
+        var path = IsClipFromMetadata(metadata) ? "clip" : "video";
+        return new($"https://vkvideo.ru/{path}{externalMediaId}{query}");
     }
 
     public async IAsyncEnumerable<MediaDto> GetMedia(
@@ -112,9 +136,24 @@ public sealed class VkVideoChannel(
         logger.RequestingVideoDetails(externalId);
         using var lease = await AcquireServiceLeaseAsync(settings, cancellationToken);
         var (ownerId, videoId) = ParseExternalId(externalId);
+        var service = lease.Service;
 
-        var video = await lease.Service.GetVideoByIdAsync(ownerId, videoId, cancellationToken);
-        return video != null ? CreateMediaDto(video) : null;
+        var video = await service.GetVideoByIdAsync(ownerId, videoId, cancellationToken);
+        if (video == null)
+        {
+            return null;
+        }
+
+        if (IsClip(video))
+        {
+            var shortVideo = await service.GetShortVideoByIdAsync(ownerId, videoId, cancellationToken);
+            if (shortVideo != null)
+            {
+                ApplyShortVideoData(video, shortVideo);
+            }
+        }
+
+        return CreateMediaDto(video);
     }
 
     public async IAsyncEnumerable<CommentDto> GetCommentsAsync(
@@ -403,13 +442,12 @@ public sealed class VkVideoChannel(
 
         var errorMessage = "";
         SaveThumbResponse? thumbResult = null;
-        var isShorts = false;
+        var isShorts = await ResolveIsShortsAsync(tempMedia, service, ownerId, videoId, cancellationToken);
 
         if (!string.IsNullOrEmpty(tempMedia.TempPreviewPath) && File.Exists(tempMedia.TempPreviewPath))
         {
             try
             {
-                isShorts = await ResolveIsShortsAsync(tempMedia, service, ownerId, videoId, cancellationToken);
                 var previewPath = PreparePreviewForUpload(tempMedia.TempPreviewPath, isShorts);
                 thumbResult = await service.UploadThumbnailAsync(isShorts, ownerId, videoId, previewPath, cancellationToken);
             }
@@ -426,7 +464,14 @@ public sealed class VkVideoChannel(
 
         try
         {
-            await service.EditVideoAsync(ownerId, videoId, tempMedia.Title, tempMedia.Description, isShorts ? null : thumbResult, cancellationToken);
+            if (isShorts)
+            {
+                await service.EditShortVideoAsync(ownerId, videoId, tempMedia.Title, cancellationToken);
+            }
+            else
+            {
+                await service.EditVideoAsync(ownerId, videoId, tempMedia.Title, tempMedia.Description, thumbResult, cancellationToken);
+            }
         }
         catch (OperationCanceledException)
         {
@@ -717,6 +762,12 @@ public sealed class VkVideoChannel(
             Value = previewUrl,
         });
 
+        metadata.Add(new()
+        {
+            Key = SubtypeMetadataKey,
+            Value = IsClip(video) ? ClipSubtype : VideoSubtype,
+        });
+
         return new()
         {
             Id = video.GetVideoKey(),
@@ -726,6 +777,24 @@ public sealed class VkVideoChannel(
             PreviewPath = previewUrl,
             Metadata = metadata,
         };
+    }
+
+    private static bool IsClipFromMetadata(IReadOnlyList<MetadataItem>? metadata)
+    {
+        if (metadata == null)
+        {
+            return false;
+        }
+
+        foreach (var item in metadata)
+        {
+            if (string.Equals(item.Key, SubtypeMetadataKey, StringComparison.Ordinal))
+            {
+                return string.Equals(item.Value, ClipSubtype, StringComparison.Ordinal);
+            }
+        }
+
+        return false;
     }
 
     private static string GetTitle(VideoItem video)
@@ -741,6 +810,61 @@ public sealed class VkVideoChannel(
     private static bool IsClip(VideoItem video)
     {
         return string.Equals(video.Type, "short_video", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void ApplyShortVideoData(
+        VideoItem video,
+        ShortVideoFullItem shortVideo)
+    {
+        if (!string.IsNullOrEmpty(shortVideo.Description))
+        {
+            video.Description = shortVideo.Description;
+        }
+
+        if (shortVideo.DurationSeconds > 0)
+        {
+            video.Duration = shortVideo.DurationSeconds;
+        }
+
+        if (shortVideo.Width > 0)
+        {
+            video.Width = shortVideo.Width;
+        }
+
+        if (shortVideo.Height > 0)
+        {
+            video.Height = shortVideo.Height;
+        }
+
+        if (shortVideo.PublishTimestamp > 0)
+        {
+            video.Date = shortVideo.PublishTimestamp;
+        }
+
+        if (shortVideo.Engagement is { } engagement)
+        {
+            video.Views = engagement.ViewCount;
+            video.Comments = engagement.CommentCount;
+            video.Likes = new() { Count = engagement.LikeCount };
+            video.Reposts = new() { Count = engagement.RepostCount };
+        }
+
+        if (shortVideo.Covers.Count > 0)
+        {
+            video.Image = shortVideo.Covers
+                .Select(c => new VideoImage
+                {
+                    Url = c.Url,
+                    Width = c.Width,
+                    Height = c.Height,
+                })
+                .ToList();
+        }
+
+        if (shortVideo.Files != null)
+        {
+            video.Files = shortVideo.Files;
+        }
     }
 
     private static List<MetadataItem> BuildMetadata(VideoItem video)
@@ -834,6 +958,11 @@ public sealed class VkVideoChannel(
 
         var video = await service.GetVideoByIdAsync(ownerId, videoId, cancellationToken)
                     ?? throw new NonRetriableException("Не удалось получить видео из VK для определения ориентации (обычное / shorts)");
+
+        if (IsClip(video))
+        {
+            return true;
+        }
 
         if (video.Width <= 0 || video.Height <= 0)
         {

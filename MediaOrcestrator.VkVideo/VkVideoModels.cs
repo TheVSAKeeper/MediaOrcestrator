@@ -346,6 +346,87 @@ public sealed class ShortVideoThumbUploadUrlResponse
     public string UploadUrl { get; set; } = string.Empty;
 }
 
+public sealed class ShortVideoGetResponse
+{
+    [JsonPropertyName("feed")]
+    public ShortVideoGetFeed Feed { get; set; } = new();
+}
+
+public sealed class ShortVideoGetFeed
+{
+    [JsonPropertyName("items")]
+    public List<ShortVideoGetFeedItem> Items { get; set; } = [];
+}
+
+public sealed class ShortVideoGetFeedItem
+{
+    [JsonPropertyName("type")]
+    public string? Type { get; set; }
+
+    [JsonPropertyName("item")]
+    public ShortVideoFullItem? Item { get; set; }
+}
+
+public sealed class ShortVideoFullItem
+{
+    [JsonPropertyName("id")]
+    public long Id { get; set; }
+
+    [JsonPropertyName("owner_id")]
+    public long OwnerId { get; set; }
+
+    [JsonPropertyName("description")]
+    public string Description { get; set; } = string.Empty;
+
+    [JsonPropertyName("duration_seconds")]
+    public int DurationSeconds { get; set; }
+
+    [JsonPropertyName("width")]
+    public int Width { get; set; }
+
+    [JsonPropertyName("height")]
+    public int Height { get; set; }
+
+    [JsonPropertyName("publish_timestamp")]
+    public long PublishTimestamp { get; set; }
+
+    [JsonPropertyName("engagement")]
+    public ShortVideoEngagement? Engagement { get; set; }
+
+    [JsonPropertyName("covers")]
+    public List<ShortVideoCover> Covers { get; set; } = [];
+
+    [JsonPropertyName("files")]
+    public VideoFiles? Files { get; set; }
+}
+
+public sealed class ShortVideoEngagement
+{
+    [JsonPropertyName("view_count")]
+    public int ViewCount { get; set; }
+
+    [JsonPropertyName("comment_count")]
+    public int CommentCount { get; set; }
+
+    [JsonPropertyName("like_count")]
+    public int LikeCount { get; set; }
+
+    [JsonPropertyName("repost_count")]
+    public int RepostCount { get; set; }
+}
+
+public sealed class ShortVideoCover
+{
+    [JsonPropertyName("url")]
+    public string Url { get; set; } = string.Empty;
+
+    [JsonPropertyName("width")]
+    public int Width { get; set; }
+
+    [JsonPropertyName("height")]
+    public int Height { get; set; }
+}
+
 public sealed class ShortVideoEncodeProgressResponse
 {
     [JsonPropertyName("percents")]

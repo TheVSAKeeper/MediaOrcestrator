@@ -15,8 +15,7 @@ namespace MediaOrcestrator.VkVideo;
 public sealed class VkVideoService : IDisposable
 {
     private const string ApiBase = "https://api.vkvideo.ru/method/";
-    private const string ApiVkBase = "https://api.vk.com/method/";
-    private const string ApiVersion = "5.275";
+    private const string ApiVersion = "5.276";
     private const string ClientId = "52461373";
     private const string OwnerIdKey = "owner_id";
     private const string VideoIdKey = "video_id";
@@ -102,7 +101,7 @@ public sealed class VkVideoService : IDisposable
         var videoKey = $"{ownerId}_{videoId}";
         _logger.RequestingVideo(videoKey);
 
-        var response = await CallVkApiAsync("video.getByIds",
+        var response = await CallApiAsync("video.getByIds",
             Operations.GetVideoById,
             new()
             {
@@ -113,6 +112,34 @@ public sealed class VkVideoService : IDisposable
             cancellationToken);
 
         return response.Items.Count > 0 ? response.Items[0] : null;
+    }
+
+    public async Task<ShortVideoFullItem?> GetShortVideoByIdAsync(
+        long ownerId,
+        long videoId,
+        CancellationToken cancellationToken = default)
+    {
+        var rawId = $"{ownerId}_{videoId}";
+
+        var response = await CallApiAsync("shortVideo.get",
+            Operations.ShortVideoGet,
+            new()
+            {
+                ["short_video_raw_ids"] = rawId,
+                ["fields"] = string.Empty,
+            },
+            VkVideoJsonContext.Default.ShortVideoGetResponse,
+            cancellationToken);
+
+        foreach (var item in response.Feed.Items)
+        {
+            if (item.Item != null && string.Equals(item.Type, "short_video_full", StringComparison.OrdinalIgnoreCase))
+            {
+                return item.Item;
+            }
+        }
+
+        return null;
     }
 
     public async Task EditVideoAsync(
@@ -149,6 +176,29 @@ public sealed class VkVideoService : IDisposable
         {
             throw new InvalidOperationException($"Ошибка редактирования видео {ownerId}_{videoId}");
         }
+
+        _logger.VideoEdited(ownerId, videoId);
+    }
+
+    public async Task EditShortVideoAsync(
+        long ownerId,
+        long videoId,
+        string description,
+        CancellationToken cancellationToken = default)
+    {
+        _logger.EditingVideo(ownerId, videoId);
+
+        await CallApiNoResultAsync(ApiBase,
+            "shortVideo.edit",
+            Operations.ShortVideoEdit,
+            new()
+            {
+                [OwnerIdKey] = ownerId.ToString(CultureInfo.InvariantCulture),
+                [VideoIdKey] = videoId.ToString(CultureInfo.InvariantCulture),
+                ["description"] = description,
+                ["publish_date"] = "0",
+            },
+            cancellationToken);
 
         _logger.VideoEdited(ownerId, videoId);
     }
@@ -1089,16 +1139,6 @@ public sealed class VkVideoService : IDisposable
         return CallApiInternalAsync(ApiBase, method, operationKey, parameters, typeInfo, cancellationToken);
     }
 
-    private Task<T> CallVkApiAsync<T>(
-        string method,
-        string operationKey,
-        Dictionary<string, string> parameters,
-        JsonTypeInfo<T> typeInfo,
-        CancellationToken cancellationToken)
-    {
-        return CallApiInternalAsync(ApiVkBase, method, operationKey, parameters, typeInfo, cancellationToken);
-    }
-
     private Task CallApiNoResultAsync(
         string baseUrl,
         string method,
@@ -1426,6 +1466,7 @@ public sealed class VkVideoService : IDisposable
         public const string VideoSave = "vkvideo.video.save";
         public const string VideoPublish = "vkvideo.video.publish";
         public const string VideoSaveThumb = "vkvideo.video.save-thumb";
+        public const string ShortVideoGet = "vkvideo.short-video.get";
         public const string ShortVideoCreate = "vkvideo.short-video.create";
         public const string ShortVideoEdit = "vkvideo.short-video.edit";
         public const string ShortVideoPublish = "vkvideo.short-video.publish";
