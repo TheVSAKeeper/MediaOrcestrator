@@ -1,10 +1,11 @@
 ﻿using Microsoft.Extensions.Logging;
+using System.Collections.Concurrent;
 
 namespace MediaOrcestrator.Domain;
 
 public class ActionHolder(ILogger<ActionHolder> logger)
 {
-    public Dictionary<Guid, RunningAction> Actions = new();
+    public ConcurrentDictionary<Guid, RunningAction> Actions = new();
 
     public RunningAction Register(string name, string status, int progressMax, CancellationTokenSource ctx)
     {
@@ -19,23 +20,29 @@ public class ActionHolder(ILogger<ActionHolder> logger)
             Holder = this,
         };
 
-        Actions.Add(id, act);
+        Actions.TryAdd(id, act);
         return act;
     }
 
     public void SetStatus(Guid id, string value)
     {
-        Actions[id].Status = value;
+        if (Actions.TryGetValue(id, out var act))
+        {
+            act.Status = value;
+        }
     }
 
     public void ProgressPlus(Guid id)
     {
-        Actions[id].ProgressValue++;
+        if (Actions.TryGetValue(id, out var act))
+        {
+            act.ProgressValue++;
+        }
     }
 
     public void Cancel(Guid id)
     {
-        if (!Actions.Remove(id, out var act))
+        if (!Actions.TryRemove(id, out var act))
         {
             return;
         }

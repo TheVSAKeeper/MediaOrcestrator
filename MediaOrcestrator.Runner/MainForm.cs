@@ -385,13 +385,10 @@ public partial class MainForm : Form
     private void button1_Click(object sender, EventArgs e)
     {
         uiRunningActionsFlowLayoutPanel.Controls.Clear();
-        // todo shlyapa
         var actionHolder = _serviceProvider.GetRequiredService<ActionHolder>();
-        //actionHolder.Register("Синкаем пипку коня Никиты " + actionHolder.Actions.Count, "в процессе", 10, new CancellationTokenSource());
         var i = -1;
         foreach (var action in actionHolder.Actions)
         {
-            action.Value.ProgressPlus();
             i++;
             var btn = new ActionUserControl();
             btn.SetAction(action.Value);
