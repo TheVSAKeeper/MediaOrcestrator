@@ -71,9 +71,9 @@ public class ActionHolder(ILogger<ActionHolder> logger)
             Holder.ProgressPlus(Id);
         }
 
-        public void Finish()
+        public void Finish(string? finalStatus = null)
         {
-            Status = "Выполнено";
+            Status = finalStatus ?? "Выполнено";
             Holder.Cancel(Id);
         }
     }

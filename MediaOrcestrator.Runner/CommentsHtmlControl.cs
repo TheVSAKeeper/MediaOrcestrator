@@ -351,13 +351,11 @@ public partial class CommentsHtmlControl : UserControl
                 MediaSearch = mediaSearch,
             });
 
-            uiCountLabel.Text = truncated
-                ? $"Найдено: ≥{records.Count} (увеличьте лимит)"
-                : $"Найдено: {records.Count}";
-
             uiStatusLabel.Text = records.Count == 0
                 ? "Ничего не найдено"
-                : $"Комментариев: {records.Count}";
+                : truncated
+                    ? $"Комментариев: ≥{records.Count} (увеличьте лимит)"
+                    : $"Комментариев: {records.Count}";
         }
         catch (Exception ex)
         {
@@ -407,7 +405,8 @@ public partial class CommentsHtmlControl : UserControl
 
         try
         {
-            var uri = source.Type.GetExternalUri(externalId, source.Settings);
+            var metadata = ResolveMediaMetadata(sourceId, externalId);
+            var uri = source.Type.GetExternalUri(externalId, source.Settings, metadata);
             if (uri == null)
             {
                 return;
@@ -443,10 +442,12 @@ public partial class CommentsHtmlControl : UserControl
 
         try
         {
+            var metadata = ResolveMediaMetadata(sourceId, externalMediaId);
             var uri = permalinks.GetCommentExternalUri(externalMediaId,
                 externalCommentId,
                 rootCommentId,
-                source.Settings);
+                source.Settings,
+                metadata);
 
             if (uri == null)
             {
@@ -463,6 +464,27 @@ public partial class CommentsHtmlControl : UserControl
             _logger?.LogError(ex, "Не удалось открыть комментарий в источнике ({Source}/{Media}/{Comment})",
                 sourceId, externalMediaId, externalCommentId);
         }
+    }
+
+    private IReadOnlyList<MetadataItem>? ResolveMediaMetadata(string sourceId, string externalMediaId)
+    {
+        if (_orcestrator == null)
+        {
+            return null;
+        }
+
+        foreach (var media in _orcestrator.GetMedias())
+        {
+            foreach (var link in media.Sources)
+            {
+                if (link.SourceId == sourceId && link.ExternalId == externalMediaId)
+                {
+                    return media.Metadata.ForSource(sourceId);
+                }
+            }
+        }
+
+        return null;
     }
 
     private async Task HandleMutationAsync(CommentMutationRequest request)
@@ -646,6 +668,10 @@ public partial class CommentsHtmlControl : UserControl
         var cts = new CancellationTokenSource();
         var action = _actionHolder.Register($"Комментарии: «{media.Title}»", "Запущена", 1, cts);
 
+        uiFetchProgressBar.Style = ProgressBarStyle.Marquee;
+        uiFetchProgressBar.Visible = true;
+        uiStatusLabel.Text = $"Загрузка комментариев: «{media.Title}»...";
+
         try
         {
             await Task.Run(async () =>
@@ -665,6 +691,8 @@ public partial class CommentsHtmlControl : UserControl
         {
             action.ProgressPlus();
             action.Finish();
+            uiFetchProgressBar.Visible = false;
+            uiFetchProgressBar.Style = ProgressBarStyle.Blocks;
         }
 
         ApplyFilters();
@@ -742,8 +770,24 @@ public partial class CommentsHtmlControl : UserControl
             targets.Count,
             cts);
 
+        uiFetchProgressBar.Style = ProgressBarStyle.Blocks;
+        uiFetchProgressBar.Maximum = targets.Count;
+        uiFetchProgressBar.Value = 0;
+        uiFetchProgressBar.Visible = true;
+        uiFetchCounterLabel.Text = $"0 / {targets.Count}";
+        uiFetchCounterLabel.Visible = true;
+        uiStatusLabel.Text = $"Загрузка комментариев из «{source.TitleFull}»...";
+
         var ok = 0;
         var failed = 0;
+        var processed = 0;
+
+        IProgress<FetchProgress> reporter = new Progress<FetchProgress>(p =>
+        {
+            uiFetchProgressBar.Value = p.Processed;
+            uiStatusLabel.Text = p.StatusText;
+            uiFetchCounterLabel.Text = p.CounterText;
+        });
 
         try
         {
@@ -756,6 +800,12 @@ public partial class CommentsHtmlControl : UserControl
                         break;
                     }
 
+                    var startStatus = $"[{processed + 1}/{targets.Count}] Загрузка: «{media.Title}»";
+                    var startCounter = failed > 0
+                        ? $"✓ {ok}  ✗ {failed}  /  {targets.Count}"
+                        : $"✓ {ok}  /  {targets.Count}";
+
+                    reporter.Report(new(processed, startStatus, startCounter));
                     action.Status = $"{media.Title}: загрузка...";
 
                     try
@@ -776,6 +826,12 @@ public partial class CommentsHtmlControl : UserControl
                     }
 
                     action.ProgressPlus();
+                    processed++;
+                    var counter = failed > 0
+                        ? $"✓ {ok}  ✗ {failed}  /  {targets.Count}"
+                        : $"✓ {ok}  /  {targets.Count}";
+
+                    reporter.Report(new(processed, startStatus, counter));
                 }
             }, cts.Token);
         }
@@ -785,23 +841,22 @@ public partial class CommentsHtmlControl : UserControl
         }
         finally
         {
-            action.Finish();
+            var summary = $"Источник «{source.TitleFull}»: успешно {ok} из {targets.Count}";
+            if (failed > 0)
+            {
+                summary += $", ошибок {failed}";
+            }
+
+            action.Finish(summary);
+            uiFetchProgressBar.Visible = false;
+            uiFetchCounterLabel.Visible = false;
         }
 
         ApplyFilters();
         UpdateForceFetchButtonState();
-
-        var summary = $"Источник «{source.TitleFull}»: успешно {ok} из {targets.Count}";
-        if (failed > 0)
-        {
-            summary += $", ошибок {failed}";
-        }
-
-        MessageBox.Show(summary,
-            "Загрузка завершена",
-            MessageBoxButtons.OK,
-            failed > 0 ? MessageBoxIcon.Warning : MessageBoxIcon.Information);
     }
+
+    private sealed record FetchProgress(int Processed, string StatusText, string CounterText);
 
     private sealed class SourceComboItem(string? sourceId, string label)
     {
