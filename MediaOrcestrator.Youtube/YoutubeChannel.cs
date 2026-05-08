@@ -1,23 +1,37 @@
-﻿using MediaOrcestrator.Modules;
+﻿using Google.Apis.Auth.OAuth2;
+using Google.Apis.Util.Store;
+using Google.Apis.YouTube.v3;
+using MediaOrcestrator.Modules;
 using Microsoft.Extensions.Logging;
+using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 
 namespace MediaOrcestrator.Youtube;
 
-public class YoutubeChannel(ILogger<YoutubeChannel> logger, IToolPathProvider toolPathProvider)
+internal sealed class YoutubeChannel(
+    ILogger<YoutubeChannel> logger,
+    IYoutubeServiceFactory youtubeServiceFactory,
+    IToolPathProvider toolPathProvider,
+    YoutubeExplodeReadService explodeService,
+    YoutubeYtDlpReadService ytDlpReadService,
+    YoutubeApiReadService apiReadService,
+    YoutubeCommentsReadService commentsReadService,
+    YoutubeUploadService uploadService)
     : ISourceType, IAuthenticatable, IToolConsumer, ISupportsComments
 {
     internal const string VideoUrlTemplate = "https://www.youtube.com/watch?v={0}";
 
-    private readonly YoutubeAuthService _authService = new(logger);
-    private readonly YoutubeExplodeReadService _explodeService = new(logger);
-    private readonly YoutubeYtDlpReadService _ytDlpReadService = new(logger);
+    private static readonly string[] OAuthScopes =
+    [
+        YouTubeService.Scope.YoutubeUpload,
+        YouTubeService.Scope.Youtube,
+        YouTubeService.Scope.YoutubeForceSsl,
+    ];
 
-    private YoutubeUploadService? _uploadService;
-    private YoutubeApiReadService? _apiReadService;
-    private YoutubeCommentsReadService? _commentsReadService;
+    private readonly ConcurrentDictionary<string, CachedEntry> _serviceCache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly SemaphoreSlim _cacheLock = new(1, 1);
 
     public IReadOnlyList<ToolDescriptor> RequiredTools { get; } =
     [
@@ -138,24 +152,22 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger, IToolPathProvider to
         },
     ];
 
-    private YoutubeUploadService UploadService => _uploadService ??= new(logger, _authService);
-    private YoutubeApiReadService ApiReadService => _apiReadService ??= new(logger, _authService);
-    private YoutubeCommentsReadService CommentsReadService => _commentsReadService ??= new(logger, _authService);
-
-    public async Task<List<SettingOption>> GetSettingOptionsAsync(string settingKey, Dictionary<string, string> currentSettings)
+    public async Task<List<SettingOption>> GetSettingOptionsAsync(
+        string settingKey,
+        Dictionary<string, string> currentSettings)
     {
         if (settingKey != "category_id")
         {
             return [];
         }
 
-        if (YoutubeAuthService.IsConfigured(currentSettings))
+        if (IsOAuthConfigured(currentSettings))
         {
             try
             {
-                using var service = await _authService.CreateServiceAsync(currentSettings, CancellationToken.None);
+                using var lease = await AcquireServiceLeaseAsync(currentSettings, CancellationToken.None);
 
-                var request = service.VideoCategories.List("snippet");
+                var request = lease.Service.VideoCategories.List("snippet");
                 request.RegionCode = currentSettings.GetValueOrDefault("region_code", "RU");
 
                 var response = await request.ExecuteAsync();
@@ -166,78 +178,39 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger, IToolPathProvider to
                            .ToList()
                        ?? FallbackCategories();
             }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "Не удалось получить категории через API, используются встроенные");
+                logger.CategoriesFallback(ex);
             }
         }
 
         return FallbackCategories();
     }
 
-    public Uri? GetExternalUri(string externalId, Dictionary<string, string> settings)
+    public Uri? GetExternalUri(
+        string externalId,
+        Dictionary<string, string> settings)
     {
         return new(string.Format(VideoUrlTemplate, externalId));
     }
 
-    public async IAsyncEnumerable<MediaDto> GetMedia(Dictionary<string, string> settings, bool isFull, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    public async IAsyncEnumerable<MediaDto> GetMedia(
+        Dictionary<string, string> settings,
+        bool isFull,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var channelUrl = settings["channel_id"];
-        logger.LogInformation("Получение списка медиа для канала: {ChannelUrl}", channelUrl);
+        logger.StartingChannelFetch(channelUrl);
 
         string? channelId = null;
 
         try
         {
-            channelId = await _explodeService.GetChannelIdAsync(channelUrl, cancellationToken);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            logger.LogWarning(ex, "YoutubeExplode не смог получить канал, пробую YouTube API fallback");
-        }
-
-        if (channelId is not null)
-        {
-            await foreach (var media in _explodeService.GetMediaAsync(channelId, isFull, cancellationToken))
-            {
-                yield return media;
-            }
-
-            yield break;
-        }
-
-        if (!YoutubeAuthService.IsConfigured(settings))
-        {
-            logger.LogError("YoutubeExplode не работает, а OAuth не настроен. Укажите client_id и client_secret для fallback через YouTube API");
-            yield break;
-        }
-
-        var apiChannel = await ApiReadService.GetChannelAsync(channelUrl, settings, cancellationToken);
-
-        if (apiChannel is null)
-        {
-            logger.LogError("YouTube API: канал не найден: {ChannelUrl}", channelUrl);
-            yield break;
-        }
-
-        await foreach (var media in ApiReadService.GetMediaAsync(apiChannel.Id, isFull, settings, cancellationToken))
-        {
-            yield return media;
-        }
-
-        logger.LogInformation("Завершено получение медиа для канала: {ChannelUrl}", channelUrl);
-    }
-
-    public IAsyncEnumerable<CommentDto> GetCommentsAsync(string externalId, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
-    {
-        return CommentsReadService.GetCommentsAsync(externalId, settings, cancellationToken);
-    }
-
-    public async Task<MediaDto?> GetMediaByIdAsync(string externalId, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            return await _explodeService.GetVideoByIdAsync(externalId, cancellationToken);
+            channelId = await explodeService.GetChannelIdAsync(channelUrl, cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -245,14 +218,85 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger, IToolPathProvider to
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "YoutubeExplode не смог получить видео {VideoId}, пробую YouTube API fallback", externalId);
+            logger.ExplodeChannelFallback(ex);
         }
 
-        if (YoutubeAuthService.IsConfigured(settings))
+        if (channelId is not null)
+        {
+            await foreach (var media in explodeService.GetMediaAsync(channelId, isFull, cancellationToken))
+            {
+                yield return media;
+            }
+
+            yield break;
+        }
+
+        if (!IsOAuthConfigured(settings))
+        {
+            logger.OAuthNotConfigured();
+            yield break;
+        }
+
+        using var lease = await AcquireServiceLeaseAsync(settings, cancellationToken);
+
+        var apiChannel = await apiReadService.GetChannelAsync(lease.Service, channelUrl, cancellationToken);
+
+        if (apiChannel is null)
+        {
+            logger.ApiChannelNotFound(channelUrl);
+            yield break;
+        }
+
+        await foreach (var media in apiReadService.GetMediaAsync(lease.Service, apiChannel.Id, isFull, cancellationToken))
+        {
+            yield return media;
+        }
+
+        logger.ChannelFetchCompleted(channelUrl);
+    }
+
+    public async IAsyncEnumerable<CommentDto> GetCommentsAsync(
+        string externalId,
+        Dictionary<string, string> settings,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        if (!IsOAuthConfigured(settings))
+        {
+            throw new InvalidOperationException("Для получения комментариев YouTube необходимо настроить OAuth (client_id и client_secret)");
+        }
+
+        using var lease = await AcquireServiceLeaseAsync(settings, cancellationToken);
+
+        await foreach (var comment in commentsReadService.GetCommentsAsync(lease.Service, externalId, cancellationToken))
+        {
+            yield return comment;
+        }
+    }
+
+    public async Task<MediaDto?> GetMediaByIdAsync(
+        string externalId,
+        Dictionary<string, string> settings,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await explodeService.GetVideoByIdAsync(externalId, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.ExplodeVideoFallback(externalId, ex);
+        }
+
+        if (IsOAuthConfigured(settings))
         {
             try
             {
-                var apiResult = await ApiReadService.GetVideoByIdAsync(externalId, settings, cancellationToken);
+                using var lease = await AcquireServiceLeaseAsync(settings, cancellationToken);
+                var apiResult = await apiReadService.GetVideoByIdAsync(lease.Service, externalId, cancellationToken);
 
                 if (apiResult is not null)
                 {
@@ -265,18 +309,18 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger, IToolPathProvider to
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "YouTube API не смог получить видео {VideoId}, пробую yt-dlp fallback", externalId);
+                logger.ApiVideoFallback(externalId, ex);
             }
         }
         else
         {
-            logger.LogInformation("YouTube API не настроен, пробую yt-dlp fallback для видео {VideoId}", externalId);
+            logger.ApiNotConfiguredFallback(externalId);
         }
 
         try
         {
             var ytDlp = BuildYtDlp(settings);
-            return await _ytDlpReadService.GetVideoByIdAsync(externalId, ytDlp, cancellationToken);
+            return await ytDlpReadService.GetVideoByIdAsync(externalId, ytDlp, cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -284,22 +328,25 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger, IToolPathProvider to
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "yt-dlp не смог получить метаданные видео {VideoId}", externalId);
+            logger.YtDlpMetadataFailed(externalId, ex);
         }
 
         return null;
     }
 
-    public async Task<MediaDto> DownloadAsync(string videoId, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
+    public async Task<MediaDto> DownloadAsync(
+        string videoId,
+        Dictionary<string, string> settings,
+        CancellationToken cancellationToken = default)
     {
-        logger.LogInformation("Начало загрузки видео с YouTube. ID: {VideoId}", videoId);
+        logger.DownloadStart(videoId);
 
         var tempPath = settings["_system_temp_path"];
         var guid = Guid.NewGuid().ToString();
         var finalPath = Path.Combine(tempPath, guid, "media.mp4");
 
         Directory.CreateDirectory(Path.GetDirectoryName(finalPath)!);
-        logger.LogDebug("Создана временная директория: {TempPath}", Path.GetDirectoryName(finalPath));
+        logger.TempDirCreated(Path.GetDirectoryName(finalPath));
 
         var ytDlp = BuildYtDlp(settings);
 
@@ -316,7 +363,7 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger, IToolPathProvider to
                 {
                     currentPart = p.PartNumber;
                     oldPercent = -1;
-                    logger.LogInformation("Загрузка части #{PartNumber} из {TotalParts}", currentPart, p.PartNumber);
+                    logger.DownloadPartStarted(currentPart);
                 }
 
                 if (Math.Abs(p.Progress - oldPercent) < double.Epsilon)
@@ -333,12 +380,12 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger, IToolPathProvider to
                     return;
                 }
 
-                logger.LogInformation("Прогресс загрузки [Часть {PartNumber}]: {Percent:P0}", p.PartNumber, p.Progress);
+                logger.DownloadProgress(p.PartNumber, p.Progress);
                 oldPercent = p.Progress;
             }
         });
 
-        logger.LogInformation("Запуск загрузки через yt-dlp. URL: https://www.youtube.com/watch?v={VideoId}", videoId);
+        logger.StartingYtDlpDownload(videoId);
 
         YtDlpVideoInfo? info;
 
@@ -346,7 +393,7 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger, IToolPathProvider to
         {
             var rateLimitBytes = SpeedLimitHelper.ParseDownloadBytesPerSecond(settings);
             info = await ytDlp.DownloadAsync(string.Format(VideoUrlTemplate, videoId), finalPath, progress, rateLimitBytes, cancellationToken);
-            logger.LogInformation("Видео успешно загружено. ID: {VideoId}, Путь: {FilePath}", videoId, finalPath);
+            logger.DownloadCompleted(videoId, finalPath);
         }
         catch (OperationCanceledException)
         {
@@ -354,7 +401,7 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger, IToolPathProvider to
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Ошибка при загрузке видео через yt-dlp. ID: {VideoId}", videoId);
+            logger.DownloadFailed(videoId, ex);
             throw;
         }
 
@@ -362,12 +409,12 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger, IToolPathProvider to
 
         if (info is not null)
         {
-            media = _ytDlpReadService.BuildMediaDto(videoId, info);
-            logger.LogDebug("Метаданные видео получены из info.json yt-dlp. Название: '{Title}'", media.Title);
+            media = ytDlpReadService.BuildMediaDto(videoId, info);
+            logger.InfoJsonMetadataParsed(media.Title);
         }
         else
         {
-            logger.LogWarning("yt-dlp не сохранил info.json, запрашиваю метаданные отдельным вызовом");
+            logger.InfoJsonMissing();
 
             media = await GetMediaByIdAsync(videoId, settings, cancellationToken)
                     ?? throw new InvalidOperationException($"Видео не найдено: {videoId}");
@@ -379,45 +426,57 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger, IToolPathProvider to
         if (File.Exists(thumbnailPath))
         {
             media.TempPreviewPath = thumbnailPath;
-            logger.LogInformation("Превью сохранено через yt-dlp: {ThumbnailPath}", thumbnailPath);
+            logger.YtDlpThumbnailSaved(thumbnailPath);
         }
         else
         {
-            logger.LogDebug("yt-dlp не сохранил превью рядом с видео: {ThumbnailPath}", thumbnailPath);
+            logger.YtDlpThumbnailMissing(thumbnailPath);
         }
 
         return media;
     }
 
-    public Task<UploadResult> UploadAsync(MediaDto media, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
+    public async Task<UploadResult> UploadAsync(
+        MediaDto media,
+        Dictionary<string, string> settings,
+        CancellationToken cancellationToken = default)
     {
-        return UploadService.UploadVideoAsync(media, settings, cancellationToken);
+        using var lease = await AcquireServiceLeaseAsync(settings, cancellationToken);
+        return await uploadService.UploadVideoAsync(lease.Service, media, settings, cancellationToken);
     }
 
-    public Task<UploadResult> UpdateAsync(string externalId, MediaDto tempMedia, Dictionary<string, string> settings, CancellationToken cancellationToken)
+    public async Task<UploadResult> UpdateAsync(
+        string externalId,
+        MediaDto tempMedia,
+        Dictionary<string, string> settings,
+        CancellationToken cancellationToken)
     {
-        return UploadService.UpdateVideoAsync(externalId, tempMedia, settings, cancellationToken);
+        using var lease = await AcquireServiceLeaseAsync(settings, cancellationToken);
+        return await uploadService.UpdateVideoAsync(lease.Service, externalId, tempMedia, settings, cancellationToken);
     }
 
-    public async Task DeleteAsync(string externalId, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
+    public async Task DeleteAsync(
+        string externalId,
+        Dictionary<string, string> settings,
+        CancellationToken cancellationToken = default)
     {
-        logger.LogInformation("Удаление видео с YouTube. ID: {ExternalId}", externalId);
+        logger.DeleteStart(externalId);
 
-        using var service = await _authService.CreateServiceAsync(settings, cancellationToken);
-        await service.Videos.Delete(externalId).ExecuteAsync(cancellationToken);
+        using var lease = await AcquireServiceLeaseAsync(settings, cancellationToken);
+        await lease.Service.Videos.Delete(externalId).ExecuteAsync(cancellationToken);
 
-        logger.LogInformation("Видео {ExternalId} удалено с YouTube", externalId);
+        logger.DeleteCompleted(externalId);
     }
 
     public bool IsAuthenticated(Dictionary<string, string> settings)
     {
-        var hasCookies = HasValidCookieFile(settings);
-        var hasOAuth = YoutubeAuthService.HasCachedToken(settings);
-
-        return hasCookies || hasOAuth;
+        return HasValidCookieFile(settings) || HasCachedOAuthToken(settings);
     }
 
-    public async Task AuthenticateAsync(Dictionary<string, string> settings, IAuthUI ui, CancellationToken ct)
+    public async Task AuthenticateAsync(
+        Dictionary<string, string> settings,
+        IAuthUI ui,
+        CancellationToken ct)
     {
         var authStatePath = GetAuthStatePath(settings);
         var tempJsonPath = authStatePath + ".tmp.json";
@@ -430,8 +489,8 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger, IToolPathProvider to
                 return;
             }
 
-            ConvertPlaywrightToNetscape(tempJsonPath, authStatePath);
-            logger.LogInformation("YouTube: авторизация сохранена в {Path}", authStatePath);
+            await ConvertPlaywrightToNetscapeAsync(tempJsonPath, authStatePath, ct);
+            logger.AuthSaved(authStatePath);
             await ui.ShowMessageAsync("Авторизация YouTube сохранена!");
         }
         finally
@@ -463,6 +522,26 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger, IToolPathProvider to
         ];
     }
 
+    private static bool IsOAuthConfigured(Dictionary<string, string> settings)
+    {
+        return !string.IsNullOrEmpty(settings.GetValueOrDefault("client_id"))
+               && !string.IsNullOrEmpty(settings.GetValueOrDefault("client_secret"))
+               && !string.IsNullOrEmpty(settings.GetValueOrDefault("_system_state_path"));
+    }
+
+    private static bool HasCachedOAuthToken(Dictionary<string, string> settings)
+    {
+        if (!IsOAuthConfigured(settings))
+        {
+            return false;
+        }
+
+        var tokenDir = GetTokenDir(settings);
+
+        return Directory.Exists(tokenDir)
+               && Directory.EnumerateFiles(tokenDir, "Google.Apis.Auth.OAuth2.Responses.*").Any();
+    }
+
     private static bool HasValidCookieFile(Dictionary<string, string> settings)
     {
         var authStatePath = GetAuthStatePath(settings);
@@ -487,18 +566,47 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger, IToolPathProvider to
         return Path.Combine(settings["_system_state_path"], "auth_state");
     }
 
-    private static void ConvertPlaywrightToNetscape(string playwrightJsonPath, string netscapePath)
+    private static string GetTokenDir(Dictionary<string, string> settings)
     {
-        var json = File.ReadAllText(playwrightJsonPath);
-        using var doc = JsonDocument.Parse(json);
-        var cookies = doc.RootElement.GetProperty("cookies");
+        return Path.Combine(settings["_system_state_path"], "oauth");
+    }
 
-        using var writer = new StreamWriter(netscapePath, false, new UTF8Encoding(false));
-        writer.WriteLine("# Netscape HTTP Cookie File");
+    private static DateTime GetTokenDirMtime(string tokenDir)
+    {
+        return Directory.Exists(tokenDir)
+            ? Directory.GetLastWriteTimeUtc(tokenDir)
+            : DateTime.MinValue;
+    }
 
-        foreach (var cookie in cookies.EnumerateArray())
+    private static async Task ConvertPlaywrightToNetscapeAsync(
+        string playwrightJsonPath,
+        string netscapePath,
+        CancellationToken cancellationToken)
+    {
+        PlaywrightAuthState? authState;
+
+        try
         {
-            var domain = cookie.GetProperty("domain").GetString() ?? "";
+            await using var jsonStream = File.OpenRead(playwrightJsonPath);
+            authState = await JsonSerializer.DeserializeAsync(jsonStream, YoutubeJsonContext.Default.PlaywrightAuthState, cancellationToken);
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidOperationException($"Файл cookies от браузера повреждён или не дочитан: {playwrightJsonPath}", ex);
+        }
+
+        await using var output = File.Create(netscapePath);
+        await using var writer = new StreamWriter(output, new UTF8Encoding(false));
+        await writer.WriteLineAsync("# Netscape HTTP Cookie File");
+
+        if (authState?.Cookies is null)
+        {
+            return;
+        }
+
+        foreach (var cookie in authState.Cookies)
+        {
+            var domain = cookie.Domain ?? "";
             if (string.IsNullOrEmpty(domain))
             {
                 continue;
@@ -510,16 +618,111 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger, IToolPathProvider to
             }
 
             var flag = "TRUE";
+            var path = string.IsNullOrEmpty(cookie.Path) ? "/" : cookie.Path;
+            var secure = cookie.Secure ? "TRUE" : "FALSE";
+            var expiry = cookie.Expires > 0 ? (long)cookie.Expires : 0;
+            var name = cookie.Name ?? "";
+            var value = cookie.Value ?? "";
 
-            var path = cookie.GetProperty("path").GetString() ?? "/";
-            var secure = cookie.GetProperty("secure").GetBoolean() ? "TRUE" : "FALSE";
-            var expires = cookie.GetProperty("expires").GetDouble();
-            var expiry = expires > 0 ? (long)expires : 0;
-            var name = cookie.GetProperty("name").GetString() ?? "";
-            var value = cookie.GetProperty("value").GetString() ?? "";
-
-            writer.WriteLine($"{domain}\t{flag}\t{path}\t{secure}\t{expiry}\t{name}\t{value}");
+            await writer.WriteLineAsync($"{domain}\t{flag}\t{path}\t{secure}\t{expiry}\t{name}\t{value}");
         }
+    }
+
+    private async Task<ServiceLease> AcquireServiceLeaseAsync(
+        Dictionary<string, string> settings,
+        CancellationToken cancellationToken)
+    {
+        while (true)
+        {
+            var entry = await GetOrCreateCachedAsync(settings, cancellationToken);
+            if (entry.TryAcquire())
+            {
+                return new(entry);
+            }
+
+            await Task.Yield();
+        }
+    }
+
+    private async Task<CachedEntry> GetOrCreateCachedAsync(
+        Dictionary<string, string> settings,
+        CancellationToken cancellationToken)
+    {
+        var clientId = settings.GetValueOrDefault("client_id")
+                       ?? throw new InvalidOperationException("Настройка 'client_id' не задана. Укажите OAuth Client ID из Google Cloud Console.");
+
+        var clientSecret = settings.GetValueOrDefault("client_secret")
+                           ?? throw new InvalidOperationException("Настройка 'client_secret' не задана. Укажите OAuth Client Secret из Google Cloud Console.");
+
+        var tokenDir = GetTokenDir(settings);
+        Directory.CreateDirectory(tokenDir);
+        var appName = settings.GetValueOrDefault("app_name", "MediaOrcestrator");
+
+        var lastWriteUtc = GetTokenDirMtime(tokenDir);
+
+        if (_serviceCache.TryGetValue(tokenDir, out var cached) && cached.LastWriteUtc == lastWriteUtc)
+        {
+            return cached;
+        }
+
+        await _cacheLock.WaitAsync(cancellationToken);
+
+        try
+        {
+            lastWriteUtc = GetTokenDirMtime(tokenDir);
+
+            if (_serviceCache.TryGetValue(tokenDir, out cached) && cached.LastWriteUtc == lastWriteUtc)
+            {
+                return cached;
+            }
+
+            var credential = await BuildCredentialAsync(clientId, clientSecret, tokenDir, cancellationToken);
+            var service = youtubeServiceFactory.Create(credential, appName);
+            var entry = new CachedEntry(service, lastWriteUtc);
+            _serviceCache[tokenDir] = entry;
+            cached?.MarkEvicted();
+            return entry;
+        }
+        finally
+        {
+            _cacheLock.Release();
+        }
+    }
+
+    private async Task<UserCredential> BuildCredentialAsync(
+        string clientId,
+        string clientSecret,
+        string tokenDir,
+        CancellationToken cancellationToken)
+    {
+        logger.OAuthAuthorizing(tokenDir);
+
+        var clientSecrets = new ClientSecrets
+        {
+            ClientId = clientId,
+            ClientSecret = clientSecret,
+        };
+
+        var credential = await GoogleWebAuthorizationBroker.AuthorizeAsync(clientSecrets,
+            OAuthScopes,
+            "user",
+            cancellationToken,
+            new FileDataStore(tokenDir, true));
+
+        if (credential.Token.IsStale)
+        {
+            logger.OAuthTokenStale();
+            var refreshed = await credential.RefreshTokenAsync(cancellationToken);
+
+            if (!refreshed)
+            {
+                throw new InvalidOperationException("Не удалось обновить OAuth-токен. Удалите файл токена и авторизуйтесь заново.");
+            }
+
+            logger.OAuthTokenRefreshed();
+        }
+
+        return credential;
     }
 
     private YtDlp BuildYtDlp(Dictionary<string, string> settings)
@@ -543,5 +746,77 @@ public class YoutubeChannel(ILogger<YoutubeChannel> logger, IToolPathProvider to
         }
 
         return new(ytDlpPath, ffmpegPath, jsRuntime, jsRuntimeDir, cookiePath);
+    }
+
+    private readonly struct ServiceLease(CachedEntry entry) : IDisposable
+    {
+        public YouTubeService Service => entry.Service;
+
+        public void Dispose()
+        {
+            entry.Release();
+        }
+    }
+
+    private sealed class CachedEntry(YouTubeService service, DateTime lastWriteUtc)
+    {
+        private readonly object _gate = new();
+        private int _refCount;
+        private bool _evicted;
+
+        public YouTubeService Service { get; } = service;
+
+        public DateTime LastWriteUtc { get; } = lastWriteUtc;
+
+        public bool TryAcquire()
+        {
+            lock (_gate)
+            {
+                if (_evicted)
+                {
+                    return false;
+                }
+
+                _refCount++;
+                return true;
+            }
+        }
+
+        public void Release()
+        {
+            bool dispose;
+
+            lock (_gate)
+            {
+                _refCount--;
+                dispose = _refCount == 0 && _evicted;
+            }
+
+            if (dispose)
+            {
+                Service.Dispose();
+            }
+        }
+
+        public void MarkEvicted()
+        {
+            bool dispose;
+
+            lock (_gate)
+            {
+                if (_evicted)
+                {
+                    return;
+                }
+
+                _evicted = true;
+                dispose = _refCount == 0;
+            }
+
+            if (dispose)
+            {
+                Service.Dispose();
+            }
+        }
     }
 }

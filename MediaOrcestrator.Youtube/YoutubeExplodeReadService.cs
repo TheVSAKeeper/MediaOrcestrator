@@ -1,4 +1,4 @@
-using MediaOrcestrator.Modules;
+﻿using MediaOrcestrator.Modules;
 using Microsoft.Extensions.Logging;
 using System.Runtime.CompilerServices;
 using YoutubeExplode;
@@ -9,36 +9,31 @@ using YoutubeExplode.Videos;
 
 namespace MediaOrcestrator.Youtube;
 
-public sealed class YoutubeExplodeReadService(ILogger logger)
+internal sealed class YoutubeExplodeReadService(
+    IHttpClientFactory httpClientFactory,
+    ILogger<YoutubeExplodeReadService> logger)
 {
-    private const int RetryCount = 5;
-    private const int RetryDelayMs = 500;
+    private readonly YoutubeClient _client = new(httpClientFactory.CreateClient(YoutubeServiceFactory.ApiClientName));
 
-    private static readonly HttpClient SharedHttpClient = new(new SocketsHttpHandler
+    public async Task<string?> GetChannelIdAsync(
+        string channelUrl,
+        CancellationToken cancellationToken)
     {
-        PooledConnectionLifetime = TimeSpan.FromMinutes(10),
-    });
+        logger.ResolvingChannel(channelUrl);
 
-    private readonly YoutubeClient _client = new(SharedHttpClient);
-
-    public async Task<string?> GetChannelIdAsync(string channelUrl, CancellationToken cancellationToken)
-    {
-        logger.LogDebug("YoutubeExplode: попытка определить канал по URL: {ChannelUrl}", channelUrl);
-
-        var channel = await RetryHelper.ExecuteAsync(() => ChannelUrlResolver.ResolveAsync<Channel>(channelUrl,
-                async id => await _client.Channels.GetAsync(new(id), cancellationToken),
-                async slug => await _client.Channels.GetBySlugAsync(new(slug), cancellationToken),
-                async handle => await _client.Channels.GetByHandleAsync(new(handle), cancellationToken),
-                async userName => await _client.Channels.GetByUserAsync(new(userName), cancellationToken)),
-            RetryCount, RetryDelayMs, logger, cancellationToken);
+        var channel = await ChannelUrlResolver.ResolveAsync<Channel>(channelUrl,
+            async id => await _client.Channels.GetAsync(new(id), cancellationToken),
+            async slug => await _client.Channels.GetBySlugAsync(new(slug), cancellationToken),
+            async handle => await _client.Channels.GetByHandleAsync(new(handle), cancellationToken),
+            async userName => await _client.Channels.GetByUserAsync(new(userName), cancellationToken));
 
         if (channel is not null)
         {
-            logger.LogDebug("Канал найден: '{Title}' (ID: {Id})", channel.Title, channel.Id);
+            logger.ChannelResolved(channel.Title, channel.Id.Value);
             return channel.Id.Value;
         }
 
-        logger.LogWarning("Не удалось определить канал по URL: {ChannelUrl}", channelUrl);
+        logger.ChannelResolveFailed(channelUrl);
         return null;
     }
 
@@ -51,13 +46,11 @@ public sealed class YoutubeExplodeReadService(ILogger logger)
 
         await foreach (var video in uploads)
         {
-            logger.LogDebug("Обработка видео: '{Title}' (ID: {Id})", video.Title, video.Id);
+            logger.ProcessingVideo(video.Title, video.Id.Value);
 
             if (isFull)
             {
-                var fullVideo = await RetryHelper.ExecuteAsync(async () => await _client.Videos.GetAsync(video.Id, cancellationToken),
-                    RetryCount, RetryDelayMs, logger, cancellationToken);
-
+                var fullVideo = await _client.Videos.GetAsync(video.Id, cancellationToken);
                 yield return CreateFullMediaDto(fullVideo);
             }
             else
@@ -67,15 +60,17 @@ public sealed class YoutubeExplodeReadService(ILogger logger)
         }
     }
 
-    public async Task<MediaDto?> GetVideoByIdAsync(string videoId, CancellationToken cancellationToken)
+    public async Task<MediaDto?> GetVideoByIdAsync(
+        string videoId,
+        CancellationToken cancellationToken)
     {
-        var video = await RetryHelper.ExecuteAsync(async () => await _client.Videos.GetAsync(videoId, cancellationToken),
-            RetryCount, RetryDelayMs, logger, cancellationToken);
-
+        var video = await _client.Videos.GetAsync(videoId, cancellationToken);
         return video is not null ? CreateFullMediaDto(video) : null;
     }
 
-    private static MediaDto CreateFullMediaDto(Video video, string? tempDataPath = null)
+    private static MediaDto CreateFullMediaDto(
+        Video video,
+        string? tempDataPath = null)
     {
         var previewUrl = video.Thumbnails.TryGetWithHighestResolution()?.Url ?? "";
 
