@@ -1,14 +1,16 @@
 ﻿using MediaOrcestrator.Modules;
 using Microsoft.Extensions.Logging;
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Runtime.CompilerServices;
+using System.Text;
 using System.Text.Json;
 
 namespace MediaOrcestrator.VkVideo;
 
 public sealed class VkVideoChannel(
     ILogger<VkVideoChannel> logger,
-    ILogger<VkVideoService> serviceLogger,
+    IVkVideoServiceFactory vkVideoServiceFactory,
     VideoTranscoder videoTranscoder)
     : ISourceType,
         IAuthenticatable,
@@ -17,8 +19,8 @@ public sealed class VkVideoChannel(
         ISupportsCommentMutations,
         ISupportsCommentLikes
 {
-    private readonly SemaphoreSlim _serviceLock = new(1, 1);
-    private readonly Dictionary<string, VkVideoService> _cachedServices = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, CachedEntry> _serviceCache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly SemaphoreSlim _cacheLock = new(1, 1);
 
     public string Name => "VkVideo";
 
@@ -56,12 +58,16 @@ public sealed class VkVideoChannel(
         },
     ];
 
-    public Task<List<SettingOption>> GetSettingOptionsAsync(string settingKey, Dictionary<string, string> currentSettings)
+    public Task<List<SettingOption>> GetSettingOptionsAsync(
+        string settingKey,
+        Dictionary<string, string> currentSettings)
     {
         return Task.FromResult<List<SettingOption>>([]);
     }
 
-    public Uri? GetExternalUri(string externalId, Dictionary<string, string> settings)
+    public Uri? GetExternalUri(
+        string externalId,
+        Dictionary<string, string> settings)
     {
         return new($"https://vkvideo.ru/video{externalId}");
     }
@@ -84,9 +90,13 @@ public sealed class VkVideoChannel(
         return new($"https://vkvideo.ru/video{externalMediaId}{query}");
     }
 
-    public async IAsyncEnumerable<MediaDto> GetMedia(Dictionary<string, string> settings, bool isFull, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    public async IAsyncEnumerable<MediaDto> GetMedia(
+        Dictionary<string, string> settings,
+        bool isFull,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        var service = await CreateServiceAsync(settings);
+        using var lease = await AcquireServiceLeaseAsync(settings, cancellationToken);
+        var service = lease.Service;
         var groupId = ParseGroupId(settings["group_id"]);
         await foreach (var video in service.GetMediaAsync(groupId, cancellationToken))
         {
@@ -94,13 +104,16 @@ public sealed class VkVideoChannel(
         }
     }
 
-    public async Task<MediaDto?> GetMediaByIdAsync(string externalId, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
+    public async Task<MediaDto?> GetMediaByIdAsync(
+        string externalId,
+        Dictionary<string, string> settings,
+        CancellationToken cancellationToken = default)
     {
-        logger.LogInformation("Получение деталей видео {ExternalId}", externalId);
-        var service = await CreateServiceAsync(settings);
+        logger.RequestingVideoDetails(externalId);
+        using var lease = await AcquireServiceLeaseAsync(settings, cancellationToken);
         var (ownerId, videoId) = ParseExternalId(externalId);
 
-        var video = await service.GetVideoByIdAsync(ownerId, videoId);
+        var video = await lease.Service.GetVideoByIdAsync(ownerId, videoId, cancellationToken);
         return video != null ? CreateMediaDto(video) : null;
     }
 
@@ -110,7 +123,8 @@ public sealed class VkVideoChannel(
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var (ownerId, videoId) = ParseExternalId(externalId);
-        var service = await CreateServiceAsync(settings);
+        using var lease = await AcquireServiceLeaseAsync(settings, cancellationToken);
+        var service = lease.Service;
 
         var authors = new Dictionary<long, AuthorInfo>();
 
@@ -142,7 +156,8 @@ public sealed class VkVideoChannel(
         CancellationToken cancellationToken = default)
     {
         var (ownerId, videoId) = ParseExternalId(externalMediaId);
-        var service = await CreateServiceAsync(settings);
+        using var lease = await AcquireServiceLeaseAsync(settings, cancellationToken);
+        var service = lease.Service;
 
         long? parentId = null;
         if (!string.IsNullOrEmpty(parentExternalCommentId)
@@ -151,10 +166,10 @@ public sealed class VkVideoChannel(
             parentId = parsed;
         }
 
-        var newCommentId = await service.CreateVideoCommentAsync(ownerId, videoId, parentId, text);
+        var newCommentId = await service.CreateVideoCommentAsync(ownerId, videoId, parentId, text, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
 
-        return await FetchSingleCommentAsync(service, ownerId, newCommentId, parentId);
+        return await FetchSingleCommentAsync(service, ownerId, newCommentId, parentId, cancellationToken);
     }
 
     public async Task<CommentDto?> EditCommentAsync(
@@ -167,11 +182,12 @@ public sealed class VkVideoChannel(
         var (ownerId, _) = ParseExternalId(externalMediaId);
         var commentId = long.Parse(externalCommentId, CultureInfo.InvariantCulture);
 
-        var service = await CreateServiceAsync(settings);
-        await service.EditVideoCommentAsync(ownerId, commentId, text);
+        using var lease = await AcquireServiceLeaseAsync(settings, cancellationToken);
+        var service = lease.Service;
+        await service.EditVideoCommentAsync(ownerId, commentId, text, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
 
-        return await FetchSingleCommentAsync(service, ownerId, commentId, null);
+        return await FetchSingleCommentAsync(service, ownerId, commentId, null, cancellationToken);
     }
 
     public async Task DeleteCommentAsync(
@@ -183,8 +199,8 @@ public sealed class VkVideoChannel(
         var (ownerId, _) = ParseExternalId(externalMediaId);
         var commentId = long.Parse(externalCommentId, CultureInfo.InvariantCulture);
 
-        var service = await CreateServiceAsync(settings);
-        await service.DeleteVideoCommentAsync(ownerId, commentId);
+        using var lease = await AcquireServiceLeaseAsync(settings, cancellationToken);
+        await lease.Service.DeleteVideoCommentAsync(ownerId, commentId, cancellationToken);
     }
 
     public async Task RestoreCommentAsync(
@@ -196,8 +212,8 @@ public sealed class VkVideoChannel(
         var (ownerId, _) = ParseExternalId(externalMediaId);
         var commentId = long.Parse(externalCommentId, CultureInfo.InvariantCulture);
 
-        var service = await CreateServiceAsync(settings);
-        await service.RestoreVideoCommentAsync(ownerId, commentId);
+        using var lease = await AcquireServiceLeaseAsync(settings, cancellationToken);
+        await lease.Service.RestoreVideoCommentAsync(ownerId, commentId, cancellationToken);
     }
 
     public async Task<int> LikeCommentAsync(
@@ -209,8 +225,8 @@ public sealed class VkVideoChannel(
         var (ownerId, _) = ParseExternalId(externalMediaId);
         var commentId = long.Parse(externalCommentId, CultureInfo.InvariantCulture);
 
-        var service = await CreateServiceAsync(settings);
-        return await service.LikeVideoCommentAsync(ownerId, commentId);
+        using var lease = await AcquireServiceLeaseAsync(settings, cancellationToken);
+        return await lease.Service.LikeVideoCommentAsync(ownerId, commentId, cancellationToken);
     }
 
     public async Task<int> UnlikeCommentAsync(
@@ -222,18 +238,22 @@ public sealed class VkVideoChannel(
         var (ownerId, _) = ParseExternalId(externalMediaId);
         var commentId = long.Parse(externalCommentId, CultureInfo.InvariantCulture);
 
-        var service = await CreateServiceAsync(settings);
-        return await service.UnlikeVideoCommentAsync(ownerId, commentId);
+        using var lease = await AcquireServiceLeaseAsync(settings, cancellationToken);
+        return await lease.Service.UnlikeVideoCommentAsync(ownerId, commentId, cancellationToken);
     }
 
     // TODO: Переделать нормально
-    public async Task<MediaDto> DownloadAsync(string videoId, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
+    public async Task<MediaDto> DownloadAsync(
+        string videoId,
+        Dictionary<string, string> settings,
+        CancellationToken cancellationToken = default)
     {
-        logger.LogInformation("Скачивание видео {VideoId}", videoId);
-        var service = await CreateServiceAsync(settings);
+        logger.DownloadingVideo(videoId);
+        using var lease = await AcquireServiceLeaseAsync(settings, cancellationToken);
+        var service = lease.Service;
         var (ownerId, vid) = ParseExternalId(videoId);
 
-        var video = await service.GetVideoByIdAsync(ownerId, vid)
+        var video = await service.GetVideoByIdAsync(ownerId, vid, cancellationToken)
                     ?? throw new InvalidOperationException($"Видео {videoId} не найдено");
 
         var downloadUrl = video.Files?.GetBestQualityUrl()
@@ -246,22 +266,17 @@ public sealed class VkVideoChannel(
 
         Directory.CreateDirectory(Path.Combine(tempPath, guid));
 
-        //logger.LogInformation("Скачивание видео из {Url}", downloadUrl[..Math.Min(80, downloadUrl.Length)] + "...");
-        logger.LogInformation("Скачивание видео из {Url}", downloadUrl);
+        logger.DownloadingFromUrl(downloadUrl);
         var downloadBytesPerSecond = SpeedLimitHelper.ParseDownloadBytesPerSecond(settings);
 
-        await using (var videoStream = await service.HttpClient.GetStreamAsync(downloadUrl, cancellationToken))
+        await service.DownloadAsync(downloadUrl, async (stream, ct) =>
         {
-            await using (var throttled = new ThrottledStream(videoStream, downloadBytesPerSecond))
-            {
-                await using (var fileStream = File.Create(tempVideoPath))
-                {
-                    await throttled.CopyToAsync(fileStream, cancellationToken);
-                }
-            }
-        }
+            await using var throttled = new ThrottledStream(stream, downloadBytesPerSecond);
+            await using var fileStream = File.Create(tempVideoPath);
+            await throttled.CopyToAsync(fileStream, ct);
+        }, cancellationToken);
 
-        logger.LogInformation("Видео сохранено: {Path} ({Size} байт)", tempVideoPath, new FileInfo(tempVideoPath).Length);
+        logger.VideoSaved(tempVideoPath, new FileInfo(tempVideoPath).Length);
 
         var previewUrl = video.Image
             .OrderByDescending(i => i.Width)
@@ -270,10 +285,11 @@ public sealed class VkVideoChannel(
 
         if (previewUrl != null)
         {
-            // TODO: Не комильфо снаружи HttpClient тягать
-            await using var previewStream = await service.HttpClient.GetStreamAsync(previewUrl, cancellationToken);
-            await using var previewFile = File.Create(tempPreviewPath);
-            await previewStream.CopyToAsync(previewFile, cancellationToken);
+            await service.DownloadAsync(previewUrl, async (stream, ct) =>
+            {
+                await using var previewFile = File.Create(tempPreviewPath);
+                await stream.CopyToAsync(previewFile, ct);
+            }, cancellationToken);
         }
 
         var mediaDto = CreateMediaDto(video);
@@ -293,9 +309,12 @@ public sealed class VkVideoChannel(
         };
     }
 
-    public async Task<UploadResult> UploadAsync(MediaDto media, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
+    public async Task<UploadResult> UploadAsync(
+        MediaDto media,
+        Dictionary<string, string> settings,
+        CancellationToken cancellationToken = default)
     {
-        logger.LogInformation("Загрузка видео на VK Video. Название: '{Title}'", media.Title);
+        logger.UploadingVideo(media.Title);
 
         var filePath = media.TempDataPath;
         if (!File.Exists(filePath))
@@ -309,7 +328,8 @@ public sealed class VkVideoChannel(
         // todo поидее ещё и размер фаила надо проверять, но после первого инцидента будем
         var isShorts = frameSize.IsPortrait;
 
-        var service = await CreateServiceAsync(settings);
+        using var lease = await AcquireServiceLeaseAsync(settings, cancellationToken);
+        var service = lease.Service;
         var groupId = ParseGroupId(settings["group_id"]);
         var fileExt = Path.GetExtension(filePath).TrimStart('.').ToLowerInvariant();
 
@@ -333,7 +353,7 @@ public sealed class VkVideoChannel(
             if (publishAt.HasValue)
             {
                 publishAtUnix = new DateTimeOffset(publishAt.Value).ToUnixTimeSeconds();
-                logger.LogInformation("Отложенная публикация на {PublishAt}", publishAt.Value);
+                logger.ScheduledPublication(publishAt.Value);
             }
         }
 
@@ -346,7 +366,7 @@ public sealed class VkVideoChannel(
                 fileExt, previewPath, publishAtUnix, uploadBytesPerSecond, uploadProgress, cancellationToken);
 
             var externalId = $"{result.OwnerId}_{result.Id}";
-            logger.LogInformation("Видео загружено на VK Video. ID: {ExternalId}", externalId);
+            logger.VideoUploaded(externalId);
 
             return new()
             {
@@ -354,9 +374,13 @@ public sealed class VkVideoChannel(
                 Id = externalId,
             };
         }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Ошибка загрузки видео на VK Video");
+            logger.UploadFailed(ex);
             return new()
             {
                 Status = MediaStatusHelper.GetById(MediaStatus.Error),
@@ -365,11 +389,16 @@ public sealed class VkVideoChannel(
         }
     }
 
-    public async Task<UploadResult> UpdateAsync(string externalId, MediaDto tempMedia, Dictionary<string, string> settings, CancellationToken cancellationToken)
+    public async Task<UploadResult> UpdateAsync(
+        string externalId,
+        MediaDto tempMedia,
+        Dictionary<string, string> settings,
+        CancellationToken cancellationToken)
     {
-        logger.LogInformation("Обновление видео {ExternalId} на VK Video", externalId);
+        logger.UpdatingVideo(externalId);
 
-        var service = await CreateServiceAsync(settings);
+        using var lease = await AcquireServiceLeaseAsync(settings, cancellationToken);
+        var service = lease.Service;
         var (ownerId, videoId) = ParseExternalId(externalId);
 
         var errorMessage = "";
@@ -382,22 +411,30 @@ public sealed class VkVideoChannel(
             {
                 isShorts = await ResolveIsShortsAsync(tempMedia, service, ownerId, videoId, cancellationToken);
                 var previewPath = PreparePreviewForUpload(tempMedia.TempPreviewPath, isShorts);
-                thumbResult = await service.UploadThumbnailAsync(isShorts, ownerId, videoId, previewPath);
+                thumbResult = await service.UploadThumbnailAsync(isShorts, ownerId, videoId, previewPath, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Ошибка загрузки превью");
+                logger.ThumbnailUpdateFailed(ex);
                 errorMessage += "Ошибка загрузки превью";
             }
         }
 
         try
         {
-            await service.EditVideoAsync(ownerId, videoId, tempMedia.Title, tempMedia.Description, isShorts ? null : thumbResult);
+            await service.EditVideoAsync(ownerId, videoId, tempMedia.Title, tempMedia.Description, isShorts ? null : thumbResult, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Ошибка редактирования метаданных");
+            logger.MetadataEditFailed(ex);
             if (errorMessage.Length > 0)
             {
                 errorMessage += Environment.NewLine;
@@ -423,16 +460,19 @@ public sealed class VkVideoChannel(
         };
     }
 
-    public async Task DeleteAsync(string externalId, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
+    public async Task DeleteAsync(
+        string externalId,
+        Dictionary<string, string> settings,
+        CancellationToken cancellationToken = default)
     {
-        logger.LogInformation("Удаление видео {ExternalId} из VK Video", externalId);
+        logger.DeletingVideo(externalId);
 
-        var service = await CreateServiceAsync(settings);
+        using var lease = await AcquireServiceLeaseAsync(settings, cancellationToken);
         var (ownerId, videoId) = ParseExternalId(externalId);
 
-        await service.DeleteVideoAsync(ownerId, videoId);
+        await lease.Service.DeleteVideoAsync(ownerId, videoId, cancellationToken);
 
-        logger.LogInformation("Видео {ExternalId} удалено", externalId);
+        logger.VideoDeleted(externalId);
     }
 
     // TODO: Придумать более умный механизм
@@ -463,14 +503,16 @@ public sealed class VkVideoChannel(
         }
     }
 
-    public async Task AuthenticateAsync(Dictionary<string, string> settings, IAuthUI ui, CancellationToken ct)
+    public async Task AuthenticateAsync(
+        Dictionary<string, string> settings,
+        IAuthUI ui,
+        CancellationToken ct)
     {
         var authStatePath = GetAuthStatePath(settings);
         var result = await ui.OpenBrowserAsync("https://cabinet.vkvideo.ru/", authStatePath);
         if (result != null)
         {
-            await InvalidateServiceAsync(authStatePath);
-            logger.LogInformation("VK Video: авторизация сохранена в {Path}", result);
+            logger.AuthSaved(result);
             await ui.ShowMessageAsync("Авторизация VK Video сохранена!");
         }
     }
@@ -480,7 +522,12 @@ public sealed class VkVideoChannel(
         return [];
     }
 
-    public Task ConvertAsync(int typeId, string externalId, Dictionary<string, string> settings, IProgress<ConvertProgress>? progress = null, CancellationToken cancellationToken = default)
+    public Task ConvertAsync(
+        int typeId,
+        string externalId,
+        Dictionary<string, string> settings,
+        IProgress<ConvertProgress>? progress = null,
+        CancellationToken cancellationToken = default)
     {
         throw new NotImplementedException();
     }
@@ -489,9 +536,10 @@ public sealed class VkVideoChannel(
         VkVideoService service,
         long ownerId,
         long commentId,
-        long? parentCommentId)
+        long? parentCommentId,
+        CancellationToken cancellationToken)
     {
-        var response = await service.GetVideoCommentAsync(ownerId, commentId);
+        var response = await service.GetVideoCommentAsync(ownerId, commentId, cancellationToken);
 
         var item = response.Items.FirstOrDefault()
                    ?? throw new InvalidOperationException($"VK не вернул комментарий {commentId} после операции");
@@ -502,7 +550,9 @@ public sealed class VkVideoChannel(
         return MapComment(item, parentCommentId, ownerId, authors);
     }
 
-    private static void AppendAuthors(VkCommentsResponse response, Dictionary<long, AuthorInfo> authors)
+    private static void AppendAuthors(
+        VkCommentsResponse response,
+        Dictionary<long, AuthorInfo> authors)
     {
         foreach (var profile in response.Profiles)
         {
@@ -535,7 +585,8 @@ public sealed class VkVideoChannel(
                 videoId,
                 PageSize,
                 offset,
-                parentCommentId);
+                parentCommentId,
+                cancellationToken: cancellationToken);
 
             AppendAuthors(response, authors);
 
@@ -562,7 +613,11 @@ public sealed class VkVideoChannel(
         }
     }
 
-    private static CommentDto MapComment(VkCommentItem item, long? parentCommentId, long ownerId, Dictionary<long, AuthorInfo> authors)
+    private static CommentDto MapComment(
+        VkCommentItem item,
+        long? parentCommentId,
+        long ownerId,
+        Dictionary<long, AuthorInfo> authors)
     {
         authors.TryGetValue(item.FromId, out var author);
 
@@ -735,7 +790,9 @@ public sealed class VkVideoChannel(
         return Path.Combine(settings["_system_state_path"], "auth_state");
     }
 
-    private string PreparePreviewForUpload(string previewPath, bool isShorts)
+    private string PreparePreviewForUpload(
+        string previewPath,
+        bool isShorts)
     {
         if (!isShorts || string.IsNullOrEmpty(previewPath) || !File.Exists(previewPath))
         {
@@ -747,14 +804,14 @@ public sealed class VkVideoChannel(
             var croppedPath = ThumbnailCropper.CropToShortsIfNeeded(previewPath);
             if (!ReferenceEquals(croppedPath, previewPath) && croppedPath != previewPath)
             {
-                logger.LogInformation("Превью обрезано под клип VK: {CroppedPath}", croppedPath);
+                logger.ThumbnailCropped(croppedPath);
             }
 
             return croppedPath;
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Не удалось обрезать превью под вертикальный формат, используется оригинал");
+            logger.ThumbnailCropFailed(ex);
             return previewPath;
         }
     }
@@ -775,7 +832,7 @@ public sealed class VkVideoChannel(
             }
         }
 
-        var video = await service.GetVideoByIdAsync(ownerId, videoId)
+        var video = await service.GetVideoByIdAsync(ownerId, videoId, cancellationToken)
                     ?? throw new NonRetriableException("Не удалось получить видео из VK для определения ориентации (обычное / shorts)");
 
         if (video.Width <= 0 || video.Height <= 0)
@@ -786,68 +843,163 @@ public sealed class VkVideoChannel(
         return video.Width < video.Height;
     }
 
-    private async Task<VkVideoService> CreateServiceAsync(Dictionary<string, string> settings)
+    private async Task<ServiceLease> AcquireServiceLeaseAsync(
+        Dictionary<string, string> settings,
+        CancellationToken cancellationToken)
+    {
+        while (true)
+        {
+            var entry = await GetOrCreateCachedAsync(settings, cancellationToken);
+            if (entry.TryAcquire())
+            {
+                return new(entry);
+            }
+
+            await Task.Yield();
+        }
+    }
+
+    private async Task<CachedEntry> GetOrCreateCachedAsync(
+        Dictionary<string, string> settings,
+        CancellationToken cancellationToken)
     {
         var authStatePath = GetAuthStatePath(settings);
+        if (!File.Exists(authStatePath))
+        {
+            throw new FileNotFoundException($"Файл аутентификации VK Video не найден: {authStatePath}. Выполните авторизацию.", authStatePath);
+        }
 
-        await _serviceLock.WaitAsync();
+        var lastWriteUtc = File.GetLastWriteTimeUtc(authStatePath);
+
+        if (_serviceCache.TryGetValue(authStatePath, out var cached) && cached.LastWriteUtc == lastWriteUtc)
+        {
+            return cached;
+        }
+
+        await _cacheLock.WaitAsync(cancellationToken);
+
         try
         {
-            if (_cachedServices.TryGetValue(authStatePath, out var cached))
+            if (_serviceCache.TryGetValue(authStatePath, out cached) && cached.LastWriteUtc == lastWriteUtc)
             {
                 return cached;
             }
 
-            if (!File.Exists(authStatePath))
-            {
-                throw new FileNotFoundException($"Файл аутентификации VK Video не найден: {authStatePath}. Выполните авторизацию.", authStatePath);
-            }
-
-            var authStateBody = await File.ReadAllTextAsync(authStatePath);
-            using var authState = JsonDocument.Parse(authStateBody);
-            var cookies = authState.RootElement.GetProperty("cookies");
-
-            var cookiePairs = new List<string>();
-
-            foreach (var cookie in cookies.EnumerateArray())
-            {
-                var name = cookie.GetProperty("name").GetString()!;
-                var value = cookie.GetProperty("value").GetString()!;
-                var domain = cookie.GetProperty("domain").GetString()!;
-
-                if (domain.Contains("vkvideo.ru") || domain.Contains("vk.com"))
-                {
-                    cookiePairs.Add($"{name}={value}");
-                }
-            }
-
-            var service = new VkVideoService(string.Join("; ", cookiePairs), serviceLogger);
-            _cachedServices[authStatePath] = service;
-            return service;
+            var service = await BuildServiceAsync(authStatePath, cancellationToken);
+            var entry = new CachedEntry(service, lastWriteUtc);
+            _serviceCache[authStatePath] = entry;
+            cached?.MarkEvicted();
+            return entry;
         }
         finally
         {
-            _serviceLock.Release();
+            _cacheLock.Release();
         }
     }
 
-    private async Task InvalidateServiceAsync(string authStatePath)
+    private async Task<VkVideoService> BuildServiceAsync(
+        string authStatePath,
+        CancellationToken cancellationToken)
     {
-        await _serviceLock.WaitAsync();
-        try
+        logger.ReadingAuthState(authStatePath);
+
+        var authStateBody = await File.ReadAllTextAsync(authStatePath, cancellationToken);
+        using var authState = JsonDocument.Parse(authStateBody);
+        var cookies = authState.RootElement.GetProperty("cookies");
+
+        var cookieBuilder = new StringBuilder();
+
+        foreach (var cookie in cookies.EnumerateArray())
         {
-            if (_cachedServices.Remove(authStatePath, out var existing))
+            var name = cookie.GetProperty("name").GetString()!;
+            var value = cookie.GetProperty("value").GetString()!;
+            var domain = cookie.GetProperty("domain").GetString()!;
+
+            if (domain.Contains("vkvideo.ru") || domain.Contains("vk.com"))
             {
-                existing.Dispose();
+                if (cookieBuilder.Length > 0)
+                {
+                    cookieBuilder.Append("; ");
+                }
+
+                cookieBuilder.Append(name).Append('=').Append(value);
             }
         }
-        finally
+
+        return vkVideoServiceFactory.Create(cookieBuilder.ToString());
+    }
+
+    private readonly struct ServiceLease(CachedEntry entry) : IDisposable
+    {
+        public VkVideoService Service => entry.Service;
+
+        public void Dispose()
         {
-            _serviceLock.Release();
+            entry.Release();
         }
     }
 
     private readonly record struct AuthorInfo(string? Name, string? AvatarUrl);
 
     private sealed record ExternalVideoId(long OwnerId, long VideoId);
+
+    private sealed class CachedEntry(VkVideoService service, DateTime lastWriteUtc)
+    {
+        private readonly object _gate = new();
+        private int _refCount;
+        private bool _evicted;
+
+        public VkVideoService Service { get; } = service;
+
+        public DateTime LastWriteUtc { get; } = lastWriteUtc;
+
+        public bool TryAcquire()
+        {
+            lock (_gate)
+            {
+                if (_evicted)
+                {
+                    return false;
+                }
+
+                _refCount++;
+                return true;
+            }
+        }
+
+        public void Release()
+        {
+            bool dispose;
+            lock (_gate)
+            {
+                _refCount--;
+                dispose = _refCount == 0 && _evicted;
+            }
+
+            if (dispose)
+            {
+                Service.Dispose();
+            }
+        }
+
+        public void MarkEvicted()
+        {
+            bool dispose;
+            lock (_gate)
+            {
+                if (_evicted)
+                {
+                    return;
+                }
+
+                _evicted = true;
+                dispose = _refCount == 0;
+            }
+
+            if (dispose)
+            {
+                Service.Dispose();
+            }
+        }
+    }
 }

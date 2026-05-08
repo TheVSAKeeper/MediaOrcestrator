@@ -1,10 +1,14 @@
 ﻿using MediaOrcestrator.Modules;
 using Microsoft.Extensions.Logging;
+using Polly;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Net;
 using System.Runtime.CompilerServices;
+using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
+using System.Threading.RateLimiting;
 
 namespace MediaOrcestrator.VkVideo;
 
@@ -16,49 +20,72 @@ public sealed class VkVideoService : IDisposable
     private const string ClientId = "52461373";
     private const string OwnerIdKey = "owner_id";
     private const string VideoIdKey = "video_id";
+    private const string UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36";
+    private const string Origin = "https://cabinet.vkvideo.ru";
+    private const string Referer = "https://cabinet.vkvideo.ru/";
 
-    private const int MinRequestIntervalMs = 350;
-    private const int RateLimitMaxRetries = 4;
-
-    private readonly ILogger _logger;
+    private readonly HttpClient _apiClient;
+    private readonly HttpClient _uploadClient;
+    private readonly VkVideoOptions _options;
+    private readonly ILogger<VkVideoService> _logger;
     private readonly string _cookieString;
-    private readonly SemaphoreSlim _throttleLock = new(1, 1);
+    private readonly TokenBucketRateLimiter _rateLimiter;
 
-    private DateTimeOffset _nextAllowedCallAt = DateTimeOffset.MinValue;
     private string? _accessToken;
     private DateTimeOffset _tokenExpires = DateTimeOffset.MinValue;
 
-    public VkVideoService(string cookieString, ILogger logger)
+    public VkVideoService(
+        HttpClient apiClient,
+        HttpClient uploadClient,
+        string cookieString,
+        VkVideoOptions options,
+        ILogger<VkVideoService> logger)
     {
-        _logger = logger;
+        _apiClient = apiClient;
+        _uploadClient = uploadClient;
         _cookieString = cookieString;
-
-        var handler = new HttpClientHandler { UseCookies = false };
-        HttpClient = new(handler);
-        HttpClient.Timeout = TimeSpan.FromHours(8);
-        HttpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36");
+        _options = options;
+        _logger = logger;
+        _rateLimiter = new(new()
+        {
+            TokenLimit = 1,
+            TokensPerPeriod = 1,
+            ReplenishmentPeriod = TimeSpan.FromMilliseconds(options.MinRequestIntervalMs),
+            QueueLimit = int.MaxValue,
+            QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+            AutoReplenishment = true,
+        });
     }
-
-    public HttpClient HttpClient { get; }
 
     public void Dispose()
     {
-        HttpClient.Dispose();
-        _throttleLock.Dispose();
+        _rateLimiter.Dispose();
+    }
+
+    public async Task DownloadAsync(
+        string url,
+        Func<Stream, CancellationToken, Task> processor,
+        CancellationToken cancellationToken = default)
+    {
+        using var request = CreateDownloadRequest(url);
+        using var response = await _uploadClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        await processor(stream, cancellationToken);
     }
 
     public async IAsyncEnumerable<VideoItem> GetMediaAsync(
         long groupId,
-        [EnumeratorCancellation] CancellationToken cancel = default)
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Получение списка медиа для VkVideo");
+        _logger.ListingMedia();
 
-        var firstPage = await GetCatalogFirstPageAsync(groupId);
-        var videos = GetCatalogVideosAsync(firstPage, cancel);
-        var clips = GetCatalogClipsAsync(firstPage, cancel);
+        var firstPage = await GetCatalogFirstPageAsync(groupId, cancellationToken);
+        var videos = GetCatalogVideosAsync(firstPage, cancellationToken);
+        var clips = GetCatalogClipsAsync(firstPage, cancellationToken);
         var yieldedIds = new HashSet<string>();
 
-        await foreach (var video in MergeByDateDescending(videos, clips, cancel))
+        await foreach (var video in MergeByDateDescending(videos, clips, cancellationToken))
         {
             if (yieldedIds.Add(video.GetVideoKey()))
             {
@@ -67,28 +94,41 @@ public sealed class VkVideoService : IDisposable
         }
     }
 
-    public async Task<VideoItem?> GetVideoByIdAsync(long ownerId, long videoId)
+    public async Task<VideoItem?> GetVideoByIdAsync(
+        long ownerId,
+        long videoId,
+        CancellationToken cancellationToken = default)
     {
         var videoKey = $"{ownerId}_{videoId}";
-        _logger.LogDebug("Запрос деталей видео: {VideoKey}", videoKey);
+        _logger.RequestingVideo(videoKey);
 
-        var response = await CallVkApiAsync<VideoGetByIdsResponse>("video.getByIds", new()
-        {
-            ["videos"] = videoKey,
-            ["video_fields"] = "files,image,subtitles",
-        });
+        var response = await CallVkApiAsync("video.getByIds",
+            Operations.GetVideoById,
+            new()
+            {
+                ["videos"] = videoKey,
+                ["video_fields"] = "files,image,subtitles",
+            },
+            VkVideoJsonContext.Default.VideoGetByIdsResponse,
+            cancellationToken);
 
         return response.Items.Count > 0 ? response.Items[0] : null;
     }
 
-    public async Task EditVideoAsync(long ownerId, long videoId, string title, string description, SaveThumbResponse? thumb = null)
+    public async Task EditVideoAsync(
+        long ownerId,
+        long videoId,
+        string title,
+        string description,
+        SaveThumbResponse? thumb = null,
+        CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Редактирование видео {OwnerId}_{VideoId}", ownerId, videoId);
+        _logger.EditingVideo(ownerId, videoId);
 
         var parameters = new Dictionary<string, string>
         {
-            [OwnerIdKey] = ownerId.ToString(),
-            [VideoIdKey] = videoId.ToString(),
+            [OwnerIdKey] = ownerId.ToString(CultureInfo.InvariantCulture),
+            [VideoIdKey] = videoId.ToString(CultureInfo.InvariantCulture),
             ["name"] = title,
             ["desc"] = description,
         };
@@ -99,54 +139,73 @@ public sealed class VkVideoService : IDisposable
             parameters["thumb_hash"] = thumb.PhotoHash;
         }
 
-        var result = await CallApiAsync<EditResponse>("video.edit", parameters);
+        var result = await CallApiAsync("video.edit",
+            Operations.EditVideo,
+            parameters,
+            VkVideoJsonContext.Default.EditResponse,
+            cancellationToken);
 
         if (result.Success != 1)
         {
             throw new InvalidOperationException($"Ошибка редактирования видео {ownerId}_{videoId}");
         }
 
-        _logger.LogInformation("Видео {OwnerId}_{VideoId} успешно отредактировано", ownerId, videoId);
+        _logger.VideoEdited(ownerId, videoId);
     }
 
-    public async Task DeleteVideoAsync(long ownerId, long videoId)
+    public async Task DeleteVideoAsync(
+        long ownerId,
+        long videoId,
+        CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Удаление видео {OwnerId}_{VideoId}", ownerId, videoId);
+        _logger.DeletingVideo(ownerId, videoId);
 
         // TODO: https://github.com/MaxNagibator/MediaOrcestrator/issues/37#issuecomment-4205897816
-        // await CallApiAsync<int>("video.delete", new()
-        // {
-        //     [OwnerIdKey] = ownerId.ToString(),
-        //     [VideoIdKey] = videoId.ToString(),
-        // });
+        // await CallApiNoResultAsync(ApiBase, "video.delete", Operations.DeleteVideo, ...);
 
-        await CallApiAsync<JsonElement>("video.bulkEdit", new()
-        {
-            ["video_ids"] = $"{ownerId}_{videoId}",
-            [OwnerIdKey] = ownerId.ToString(),
-            ["action"] = "delete",
-        });
+        await CallApiNoResultAsync(ApiBase,
+            "video.bulkEdit",
+            Operations.DeleteVideo,
+            new()
+            {
+                ["video_ids"] = $"{ownerId}_{videoId}",
+                [OwnerIdKey] = ownerId.ToString(CultureInfo.InvariantCulture),
+                ["action"] = "delete",
+            },
+            cancellationToken);
 
-        _logger.LogInformation("Видео {OwnerId}_{VideoId} удалено", ownerId, videoId);
+        _logger.VideoDeleted(ownerId, videoId);
     }
 
-    public async Task<string> GetThumbUploadUrlAsync(long ownerId, long videoId)
+    public async Task<string> GetThumbUploadUrlAsync(
+        long ownerId,
+        long videoId,
+        CancellationToken cancellationToken = default)
     {
-        var response = await CallApiAsync<VideoForEditResponse>("video.getVideoForEdit", new()
-        {
-            [OwnerIdKey] = ownerId.ToString(),
-            [VideoIdKey] = videoId.ToString(),
-        });
+        var response = await CallApiAsync("video.getVideoForEdit",
+            Operations.GetVideoForEdit,
+            new()
+            {
+                [OwnerIdKey] = ownerId.ToString(CultureInfo.InvariantCulture),
+                [VideoIdKey] = videoId.ToString(CultureInfo.InvariantCulture),
+            },
+            VkVideoJsonContext.Default.VideoForEditResponse,
+            cancellationToken);
 
         return response.Item.ThumbUploadUrl
                ?? throw new InvalidOperationException("thumb_upload_url не получен");
     }
 
-    public Task<SaveThumbResponse> UploadThumbnailAsync(bool isShorts, long ownerId, long videoId, string thumbnailPath)
+    public Task<SaveThumbResponse> UploadThumbnailAsync(
+        bool isShorts,
+        long ownerId,
+        long videoId,
+        string thumbnailPath,
+        CancellationToken cancellationToken = default)
     {
         return isShorts
-            ? UploadShortVideoThumbnailAsync(ownerId, videoId, thumbnailPath)
-            : UploadVideoThumbnailAsync(ownerId, videoId, thumbnailPath);
+            ? UploadShortVideoThumbnailAsync(ownerId, videoId, thumbnailPath, cancellationToken)
+            : UploadVideoThumbnailAsync(ownerId, videoId, thumbnailPath, cancellationToken);
     }
 
     public async Task<PublishVideoResponse> UploadVideoAsync(
@@ -168,37 +227,44 @@ public sealed class VkVideoService : IDisposable
             throw new FileNotFoundException("Файл видео не найден", filePath);
         }
 
-        _logger.LogInformation("Шаг 1/3: Резервирование слота для '{Title}'", title);
+        _logger.UploadReservingSlot(title);
 
         VideoSaveResponse saveResponse;
         if (isShorts)
         {
-            saveResponse = await CallApiAsync<VideoSaveResponse>("shortVideo.create", new()
-            {
-                ["group_id"] = groupId.ToString(),
-                ["file_size"] = fileInfo.Length.ToString(),
-            });
+            saveResponse = await CallApiAsync("shortVideo.create",
+                Operations.ShortVideoCreate,
+                new()
+                {
+                    ["group_id"] = groupId.ToString(CultureInfo.InvariantCulture),
+                    ["file_size"] = fileInfo.Length.ToString(CultureInfo.InvariantCulture),
+                },
+                VkVideoJsonContext.Default.VideoSaveResponse,
+                cancellationToken);
         }
         else
         {
-            saveResponse = await CallApiAsync<VideoSaveResponse>("video.save", new()
-            {
-                ["group_id"] = groupId.ToString(),
-                ["source_file_name"] = fileInfo.Name,
-                ["file_size"] = fileInfo.Length.ToString(),
-                ["batch_id"] = $"-{groupId}_{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}",
-                ["preview"] = "1",
-                ["thumb_upload"] = "1",
-            });
+            saveResponse = await CallApiAsync("video.save",
+                Operations.VideoSave,
+                new()
+                {
+                    ["group_id"] = groupId.ToString(CultureInfo.InvariantCulture),
+                    ["source_file_name"] = fileInfo.Name,
+                    ["file_size"] = fileInfo.Length.ToString(CultureInfo.InvariantCulture),
+                    ["batch_id"] = $"-{groupId}_{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}",
+                    ["preview"] = "1",
+                    ["thumb_upload"] = "1",
+                },
+                VkVideoJsonContext.Default.VideoSaveResponse,
+                cancellationToken);
         }
 
-        _logger.LogInformation("Слот зарезервирован. VideoId: {VideoId}, OwnerId: {OwnerId}", saveResponse.VideoId, saveResponse.OwnerId);
-
-        _logger.LogInformation("Шаг 2/3: Загрузка файла ({Size} байт)", fileInfo.Length);
+        _logger.UploadSlotReserved(saveResponse.VideoId, saveResponse.OwnerId);
+        _logger.UploadStartingFile(fileInfo.Length);
 
         var uploadResponse = await UploadFileAsync(saveResponse.UploadUrl, filePath, fileInfo, uploadBytesPerSecond, uploadProgress, cancellationToken);
 
-        _logger.LogInformation("Файл загружен. Hash: {Hash}", uploadResponse.VideoHash);
+        _logger.UploadFileCompleted(uploadResponse.VideoHash);
 
         if (isShorts)
         {
@@ -210,24 +276,28 @@ public sealed class VkVideoService : IDisposable
         {
             try
             {
-                _logger.LogInformation("Загрузка превью");
-                thumbId = await UploadThumbnailAsync(isShorts, saveResponse.OwnerId, saveResponse.VideoId, thumbnailPath);
-                _logger.LogInformation("Превью загружено");
+                _logger.UploadingThumbnail();
+                thumbId = await UploadThumbnailAsync(isShorts, saveResponse.OwnerId, saveResponse.VideoId, thumbnailPath, cancellationToken);
+                _logger.ThumbnailUploaded();
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Ошибка загрузки превью, публикация продолжится без него");
+                _logger.ThumbnailFailedSkipping(ex);
             }
         }
 
-        _logger.LogInformation("Шаг 3/3: Публикация");
+        _logger.UploadPublishing();
 
         if (isShorts)
         {
             var editParams = new Dictionary<string, string>
             {
-                [OwnerIdKey] = saveResponse.OwnerId.ToString(),
-                [VideoIdKey] = saveResponse.VideoId.ToString(),
+                [OwnerIdKey] = saveResponse.OwnerId.ToString(CultureInfo.InvariantCulture),
+                [VideoIdKey] = saveResponse.VideoId.ToString(CultureInfo.InvariantCulture),
                 ["description"] = title,
                 ["privacy_view"] = "all",
                 ["can_make_duet"] = "1",
@@ -238,29 +308,39 @@ public sealed class VkVideoService : IDisposable
 
             if (thumbId != null)
             {
-                editParams["thumb_id"] = thumbId.PhotoId.ToString();
+                editParams["thumb_id"] = thumbId.PhotoId.ToString(CultureInfo.InvariantCulture);
             }
 
-            await CallApiAsync<PublishResponse>("shortVideo.edit", editParams);
-            _logger.LogInformation("Видео отредактировано перед публикацией");
+            await CallApiAsync("shortVideo.edit",
+                Operations.ShortVideoEdit,
+                editParams,
+                VkVideoJsonContext.Default.PublishResponse,
+                cancellationToken);
+
+            _logger.ShortVideoEditedBeforePublish();
 
             if (publishAt.HasValue)
             {
-                _logger.LogWarning("Отложенная публикация не поддерживается для shorts — видео будет опубликовано немедленно");
+                _logger.ShortVideoNoScheduling();
             }
 
             var publishParams = new Dictionary<string, string>
             {
-                [OwnerIdKey] = saveResponse.OwnerId.ToString(),
-                [VideoIdKey] = saveResponse.VideoId.ToString(),
+                [OwnerIdKey] = saveResponse.OwnerId.ToString(CultureInfo.InvariantCulture),
+                [VideoIdKey] = saveResponse.VideoId.ToString(CultureInfo.InvariantCulture),
                 ["wallpost"] = "0",
                 ["publish_date"] = "0",
                 ["license_agree"] = "1",
                 ["ref"] = "video_as_clip_video_upload",
             };
 
-            var publishResponse = await CallApiAsync<PublishResponse>("shortVideo.publish", publishParams);
-            _logger.LogInformation("Видео опубликовано: {Url}", publishResponse.Video?.DirectUrl);
+            var publishResponse = await CallApiAsync("shortVideo.publish",
+                Operations.ShortVideoPublish,
+                publishParams,
+                VkVideoJsonContext.Default.PublishResponse,
+                cancellationToken);
+
+            _logger.UploadPublished(publishResponse.Video?.DirectUrl);
             return publishResponse.Video
                    ?? throw new InvalidOperationException("Ответ shortVideo.publish не содержит объект video");
         }
@@ -268,8 +348,8 @@ public sealed class VkVideoService : IDisposable
         {
             var publishParams = new Dictionary<string, string>
             {
-                ["owner_id"] = saveResponse.OwnerId.ToString(),
-                ["video_id"] = saveResponse.VideoId.ToString(),
+                [OwnerIdKey] = saveResponse.OwnerId.ToString(CultureInfo.InvariantCulture),
+                [VideoIdKey] = saveResponse.VideoId.ToString(CultureInfo.InvariantCulture),
                 ["title"] = title,
                 ["description"] = description,
                 ["file_ext"] = fileExtension,
@@ -287,11 +367,16 @@ public sealed class VkVideoService : IDisposable
 
             if (publishAt.HasValue)
             {
-                publishParams["publish_at"] = publishAt.Value.ToString();
+                publishParams["publish_at"] = publishAt.Value.ToString(CultureInfo.InvariantCulture);
             }
 
-            var publishResponse = await CallApiAsync<PublishResponse>("video.publish", publishParams);
-            _logger.LogInformation("Видео опубликовано: {Url}", publishResponse.Video?.DirectUrl);
+            var publishResponse = await CallApiAsync("video.publish",
+                Operations.VideoPublish,
+                publishParams,
+                VkVideoJsonContext.Default.PublishResponse,
+                cancellationToken);
+
+            _logger.UploadPublished(publishResponse.Video?.DirectUrl);
 
             return publishResponse.Video
                    ?? throw new InvalidOperationException("Ответ video.publish не содержит объект video");
@@ -304,7 +389,8 @@ public sealed class VkVideoService : IDisposable
         int count = 100,
         int offset = 0,
         long? commentId = null,
-        string sort = "asc")
+        string sort = "asc",
+        CancellationToken cancellationToken = default)
     {
         var parameters = new Dictionary<string, string>
         {
@@ -323,25 +409,37 @@ public sealed class VkVideoService : IDisposable
             parameters["comment_id"] = commentId.Value.ToString(CultureInfo.InvariantCulture);
         }
 
-        return CallApiInternalAsync<VkCommentsResponse>(ApiBase, "video.getComments", parameters);
+        return CallApiAsync("video.getComments",
+            Operations.GetVideoComments,
+            parameters,
+            VkVideoJsonContext.Default.VkCommentsResponse,
+            cancellationToken);
     }
 
-    public Task<VkCommentsResponse> GetVideoCommentAsync(long ownerId, long commentId)
+    public Task<VkCommentsResponse> GetVideoCommentAsync(
+        long ownerId,
+        long commentId,
+        CancellationToken cancellationToken = default)
     {
-        return CallApiAsync<VkCommentsResponse>("video.getComment", new()
-        {
-            ["comment_id"] = commentId.ToString(CultureInfo.InvariantCulture),
-            ["owner_id"] = ownerId.ToString(CultureInfo.InvariantCulture),
-            ["extended"] = "1",
-            ["fields"] = "photo_100,first_name_dat",
-        });
+        return CallApiAsync("video.getComment",
+            Operations.GetVideoComment,
+            new()
+            {
+                ["comment_id"] = commentId.ToString(CultureInfo.InvariantCulture),
+                ["owner_id"] = ownerId.ToString(CultureInfo.InvariantCulture),
+                ["extended"] = "1",
+                ["fields"] = "photo_100,first_name_dat",
+            },
+            VkVideoJsonContext.Default.VkCommentsResponse,
+            cancellationToken);
     }
 
     public Task<long> CreateVideoCommentAsync(
         long ownerId,
         long videoId,
         long? replyToComment,
-        string message)
+        string message,
+        CancellationToken cancellationToken = default)
     {
         var parameters = new Dictionary<string, string>
         {
@@ -355,84 +453,137 @@ public sealed class VkVideoService : IDisposable
             ["attachments"] = string.Empty,
         };
 
-        return CallApiAsync<long>("video.createComment", parameters);
+        return CallApiAsync("video.createComment",
+            Operations.CreateComment,
+            parameters,
+            VkVideoJsonContext.Default.Int64,
+            cancellationToken);
     }
 
-    public Task EditVideoCommentAsync(long ownerId, long commentId, string message)
+    public Task EditVideoCommentAsync(
+        long ownerId,
+        long commentId,
+        string message,
+        CancellationToken cancellationToken = default)
     {
-        return CallApiAsync<int>("video.editComment", new()
-        {
-            ["comment_id"] = commentId.ToString(CultureInfo.InvariantCulture),
-            ["owner_id"] = ownerId.ToString(CultureInfo.InvariantCulture),
-            ["message"] = message,
-            ["attachments"] = string.Empty,
-        });
+        return CallApiNoResultAsync(ApiBase,
+            "video.editComment",
+            Operations.EditComment,
+            new()
+            {
+                ["comment_id"] = commentId.ToString(CultureInfo.InvariantCulture),
+                ["owner_id"] = ownerId.ToString(CultureInfo.InvariantCulture),
+                ["message"] = message,
+                ["attachments"] = string.Empty,
+            },
+            cancellationToken);
     }
 
-    public Task DeleteVideoCommentAsync(long ownerId, long commentId)
+    public Task DeleteVideoCommentAsync(
+        long ownerId,
+        long commentId,
+        CancellationToken cancellationToken = default)
     {
-        return CallApiAsync<int>("video.deleteComment", new()
-        {
-            ["owner_id"] = ownerId.ToString(CultureInfo.InvariantCulture),
-            ["comment_id"] = commentId.ToString(CultureInfo.InvariantCulture),
-        });
+        return CallApiNoResultAsync(ApiBase,
+            "video.deleteComment",
+            Operations.DeleteComment,
+            new()
+            {
+                ["owner_id"] = ownerId.ToString(CultureInfo.InvariantCulture),
+                ["comment_id"] = commentId.ToString(CultureInfo.InvariantCulture),
+            },
+            cancellationToken);
     }
 
-    public Task RestoreVideoCommentAsync(long ownerId, long commentId)
+    public Task RestoreVideoCommentAsync(
+        long ownerId,
+        long commentId,
+        CancellationToken cancellationToken = default)
     {
-        return CallApiAsync<int>("video.restoreComment", new()
-        {
-            ["owner_id"] = ownerId.ToString(CultureInfo.InvariantCulture),
-            ["comment_id"] = commentId.ToString(CultureInfo.InvariantCulture),
-        });
+        return CallApiNoResultAsync(ApiBase,
+            "video.restoreComment",
+            Operations.RestoreComment,
+            new()
+            {
+                ["owner_id"] = ownerId.ToString(CultureInfo.InvariantCulture),
+                ["comment_id"] = commentId.ToString(CultureInfo.InvariantCulture),
+            },
+            cancellationToken);
     }
 
-    public async Task<int> LikeVideoCommentAsync(long ownerId, long commentId)
+    public async Task<int> LikeVideoCommentAsync(
+        long ownerId,
+        long commentId,
+        CancellationToken cancellationToken = default)
     {
-        var response = await CallApiAsync<VkLikesAddResponse>("likes.add", new()
-        {
-            ["type"] = "video_comment",
-            ["owner_id"] = ownerId.ToString(CultureInfo.InvariantCulture),
-            ["item_id"] = commentId.ToString(CultureInfo.InvariantCulture),
-            ["from_group"] = string.Empty,
-            ["track_code"] = string.Empty,
-            ["ref"] = string.Empty,
-        });
+        var response = await CallApiAsync("likes.add",
+            Operations.LikeComment,
+            new()
+            {
+                ["type"] = "video_comment",
+                ["owner_id"] = ownerId.ToString(CultureInfo.InvariantCulture),
+                ["item_id"] = commentId.ToString(CultureInfo.InvariantCulture),
+                ["from_group"] = string.Empty,
+                ["track_code"] = string.Empty,
+                ["ref"] = string.Empty,
+            },
+            VkVideoJsonContext.Default.VkLikesAddResponse,
+            cancellationToken);
 
         return response.Likes;
     }
 
-    public async Task<int> UnlikeVideoCommentAsync(long ownerId, long commentId)
+    public async Task<int> UnlikeVideoCommentAsync(
+        long ownerId,
+        long commentId,
+        CancellationToken cancellationToken = default)
     {
-        var response = await CallApiAsync<VkLikesAddResponse>("likes.delete", new()
-        {
-            ["type"] = "video_comment",
-            ["owner_id"] = ownerId.ToString(CultureInfo.InvariantCulture),
-            ["item_id"] = commentId.ToString(CultureInfo.InvariantCulture),
-            ["from_group"] = string.Empty,
-            ["track_code"] = string.Empty,
-            ["ref"] = string.Empty,
-        });
+        var response = await CallApiAsync("likes.delete",
+            Operations.UnlikeComment,
+            new()
+            {
+                ["type"] = "video_comment",
+                ["owner_id"] = ownerId.ToString(CultureInfo.InvariantCulture),
+                ["item_id"] = commentId.ToString(CultureInfo.InvariantCulture),
+                ["from_group"] = string.Empty,
+                ["track_code"] = string.Empty,
+                ["ref"] = string.Empty,
+            },
+            VkVideoJsonContext.Default.VkLikesAddResponse,
+            cancellationToken);
 
         return response.Likes;
     }
 
     private static MultipartFormDataContent BuildThumbnailForm(string thumbnailPath)
     {
-        var form = new MultipartFormDataContent();
-        var fileStream = File.OpenRead(thumbnailPath);
-        var fileContent = new StreamContent(fileStream);
-
-        var contentType = Path.GetExtension(thumbnailPath).ToLowerInvariant() switch
+        FileStream? fileStream = null;
+        StreamContent? fileContent = null;
+        MultipartFormDataContent? form = null;
+        try
         {
-            ".jpg" or ".jpeg" => "image/jpeg",
-            ".png" => "image/png",
-            _ => "image/jpeg",
-        };
+            fileStream = File.OpenRead(thumbnailPath);
+            fileContent = new(fileStream);
 
-        fileContent.Headers.ContentType = new(contentType);
-        form.Add(fileContent, "photo", Path.GetFileName(thumbnailPath));
-        return form;
+            var contentType = Path.GetExtension(thumbnailPath).ToLowerInvariant() switch
+            {
+                ".jpg" or ".jpeg" => "image/jpeg",
+                ".png" => "image/png",
+                _ => "image/jpeg",
+            };
+
+            fileContent.Headers.ContentType = new(contentType);
+            form = new();
+            form.Add(fileContent, "photo", Path.GetFileName(thumbnailPath));
+            return form;
+        }
+        catch
+        {
+            form?.Dispose();
+            fileContent?.Dispose();
+            fileStream?.Dispose();
+            throw;
+        }
     }
 
     private static bool IsHtmlResponse(string body)
@@ -554,7 +705,9 @@ public sealed class VkVideoService : IDisposable
         }
     }
 
-    private static bool IsSameOrNewer(VideoItem left, VideoItem right)
+    private static bool IsSameOrNewer(
+        VideoItem left,
+        VideoItem right)
     {
         var dateComparison = left.Date.CompareTo(right.Date);
         if (dateComparison != 0)
@@ -571,76 +724,125 @@ public sealed class VkVideoService : IDisposable
         return left.OwnerId.CompareTo(right.OwnerId) >= 0;
     }
 
-    private async Task<string> GetShortVideoThumbUploadUrlAsync(long ownerId)
+    private static T DeserializeApiResponse<T>(
+        byte[] bodyBytes,
+        string method,
+        JsonTypeInfo<T> typeInfo)
     {
-        var response = await CallApiAsync<ShortVideoThumbUploadUrlResponse>("shortVideo.getThumbUploadUrl", new()
+        using var doc = JsonDocument.Parse(bodyBytes);
+        if (!doc.RootElement.TryGetProperty("response", out var responseElement))
         {
-            [OwnerIdKey] = ownerId.ToString(),
-        });
+            throw new InvalidOperationException($"Ответ API {method} не содержит поле 'response'");
+        }
+
+        return responseElement.Deserialize(typeInfo)
+               ?? throw new InvalidOperationException($"Не удалось десериализовать ответ API {method}");
+    }
+
+    private async Task<string> GetShortVideoThumbUploadUrlAsync(
+        long ownerId,
+        CancellationToken cancellationToken)
+    {
+        var response = await CallApiAsync("shortVideo.getThumbUploadUrl",
+            Operations.ShortVideoGetThumbUploadUrl,
+            new()
+            {
+                [OwnerIdKey] = ownerId.ToString(CultureInfo.InvariantCulture),
+            },
+            VkVideoJsonContext.Default.ShortVideoThumbUploadUrlResponse,
+            cancellationToken);
 
         return string.IsNullOrEmpty(response.UploadUrl)
             ? throw new InvalidOperationException("upload_url для shorts превью не получен")
             : response.UploadUrl;
     }
 
-    private async Task<SaveThumbResponse> UploadShortVideoThumbnailAsync(long ownerId, long videoId, string thumbnailPath)
+    private async Task<SaveThumbResponse> UploadShortVideoThumbnailAsync(
+        long ownerId,
+        long videoId,
+        string thumbnailPath,
+        CancellationToken cancellationToken)
     {
-        var thumbUploadUrl = await GetShortVideoThumbUploadUrlAsync(ownerId);
+        var thumbUploadUrl = await GetShortVideoThumbUploadUrlAsync(ownerId, cancellationToken);
 
-        _logger.LogInformation("Загрузка превью для shorts {OwnerId}_{VideoId}", ownerId, videoId);
+        _logger.UploadingShortsThumbnail(ownerId, videoId);
 
         using var form = BuildThumbnailForm(thumbnailPath);
-        var uploadBody = await PostThumbnailAsync(thumbUploadUrl, form);
+        var uploadBody = await PostThumbnailAsync(thumbUploadUrl, form, cancellationToken);
 
-        var saveResult = await CallApiAsync<SaveThumbResponse>("shortVideo.saveUploadedThumb", new()
-        {
-            [OwnerIdKey] = ownerId.ToString(),
-            [VideoIdKey] = videoId.ToString(),
-            ["thumb_json"] = uploadBody,
-        });
+        var saveResult = await CallApiAsync("shortVideo.saveUploadedThumb",
+            Operations.ShortVideoSaveThumb,
+            new()
+            {
+                [OwnerIdKey] = ownerId.ToString(CultureInfo.InvariantCulture),
+                [VideoIdKey] = videoId.ToString(CultureInfo.InvariantCulture),
+                ["thumb_json"] = uploadBody,
+            },
+            VkVideoJsonContext.Default.SaveThumbResponse,
+            cancellationToken);
 
-        _logger.LogInformation("Превью shorts загружено. PhotoId: {PhotoId}", saveResult.PhotoId);
+        _logger.ShortsThumbnailUploaded(saveResult.PhotoId);
         return saveResult;
     }
 
-    private async Task<SaveThumbResponse> UploadVideoThumbnailAsync(long ownerId, long videoId, string thumbnailPath)
+    private async Task<SaveThumbResponse> UploadVideoThumbnailAsync(
+        long ownerId,
+        long videoId,
+        string thumbnailPath,
+        CancellationToken cancellationToken)
     {
-        var thumbUploadUrl = await GetThumbUploadUrlAsync(ownerId, videoId);
+        var thumbUploadUrl = await GetThumbUploadUrlAsync(ownerId, videoId, cancellationToken);
 
-        _logger.LogInformation("Загрузка превью для видео {OwnerId}_{VideoId}", ownerId, videoId);
+        _logger.UploadingVideoThumbnail(ownerId, videoId);
 
         using var form = BuildThumbnailForm(thumbnailPath);
         var uploadUrl = thumbUploadUrl + "&ajx=1";
-        var uploadBody = await PostThumbnailAsync(uploadUrl, form);
+        var uploadBody = await PostThumbnailAsync(uploadUrl, form, cancellationToken);
 
-        var saveResult = await CallApiAsync<SaveThumbResponse>("video.saveUploadedThumb", new()
-        {
-            [OwnerIdKey] = ownerId.ToString(),
-            [VideoIdKey] = videoId.ToString(),
-            ["thumb_json"] = uploadBody,
-            ["thumb_size"] = "l",
-        });
+        var saveResult = await CallApiAsync("video.saveUploadedThumb",
+            Operations.VideoSaveThumb,
+            new()
+            {
+                [OwnerIdKey] = ownerId.ToString(CultureInfo.InvariantCulture),
+                [VideoIdKey] = videoId.ToString(CultureInfo.InvariantCulture),
+                ["thumb_json"] = uploadBody,
+                ["thumb_size"] = "l",
+            },
+            VkVideoJsonContext.Default.SaveThumbResponse,
+            cancellationToken);
 
-        _logger.LogInformation("Превью загружено. PhotoId: {PhotoId}", saveResult.PhotoId);
+        _logger.VideoThumbnailUploaded(saveResult.PhotoId);
         return saveResult;
     }
 
-    private async Task<string> PostThumbnailAsync(string uploadUrl, MultipartFormDataContent form)
+    private async Task<string> PostThumbnailAsync(
+        string uploadUrl,
+        MultipartFormDataContent form,
+        CancellationToken cancellationToken)
     {
-        var uploadResponse = await HttpClient.PostAsync(uploadUrl, form);
-        var uploadBody = await uploadResponse.Content.ReadAsStringAsync();
-
-        if (!uploadResponse.IsSuccessStatusCode)
+        using var request = new HttpRequestMessage(HttpMethod.Post, uploadUrl)
         {
-            throw new HttpRequestException($"Ошибка загрузки превью: {uploadResponse.StatusCode}");
+            Content = form,
+        };
+
+        using var response = await _uploadClient.SendAsync(request, cancellationToken);
+        var uploadBody = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new HttpRequestException($"Ошибка загрузки превью: {response.StatusCode}");
         }
 
         return uploadBody;
     }
 
-    private async Task WaitForShortVideoEncodingAsync(long ownerId, long videoId, string hash, CancellationToken cancellationToken)
+    private async Task WaitForShortVideoEncodingAsync(
+        long ownerId,
+        long videoId,
+        string hash,
+        CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Ожидание обработки shorts {OwnerId}_{VideoId}", ownerId, videoId);
+        _logger.WaitingShortsEncoding(ownerId, videoId);
 
         var pollInterval = TimeSpan.FromSeconds(2);
         var deadline = DateTimeOffset.UtcNow + TimeSpan.FromMinutes(10);
@@ -650,23 +852,27 @@ public sealed class VkVideoService : IDisposable
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var progress = await CallApiAsync<ShortVideoEncodeProgressResponse>("shortVideo.encodeProgress", new()
-            {
-                [VideoIdKey] = videoId.ToString(),
-                [OwnerIdKey] = ownerId.ToString(),
-                ["hash"] = hash,
-            });
+            var progress = await CallApiAsync("shortVideo.encodeProgress",
+                Operations.ShortVideoEncodeProgress,
+                new()
+                {
+                    [VideoIdKey] = videoId.ToString(CultureInfo.InvariantCulture),
+                    [OwnerIdKey] = ownerId.ToString(CultureInfo.InvariantCulture),
+                    ["hash"] = hash,
+                },
+                VkVideoJsonContext.Default.ShortVideoEncodeProgressResponse,
+                cancellationToken);
 
             if (progress.IsReady)
             {
-                _logger.LogInformation("Shorts {OwnerId}_{VideoId} готов к публикации ({Percents}%)", ownerId, videoId, progress.Percents);
+                _logger.ShortsEncodingReady(ownerId, videoId, progress.Percents);
                 return;
             }
 
             var bucket = progress.Percents / 10;
             if (bucket > lastLoggedBucket)
             {
-                _logger.LogInformation("Прогресс кодирования shorts {OwnerId}_{VideoId}: {Percents}%", ownerId, videoId, progress.Percents);
+                _logger.ShortsEncodingProgress(ownerId, videoId, progress.Percents);
                 lastLoggedBucket = bucket;
             }
 
@@ -686,7 +892,7 @@ public sealed class VkVideoService : IDisposable
         if (fetchFirstPage)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var firstPage = await GetCatalogSectionFirstPageAsync(sectionId);
+            var firstPage = await GetCatalogSectionFirstPageAsync(sectionId, cancellationToken);
 
             foreach (var video in firstPage.Videos)
             {
@@ -703,7 +909,7 @@ public sealed class VkVideoService : IDisposable
         {
             cancellationToken.ThrowIfCancellationRequested();
             var previousNextFrom = nextFrom;
-            var nextPage = await GetCatalogNextPageAsync(sectionId, nextFrom);
+            var nextPage = await GetCatalogNextPageAsync(sectionId, nextFrom, cancellationToken);
 
             foreach (var video in nextPage.Videos)
             {
@@ -751,7 +957,7 @@ public sealed class VkVideoService : IDisposable
             yield break;
         }
 
-        _logger.LogInformation("Получение списка клипов для VkVideo");
+        _logger.ListingClips();
         var yieldedIds = new HashSet<string>();
         var clips = GetCatalogSectionVideosAsync(firstPage.ClipsSectionId, null, true, yieldedIds, cancellationToken);
 
@@ -761,26 +967,32 @@ public sealed class VkVideoService : IDisposable
         }
     }
 
-    private async Task<CatalogFirstPageResult> GetCatalogFirstPageAsync(long groupId)
+    private async Task<CatalogFirstPageResult> GetCatalogFirstPageAsync(
+        long groupId,
+        CancellationToken cancellationToken)
     {
-        var screenName = await GetGroupScreenNameAsync(groupId);
+        var screenName = await GetGroupScreenNameAsync(groupId, cancellationToken);
         var catalogUrl = $"https://vkvideo.ru/@{Uri.EscapeDataString(screenName)}/all";
-        _logger.LogDebug("Запрос каталога: {Url}", catalogUrl);
+        _logger.RequestingCatalog(catalogUrl);
 
         CatalogResponse response;
 
         try
         {
-            response = await CallApiAsync<CatalogResponse>("catalog.getVideo", new()
-            {
-                ["need_blocks"] = "1",
-                [OwnerIdKey] = "0",
-                ["url"] = catalogUrl,
-            });
+            response = await CallApiAsync("catalog.getVideo",
+                Operations.GetCatalog,
+                new()
+                {
+                    ["need_blocks"] = "1",
+                    [OwnerIdKey] = "0",
+                    ["url"] = catalogUrl,
+                },
+                VkVideoJsonContext.Default.CatalogResponse,
+                cancellationToken);
         }
         catch (VkApiException ex) when (ex.ErrorCode == 104)
         {
-            _logger.LogWarning(ex, "Каталог видео пуст или не найден для группы {GroupId}", groupId);
+            _logger.CatalogEmpty(ex, groupId);
             return new([], null, null, null);
         }
 
@@ -788,32 +1000,45 @@ public sealed class VkVideoService : IDisposable
         return new(response.Videos, sections.VideoSectionId, sections.VideoNextFrom, sections.ClipsSectionId);
     }
 
-    private async Task<CatalogSectionPageResult> GetCatalogSectionFirstPageAsync(string sectionId)
+    private async Task<CatalogSectionPageResult> GetCatalogSectionFirstPageAsync(
+        string sectionId,
+        CancellationToken cancellationToken)
     {
-        _logger.LogDebug("Запрос первой страницы секции каталога: section={SectionId}", sectionId);
+        _logger.RequestingSectionFirstPage(sectionId);
 
-        var response = await CallApiAsync<CatalogSectionResponse>("catalog.getSection", new()
-        {
-            ["section_id"] = sectionId,
-        });
+        var response = await CallApiAsync("catalog.getSection",
+            Operations.GetCatalogSection,
+            new()
+            {
+                ["section_id"] = sectionId,
+            },
+            VkVideoJsonContext.Default.CatalogSectionResponse,
+            cancellationToken);
 
         return new(response.Videos, FindSectionNextFrom(response.Section));
     }
 
-    private async Task<CatalogSectionPageResult> GetCatalogNextPageAsync(string sectionId, string startFrom)
+    private async Task<CatalogSectionPageResult> GetCatalogNextPageAsync(
+        string sectionId,
+        string startFrom,
+        CancellationToken cancellationToken)
     {
-        _logger.LogDebug("Запрос следующей страницы каталога: section={SectionId}, from={StartFrom}", sectionId, startFrom);
+        _logger.RequestingSectionNextPage(sectionId, startFrom);
 
-        var response = await CallApiAsync<CatalogSectionResponse>("catalog.getSection", new()
-        {
-            ["section_id"] = sectionId,
-            ["start_from"] = startFrom,
-        });
+        var response = await CallApiAsync("catalog.getSection",
+            Operations.GetCatalogSection,
+            new()
+            {
+                ["section_id"] = sectionId,
+                ["start_from"] = startFrom,
+            },
+            VkVideoJsonContext.Default.CatalogSectionResponse,
+            cancellationToken);
 
         return new(response.Videos, FindSectionNextFrom(response.Section));
     }
 
-    private async Task<string> GetAccessTokenAsync()
+    private async Task<string> GetAccessTokenAsync(CancellationToken cancellationToken)
     {
         if (_accessToken != null && DateTimeOffset.UtcNow < _tokenExpires.AddMinutes(-1))
         {
@@ -822,31 +1047,29 @@ public sealed class VkVideoService : IDisposable
 
         for (var attempt = 0; attempt < 2; attempt++)
         {
-            _logger.LogInformation("Запрос нового access_token через web_token");
+            _logger.RequestingAccessToken();
 
-            using var request = new HttpRequestMessage(HttpMethod.Post, "https://cabinet.vkvideo.ru/al_video.php?act=web_token");
-            request.Headers.Add("Cookie", _cookieString);
-            request.Headers.Add("Origin", "https://cabinet.vkvideo.ru");
-            request.Headers.Add("Referer", "https://cabinet.vkvideo.ru/");
+            using var request = CreateApiRequest(HttpMethod.Post, "https://cabinet.vkvideo.ru/al_video.php?act=web_token");
             request.Content = new FormUrlEncodedContent(new Dictionary<string, string>
             {
                 ["version"] = "1",
                 ["app_id"] = ClientId,
             });
 
-            var response = await HttpClient.SendAsync(request);
-            var body = await response.Content.ReadAsStringAsync();
+            using var response = await SendApiAsync(Operations.GetAccessToken, request, cancellationToken);
+            var bodyBytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+            var body = Encoding.UTF8.GetString(bodyBytes);
 
             if (!IsHtmlResponse(body))
             {
-                return ParseWebTokenResponse(body, response.StatusCode);
+                return ParseWebTokenResponse(bodyBytes, body, response.StatusCode);
             }
 
-            _logger.LogWarning("Ответ web_token — HTML (попытка {Attempt}/2). Статус: {StatusCode}", attempt + 1, response.StatusCode);
+            _logger.WebTokenHtmlResponse(attempt + 1, response.StatusCode);
 
-            if (attempt == 0 && await TrySolveChallengeAsync(response, body))
+            if (attempt == 0 && await TrySolveChallengeAsync(response, body, cancellationToken))
             {
-                _logger.LogInformation("Повторяем запрос web_token после решения challenge...");
+                _logger.RetryingWebTokenAfterChallenge();
                 continue;
             }
 
@@ -856,23 +1079,49 @@ public sealed class VkVideoService : IDisposable
         throw new InvalidOperationException("Не удалось получить access_token после решения challenge.");
     }
 
-    private Task<T> CallApiAsync<T>(string method, Dictionary<string, string> parameters)
+    private Task<T> CallApiAsync<T>(
+        string method,
+        string operationKey,
+        Dictionary<string, string> parameters,
+        JsonTypeInfo<T> typeInfo,
+        CancellationToken cancellationToken)
     {
-        return CallApiInternalAsync<T>(ApiBase, method, parameters);
+        return CallApiInternalAsync(ApiBase, method, operationKey, parameters, typeInfo, cancellationToken);
     }
 
-    private Task<T> CallVkApiAsync<T>(string method, Dictionary<string, string> parameters)
+    private Task<T> CallVkApiAsync<T>(
+        string method,
+        string operationKey,
+        Dictionary<string, string> parameters,
+        JsonTypeInfo<T> typeInfo,
+        CancellationToken cancellationToken)
     {
-        return CallApiInternalAsync<T>(ApiVkBase, method, parameters);
+        return CallApiInternalAsync(ApiVkBase, method, operationKey, parameters, typeInfo, cancellationToken);
     }
 
-    private async Task<string> GetGroupScreenNameAsync(long groupId)
+    private Task CallApiNoResultAsync(
+        string baseUrl,
+        string method,
+        string operationKey,
+        Dictionary<string, string> parameters,
+        CancellationToken cancellationToken)
     {
-        var response = await CallApiAsync<GroupsGetByIdResponse>("groups.getById", new()
-        {
-            ["fields"] = "counters",
-            ["group_ids"] = groupId.ToString(),
-        });
+        return CallApiRawAsync(baseUrl, method, operationKey, parameters, cancellationToken);
+    }
+
+    private async Task<string> GetGroupScreenNameAsync(
+        long groupId,
+        CancellationToken cancellationToken)
+    {
+        var response = await CallApiAsync("groups.getById",
+            Operations.GetGroupById,
+            new()
+            {
+                ["fields"] = "counters",
+                ["group_ids"] = groupId.ToString(CultureInfo.InvariantCulture),
+            },
+            VkVideoJsonContext.Default.GroupsGetByIdResponse,
+            cancellationToken);
 
         var group = response.Groups.FirstOrDefault(g => g.Id == groupId) ?? response.Groups.FirstOrDefault();
         var screenName = group?.ScreenName;
@@ -882,19 +1131,22 @@ public sealed class VkVideoService : IDisposable
             screenName = $"club{groupId}";
         }
 
-        _logger.LogDebug("VK group {GroupId} screen_name={ScreenName}", groupId, screenName);
+        _logger.GroupScreenNameResolved(groupId, screenName);
         return screenName;
     }
 
-    private string ParseWebTokenResponse(string body, HttpStatusCode statusCode)
+    private string ParseWebTokenResponse(
+        byte[] bodyBytes,
+        string body,
+        HttpStatusCode statusCode)
     {
         if ((int)statusCode >= 400)
         {
-            _logger.LogError("Ошибка получения web_token. Статус: {StatusCode}, Ответ: {Body}", statusCode, body);
+            _logger.WebTokenFailed(statusCode, body);
             throw new HttpRequestException($"Не удалось получить access_token: {statusCode}");
         }
 
-        var tokens = JsonSerializer.Deserialize<List<WebTokenResponse>>(body);
+        var tokens = JsonSerializer.Deserialize(bodyBytes, VkVideoJsonContext.Default.ListWebTokenResponse);
         if (tokens == null || tokens.Count == 0 || string.IsNullOrEmpty(tokens[0].AccessToken))
         {
             throw new InvalidOperationException("Не удалось получить access_token. Возможно, cookies устарели — переавторизуйтесь через Playwright.");
@@ -902,20 +1154,37 @@ public sealed class VkVideoService : IDisposable
 
         _accessToken = tokens[0].AccessToken;
         _tokenExpires = DateTimeOffset.FromUnixTimeSeconds(tokens[0].Expires);
-        _logger.LogInformation("access_token получен, истекает в {Expires}", _tokenExpires);
+        _logger.AccessTokenReceived(_tokenExpires);
 
         return _accessToken;
     }
 
-    private async Task<T> CallApiInternalAsync<T>(string baseUrl, string method, Dictionary<string, string> parameters)
+    private async Task<T> CallApiInternalAsync<T>(
+        string baseUrl,
+        string method,
+        string operationKey,
+        Dictionary<string, string> parameters,
+        JsonTypeInfo<T> typeInfo,
+        CancellationToken cancellationToken)
+    {
+        var bodyBytes = await CallApiRawAsync(baseUrl, method, operationKey, parameters, cancellationToken);
+        return DeserializeApiResponse(bodyBytes, method, typeInfo);
+    }
+
+    private async Task<byte[]> CallApiRawAsync(
+        string baseUrl,
+        string method,
+        string operationKey,
+        Dictionary<string, string> parameters,
+        CancellationToken cancellationToken)
     {
         var challengeSolved = false;
         var rateLimitHits = 0;
 
         while (true)
         {
-            await ThrottleAsync();
-            var token = await GetAccessTokenAsync();
+            await ThrottleAsync(cancellationToken);
+            var token = await GetAccessTokenAsync(cancellationToken);
 
             var requestParams = new Dictionary<string, string>(parameters)
             {
@@ -924,140 +1193,126 @@ public sealed class VkVideoService : IDisposable
 
             var url = $"{baseUrl}{method}?v={ApiVersion}&client_id={ClientId}";
 
-            using var request = new HttpRequestMessage(HttpMethod.Post, url);
-            request.Headers.Add("Origin", "https://cabinet.vkvideo.ru");
-            request.Headers.Add("Referer", "https://cabinet.vkvideo.ru/");
+            using var request = CreateApiRequest(HttpMethod.Post, url);
             request.Content = new FormUrlEncodedContent(requestParams);
 
-            var response = await HttpClient.SendAsync(request);
-            var body = await response.Content.ReadAsStringAsync();
+            using var response = await SendApiAsync(operationKey, request, cancellationToken);
+            var bodyBytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+            var bodyString = Encoding.UTF8.GetString(bodyBytes);
 
-            if (IsHtmlResponse(body))
+            if (IsHtmlResponse(bodyString))
             {
-                _logger.LogWarning("Ответ API {Method} — HTML. Статус: {StatusCode}", method, response.StatusCode);
+                _logger.ApiHtmlResponse(method, response.StatusCode);
 
-                if (!challengeSolved && await TrySolveChallengeAsync(response, body))
+                if (!challengeSolved && await TrySolveChallengeAsync(response, bodyString, cancellationToken))
                 {
                     challengeSolved = true;
-                    _logger.LogInformation("Повторяем запрос API {Method} после решения challenge...", method);
+                    _logger.RetryingApiAfterChallenge(method);
                     continue;
                 }
 
-                ThrowHtmlResponseError(body, method);
+                ThrowHtmlResponseError(bodyString, method);
             }
 
             if (!response.IsSuccessStatusCode)
             {
-                _logger.LogError("Ошибка API {Method}. Статус: {StatusCode}, Ответ: {Body}", method, response.StatusCode, body);
+                _logger.ApiFailed(method, response.StatusCode, bodyString);
                 throw new HttpRequestException($"Ошибка API {method}: {response.StatusCode}");
             }
 
             try
             {
-                return ParseApiResponse<T>(body, method);
+                EnsureNoVkError(bodyBytes, method);
+                return bodyBytes;
             }
-            catch (VkApiException ex) when (ex.ErrorCode == 6 && rateLimitHits < RateLimitMaxRetries)
+            catch (VkApiException ex) when (ex.ErrorCode == 6 && rateLimitHits < _options.RateLimitMaxRetries)
             {
                 rateLimitHits++;
                 var delay = TimeSpan.FromMilliseconds(500 * Math.Pow(2, rateLimitHits - 1));
-                _logger.LogWarning("VK API {Method}: rate limit, попытка {Attempt}/{Max}. Ждём {Delay} мс",
-                    method, rateLimitHits, RateLimitMaxRetries, delay.TotalMilliseconds);
+                _logger.RateLimitWait(method, rateLimitHits, _options.RateLimitMaxRetries, delay.TotalMilliseconds);
 
-                await Task.Delay(delay);
+                await Task.Delay(delay, cancellationToken);
             }
         }
     }
 
-    private async Task ThrottleAsync()
+    private async Task ThrottleAsync(CancellationToken cancellationToken)
     {
-        await _throttleLock.WaitAsync();
-        try
+        using var lease = await _rateLimiter.AcquireAsync(1, cancellationToken);
+        if (!lease.IsAcquired)
         {
-            var now = DateTimeOffset.UtcNow;
-            var wait = _nextAllowedCallAt - now;
-            if (wait > TimeSpan.Zero)
-            {
-                await Task.Delay(wait);
-                now = DateTimeOffset.UtcNow;
-            }
-
-            _nextAllowedCallAt = now.AddMilliseconds(MinRequestIntervalMs);
-        }
-        finally
-        {
-            _throttleLock.Release();
+            throw new InvalidOperationException("Не удалось получить разрешение rate limiter VK API");
         }
     }
 
-    private T ParseApiResponse<T>(string body, string method)
+    private void EnsureNoVkError(
+        byte[] bodyBytes,
+        string method)
     {
-        using var doc = JsonDocument.Parse(body);
+        using var doc = JsonDocument.Parse(bodyBytes);
 
-        if (doc.RootElement.TryGetProperty("error", out var errorElement))
+        if (!doc.RootElement.TryGetProperty("error", out var errorElement))
         {
-            var errorCode = errorElement.TryGetProperty("error_code", out var code) ? code.GetInt32() : 0;
-            var errorMsg = errorElement.TryGetProperty("error_msg", out var msg) ? msg.GetString() : body;
-            _logger.LogError("Ошибка VK API {Method}. Код: {ErrorCode}, Сообщение: {ErrorMsg}", method, errorCode, errorMsg);
-            throw new VkApiException(errorCode, errorMsg ?? body, method);
+            return;
         }
 
-        if (!doc.RootElement.TryGetProperty("response", out var responseElement))
-        {
-            throw new InvalidOperationException($"Ответ API {method} не содержит поле 'response'");
-        }
-
-        return JsonSerializer.Deserialize<T>(responseElement.GetRawText())
-               ?? throw new InvalidOperationException($"Не удалось десериализовать ответ API {method}");
+        var errorCode = errorElement.TryGetProperty("error_code", out var code) ? code.GetInt32() : 0;
+        var errorMsg = errorElement.TryGetProperty("error_msg", out var msg) ? msg.GetString() : null;
+        _logger.VkApiError(method, errorCode, errorMsg ?? string.Empty);
+        throw new VkApiException(errorCode, errorMsg ?? "(no message)", method);
     }
-
-    // TODO: Копипаста + нейросетевая дрисня. Дай бог будет работать.
 
     /// <summary>
     /// Пытается решить VK challenge (rate limit). Извлекает hash429 из redirect URL,
     /// вычисляет key и отправляет решение. Возвращает true если challenge решён.
     /// </summary>
-    private async Task<bool> TrySolveChallengeAsync(HttpResponseMessage response, string body)
+    private async Task<bool> TrySolveChallengeAsync(
+        HttpResponseMessage response,
+        string body,
+        CancellationToken cancellationToken)
     {
         if (!VkChallengeSolver.IsChallengePage(body))
         {
-            _logger.LogDebug("Ответ — HTML, но не challenge-страница");
+            _logger.HtmlButNotChallenge();
             return false;
         }
 
         var challengeUri = response.RequestMessage?.RequestUri;
-        _logger.LogWarning("VK challenge (rate limit) обнаружен. Redirect URI: {Uri}", challengeUri);
+        _logger.ChallengeDetected(challengeUri);
 
         var result = VkChallengeSolver.TrySolve(challengeUri, body);
         if (!result.Success)
         {
-            _logger.LogError("Не удалось решить VK challenge: {Error}. URI: {Uri}", result.Error, challengeUri);
+            _logger.ChallengeUnsolvable(result.Error, challengeUri);
             return false;
         }
 
-        _logger.LogInformation("VK challenge решён: hash429={Hash429}, salt={Salt}, key={Key}",
-            result.Hash429, result.Salt, result.Key);
+        _logger.ChallengeSolved(result.Hash429, result.Salt, result.Key);
+        _logger.ChallengeSendingSolution(result.SolveUri);
 
-        _logger.LogDebug("Отправка решения на {SolveUri}", result.SolveUri);
+        using var solveRequest = CreateApiRequest(HttpMethod.Get, result.SolveUri!.ToString());
+        using var solveResponse = await _apiClient.SendAsync(solveRequest, cancellationToken);
+        var solveBody = await solveResponse.Content.ReadAsStringAsync(cancellationToken);
 
-        using var solveRequest = new HttpRequestMessage(HttpMethod.Get, result.SolveUri);
-        solveRequest.Headers.Add("Cookie", _cookieString);
-        var solveResponse = await HttpClient.SendAsync(solveRequest);
-        var solveBody = await solveResponse.Content.ReadAsStringAsync();
-
-        _logger.LogInformation("Ответ на решение challenge: статус {StatusCode}, длина тела {Length}",
-            solveResponse.StatusCode, solveBody.Length);
+        _logger.ChallengeSolutionResponse(solveResponse.StatusCode, solveBody.Length);
 
         if (IsHtmlResponse(solveBody))
         {
             // TODO: Нужно отловить и посмотреть, что там
-            _logger.LogWarning("Ответ на решение challenge снова HTML. Начало: {Body}", solveBody.Length > 200 ? solveBody[..200] : solveBody);
+            _logger.ChallengeStillHtml(solveBody.Length > 200 ? solveBody[..200] : solveBody);
             return false;
         }
 
         return true;
     }
 
-    private async Task<FileUploadResponse> UploadFileAsync(string uploadUrl, string filePath, FileInfo fileInfo, long? uploadBytesPerSecond, IProgress<double>? progress, CancellationToken cancellationToken)
+    private async Task<FileUploadResponse> UploadFileAsync(
+        string uploadUrl,
+        string filePath,
+        FileInfo fileInfo,
+        long? uploadBytesPerSecond,
+        IProgress<double>? progress,
+        CancellationToken cancellationToken)
     {
         await using var fileStream = File.OpenRead(filePath);
         await using var throttled = new ThrottledStream(fileStream, uploadBytesPerSecond);
@@ -1086,36 +1341,108 @@ public sealed class VkVideoService : IDisposable
             FileName = fileInfo.Name,
         };
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, uploadUrl);
-        request.Content = content;
-        request.Headers.Add("Session-ID", Guid.NewGuid().ToString("N")[..14]);
-        request.Headers.Add("X-Uploading-Mode", "parallel");
-        request.Headers.Add("Origin", "https://cabinet.vkvideo.ru");
+        using var request = new HttpRequestMessage(HttpMethod.Post, uploadUrl)
+        {
+            Content = content,
+        };
 
-        var response = await HttpClient.SendAsync(request, cancellationToken);
-        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        request.Headers.TryAddWithoutValidation("Session-ID", Guid.NewGuid().ToString("N")[..14]);
+        request.Headers.TryAddWithoutValidation("X-Uploading-Mode", "parallel");
+        request.Headers.TryAddWithoutValidation("Origin", Origin);
+        request.Headers.TryAddWithoutValidation("User-Agent", UserAgent);
+
+        using var response = await _uploadClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        var bodyBytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
 
         if (!response.IsSuccessStatusCode)
         {
-            _logger.LogError("Ошибка загрузки файла. Статус: {StatusCode}, Ответ: {Body}", response.StatusCode, body);
+            var bodyString = Encoding.UTF8.GetString(bodyBytes);
+            _logger.UploadFileFailed(response.StatusCode, bodyString);
             throw new HttpRequestException($"Ошибка загрузки файла: {response.StatusCode}");
         }
 
-        return JsonSerializer.Deserialize<FileUploadResponse>(body)
+        return JsonSerializer.Deserialize(bodyBytes, VkVideoJsonContext.Default.FileUploadResponse)
                ?? throw new InvalidOperationException("Не удалось десериализовать ответ upload");
     }
 
     [DoesNotReturn]
-    private void ThrowHtmlResponseError(string body, string context)
+    private void ThrowHtmlResponseError(
+        string body,
+        string context)
     {
         var reason = VkChallengeSolver.IsChallengePage(body)
             ? "сервер требует прохождение капчи (rate limit), автоматическое решение не удалось"
             : "сервер вернул HTML вместо JSON. Cookies устарели — переавторизуйтесь через Playwright";
 
-        _logger.LogError("Ответ {Context} — HTML вместо JSON. Начало: {Body}",
-            context, body.Length > 200 ? body[..200] : body);
+        _logger.HtmlInsteadOfJson(context, body.Length > 200 ? body[..200] : body);
 
         throw new InvalidOperationException($"Не удалось выполнить {context}: {reason}.");
+    }
+
+    private HttpRequestMessage CreateApiRequest(
+        HttpMethod method,
+        string url)
+    {
+        var request = new HttpRequestMessage(method, url);
+        request.Headers.TryAddWithoutValidation("Cookie", _cookieString);
+        request.Headers.TryAddWithoutValidation("Origin", Origin);
+        request.Headers.TryAddWithoutValidation("Referer", Referer);
+        request.Headers.TryAddWithoutValidation("User-Agent", UserAgent);
+        return request;
+    }
+
+    private HttpRequestMessage CreateDownloadRequest(string url)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.TryAddWithoutValidation("User-Agent", UserAgent);
+        return request;
+    }
+
+    private async Task<HttpResponseMessage> SendApiAsync(
+        string operationKey,
+        HttpRequestMessage request,
+        CancellationToken cancellationToken)
+    {
+        var context = ResilienceContextPool.Shared.Get(operationKey, cancellationToken);
+        request.SetResilienceContext(context);
+
+        try
+        {
+            return await _apiClient.SendAsync(request, cancellationToken);
+        }
+        finally
+        {
+            ResilienceContextPool.Shared.Return(context);
+        }
+    }
+
+    private static class Operations
+    {
+        public const string GetAccessToken = "vkvideo.access-token.get";
+        public const string GetVideoById = "vkvideo.video.get";
+        public const string EditVideo = "vkvideo.video.edit";
+        public const string DeleteVideo = "vkvideo.video.delete";
+        public const string GetVideoForEdit = "vkvideo.video.get-for-edit";
+        public const string VideoSave = "vkvideo.video.save";
+        public const string VideoPublish = "vkvideo.video.publish";
+        public const string VideoSaveThumb = "vkvideo.video.save-thumb";
+        public const string ShortVideoCreate = "vkvideo.short-video.create";
+        public const string ShortVideoEdit = "vkvideo.short-video.edit";
+        public const string ShortVideoPublish = "vkvideo.short-video.publish";
+        public const string ShortVideoGetThumbUploadUrl = "vkvideo.short-video.get-thumb-upload-url";
+        public const string ShortVideoSaveThumb = "vkvideo.short-video.save-thumb";
+        public const string ShortVideoEncodeProgress = "vkvideo.short-video.encode-progress";
+        public const string GetCatalog = "vkvideo.catalog.get";
+        public const string GetCatalogSection = "vkvideo.catalog.get-section";
+        public const string GetGroupById = "vkvideo.group.get";
+        public const string GetVideoComments = "vkvideo.comment.list";
+        public const string GetVideoComment = "vkvideo.comment.get";
+        public const string CreateComment = "vkvideo.comment.create";
+        public const string EditComment = "vkvideo.comment.edit";
+        public const string DeleteComment = "vkvideo.comment.delete";
+        public const string RestoreComment = "vkvideo.comment.restore";
+        public const string LikeComment = "vkvideo.comment.like";
+        public const string UnlikeComment = "vkvideo.comment.unlike";
     }
 
     private sealed record CatalogSectionsResult(

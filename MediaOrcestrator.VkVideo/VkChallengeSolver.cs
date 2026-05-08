@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -25,7 +25,9 @@ internal static class VkChallengeSolver
     /// Пытается решить challenge: извлекает hash429 из URL, вычисляет salt из HTML,
     /// возвращает URL с параметром key для прохождения проверки.
     /// </summary>
-    public static ChallengeResult TrySolve(Uri? challengeUri, string htmlBody)
+    public static ChallengeResult TrySolve(
+        Uri? challengeUri,
+        string htmlBody)
     {
         if (challengeUri == null)
         {
@@ -84,7 +86,11 @@ internal static class VkChallengeSolver
         return salt.ToString();
     }
 
-    private static int FindMatchingBracket(string text, int start, char open, char close)
+    private static int FindMatchingBracket(
+        string text,
+        int start,
+        char open,
+        char close)
     {
         var depth = 0;
         for (var i = start; i < text.Length; i++)
@@ -221,7 +227,9 @@ internal static class VkChallengeSolver
     /// Применяет функцию-трансформацию к значению.
     /// Поддерживаемые паттерны: e+N, e-N, e^N, map[e].
     /// </summary>
-    private static int? ApplyFunction(string func, int input)
+    private static int? ApplyFunction(
+        string func,
+        int input)
     {
         // e + N
         var m = Regex.Match(func, @"return\s+e\s*\+\s*(-?\d+);");
@@ -256,7 +264,9 @@ internal static class VkChallengeSolver
         return mapEntry != null ? int.Parse(mapEntry.Groups[2].Value) : null;
     }
 
-    private static string? ExtractQueryParam(Uri uri, string name)
+    private static string? ExtractQueryParam(
+        Uri uri,
+        string name)
     {
         var query = uri.Query.TrimStart('?');
         foreach (var segment in query.Split('&'))
@@ -271,7 +281,10 @@ internal static class VkChallengeSolver
         return null;
     }
 
-    private static string AddOrReplaceQueryParam(string query, string name, string value)
+    private static string AddOrReplaceQueryParam(
+        string query,
+        string name,
+        string value)
     {
         var parts = string.IsNullOrEmpty(query) ? [] : query.Split('&').ToList();
         var found = false;
@@ -308,7 +321,11 @@ internal static class VkChallengeSolver
         public string? Salt { get; private init; }
         public string? Key { get; private init; }
 
-        public static ChallengeResult Ok(Uri solveUri, string hash429, string salt, string key)
+        public static ChallengeResult Ok(
+            Uri solveUri,
+            string hash429,
+            string salt,
+            string key)
         {
             return new() { Success = true, SolveUri = solveUri, Hash429 = hash429, Salt = salt, Key = key };
         }
