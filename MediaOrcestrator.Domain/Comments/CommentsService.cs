@@ -88,23 +88,50 @@ public sealed class CommentsService(
         MediaSourceLink link,
         string? parentExternalCommentId,
         string text,
+        string? authorId = null,
         CancellationToken cancellationToken = default)
     {
         var mutator = RequireMutator(source);
 
-        var dto = await mutator.CreateCommentAsync(link.ExternalId,
-            parentExternalCommentId,
-            text,
-            source.Settings,
-            cancellationToken);
+        CommentDto dto;
+        if (!string.IsNullOrEmpty(authorId) && source.Type is ISupportsCommentAuthors authors)
+        {
+            dto = await authors.CreateCommentAsAsync(link.ExternalId,
+                parentExternalCommentId,
+                text,
+                authorId,
+                source.Settings,
+                cancellationToken);
+        }
+        else
+        {
+            dto = await mutator.CreateCommentAsync(link.ExternalId,
+                parentExternalCommentId,
+                text,
+                source.Settings,
+                cancellationToken);
+        }
 
         var record = MapToRecord(source.Id, link.ExternalId, dto);
         repository.Upsert(record);
 
-        logger.LogInformation("Создан комментарий {CommentId} в media={ExternalMediaId} source={SourceId}",
-            record.ExternalCommentId, link.ExternalId, source.Id);
+        logger.LogInformation("Создан комментарий {CommentId} в media={ExternalMediaId} source={SourceId} authorId={AuthorId}",
+            record.ExternalCommentId, link.ExternalId, source.Id, authorId ?? "(default)");
 
         return record;
+    }
+
+    public async Task<IReadOnlyList<CommentAuthorOption>> GetAvailableAuthorsAsync(
+        Source source,
+        MediaSourceLink link,
+        CancellationToken cancellationToken = default)
+    {
+        if (source.Type is not ISupportsCommentAuthors authors)
+        {
+            return [];
+        }
+
+        return await authors.GetAvailableAuthorsAsync(link.ExternalId, source.Settings, cancellationToken);
     }
 
     public async Task<CommentRecord> EditCommentAsync(

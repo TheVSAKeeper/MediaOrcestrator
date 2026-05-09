@@ -17,6 +17,8 @@ namespace MediaOrcestrator.VkVideo;
 [JsonSerializable(typeof(ShortVideoGetResponse))]
 [JsonSerializable(typeof(VideoForEditResponse))]
 [JsonSerializable(typeof(VkLikesAddResponse))]
+[JsonSerializable(typeof(VkReplyAsListResponse))]
+[JsonSerializable(typeof(List<VkUserItem>))]
 [JsonSerializable(typeof(GroupsGetByIdResponse))]
 [JsonSerializable(typeof(CatalogResponse))]
 [JsonSerializable(typeof(CatalogSectionResponse))]

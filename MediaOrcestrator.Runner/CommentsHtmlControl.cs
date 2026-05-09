@@ -13,7 +13,11 @@ public partial class CommentsHtmlControl : UserControl
     private const string AnySourceLabel = "(любой)";
     private const int SearchDebounceMs = 300;
 
+    private static readonly TimeSpan AuthorsCacheTtl = TimeSpan.FromMinutes(10);
+
     private readonly Timer _searchDebounce = new() { Interval = SearchDebounceMs };
+
+    private readonly Dictionary<string, (DateTime FetchedAt, IReadOnlyList<CommentAuthorView> Authors)> _authorsCache = new(StringComparer.Ordinal);
 
     private Orcestrator? _orcestrator;
     private CommentsService? _commentsService;
@@ -80,6 +84,8 @@ public partial class CommentsHtmlControl : UserControl
         _commentsService = commentsService;
         _actionHolder = actionHolder;
         _logger = logger;
+
+        uiBrowserView.AuthorsResolver = ResolveCommentAuthors;
 
         using (Splash.Current.StartSpan("Сортировки"))
         {
@@ -351,6 +357,8 @@ public partial class CommentsHtmlControl : UserControl
                 MediaSearch = mediaSearch,
             });
 
+            PrefetchAuthors(records);
+
             uiStatusLabel.Text = records.Count == 0
                 ? "Ничего не найдено"
                 : truncated
@@ -554,7 +562,7 @@ public partial class CommentsHtmlControl : UserControl
                 case CommentMutationKind.Create:
                     {
                         var record = await Task.Run(() =>
-                                _commentsService.CreateCommentAsync(source, link, request.ParentExternalCommentId, request.Text, cts.Token),
+                                _commentsService.CreateCommentAsync(source, link, request.ParentExternalCommentId, request.Text, request.AuthorId, cts.Token),
                             cts.Token);
 
                         var groupKey = CommentsBrowserView.BuildGroupKey(media, source.Id, link.ExternalId);
@@ -636,6 +644,134 @@ public partial class CommentsHtmlControl : UserControl
         {
             ApplyFilters();
         }
+    }
+
+    private IReadOnlyList<CommentAuthorView> ResolveCommentAuthors(string sourceId, string externalMediaId)
+    {
+        var key = sourceId + "|" + externalMediaId;
+        var now = DateTime.UtcNow;
+
+        if (_authorsCache.TryGetValue(key, out var cached) && now - cached.FetchedAt < AuthorsCacheTtl)
+        {
+            return cached.Authors;
+        }
+
+        if (_orcestrator == null || _commentsService == null)
+        {
+            return [];
+        }
+
+        var source = _orcestrator.GetSources().FirstOrDefault(s => s.Id == sourceId);
+        if (source?.Type is not ISupportsCommentAuthors)
+        {
+            _authorsCache[key] = (now, []);
+            return [];
+        }
+
+        var link = _orcestrator.GetMedias()
+            .SelectMany(m => m.Sources)
+            .FirstOrDefault(l => l.SourceId == sourceId && l.ExternalId == externalMediaId);
+
+        if (link == null)
+        {
+            return [];
+        }
+
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+            var authors = Task.Run(async () => await _commentsService.GetAvailableAuthorsAsync(source, link, cts.Token),
+                    cts.Token)
+                .GetAwaiter()
+                .GetResult();
+
+            var view = authors
+                .Select(a => new CommentAuthorView(a.Id, a.Name, a.AvatarUrl, a.IsDefault))
+                .ToList();
+
+            _authorsCache[key] = (now, view);
+            return view;
+        }
+        catch (OperationCanceledException)
+        {
+            _logger?.LogWarning("Превышено время ожидания списка авторов для {Source}/{Media}", sourceId, externalMediaId);
+            return [];
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "Не удалось получить список авторов для {Source}/{Media}", sourceId, externalMediaId);
+            return [];
+        }
+    }
+
+    private void PrefetchAuthors(IReadOnlyList<CommentRecord> records)
+    {
+        if (_orcestrator == null || _commentsService == null)
+        {
+            return;
+        }
+
+        var sourcesById = _orcestrator.GetSources().ToDictionary(s => s.Id);
+        var now = DateTime.UtcNow;
+
+        var pairs = records
+            .Select(r => (r.SourceId, r.ExternalMediaId))
+            .Distinct()
+            .Where(p =>
+            {
+                if (!sourcesById.TryGetValue(p.SourceId, out var src) || src.Type is not ISupportsCommentAuthors)
+                {
+                    return false;
+                }
+
+                var key = p.SourceId + "|" + p.ExternalMediaId;
+                return !_authorsCache.TryGetValue(key, out var cached)
+                       || now - cached.FetchedAt >= AuthorsCacheTtl;
+            })
+            .ToList();
+
+        if (pairs.Count == 0)
+        {
+            return;
+        }
+
+        _ = Task.Run(async () =>
+        {
+            foreach (var (sourceId, externalMediaId) in pairs)
+            {
+                try
+                {
+                    if (!sourcesById.TryGetValue(sourceId, out var source))
+                    {
+                        continue;
+                    }
+
+                    var link = _orcestrator.GetMedias()
+                        .SelectMany(m => m.Sources)
+                        .FirstOrDefault(l => l.SourceId == sourceId && l.ExternalId == externalMediaId);
+
+                    if (link == null)
+                    {
+                        continue;
+                    }
+
+                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+                    var authors = await _commentsService.GetAvailableAuthorsAsync(source, link, cts.Token);
+                    var view = authors
+                        .Select(a => new CommentAuthorView(a.Id, a.Name, a.AvatarUrl, a.IsDefault))
+                        .ToList();
+
+                    _authorsCache[sourceId + "|" + externalMediaId] = (DateTime.UtcNow, view);
+                }
+                catch (OperationCanceledException)
+                {
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogDebug(ex, "Prefetch авторов не удался для {Source}/{Media}", sourceId, externalMediaId);
+                }
+            }
+        });
     }
 
     private async Task FetchForExternalAsync(string sourceId, string externalId)

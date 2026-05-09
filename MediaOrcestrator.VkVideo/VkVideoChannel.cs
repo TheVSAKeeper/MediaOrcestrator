@@ -17,8 +17,11 @@ public sealed class VkVideoChannel(
         ISupportsComments,
         ISupportsCommentPermalinks,
         ISupportsCommentMutations,
+        ISupportsCommentAuthors,
         ISupportsCommentLikes
 {
+    private const string AuthorIdSelf = "user";
+    private const string AuthorIdGroupPrefix = "group:";
     private const string SubtypeMetadataKey = "_system_vk_subtype";
     private const string ClipSubtype = "clip";
     private const string VideoSubtype = "video";
@@ -187,10 +190,21 @@ public sealed class VkVideoChannel(
         }
     }
 
-    public async Task<CommentDto> CreateCommentAsync(
+    public Task<CommentDto> CreateCommentAsync(
         string externalMediaId,
         string? parentExternalCommentId,
         string text,
+        Dictionary<string, string> settings,
+        CancellationToken cancellationToken = default)
+    {
+        return CreateCommentAsAsync(externalMediaId, parentExternalCommentId, text, null, settings, cancellationToken);
+    }
+
+    public async Task<CommentDto> CreateCommentAsAsync(
+        string externalMediaId,
+        string? parentExternalCommentId,
+        string text,
+        string? authorId,
         Dictionary<string, string> settings,
         CancellationToken cancellationToken = default)
     {
@@ -205,10 +219,81 @@ public sealed class VkVideoChannel(
             parentId = parsed;
         }
 
-        var newCommentId = await service.CreateVideoCommentAsync(ownerId, videoId, parentId, text, cancellationToken);
+        var fromOwnerId = ParseAuthorId(authorId);
+
+        var newCommentId = await service.CreateVideoCommentAsync(ownerId,
+            videoId,
+            parentId,
+            text,
+            fromOwnerId,
+            cancellationToken);
+
         cancellationToken.ThrowIfCancellationRequested();
 
         return await FetchSingleCommentAsync(service, ownerId, newCommentId, parentId, cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<CommentAuthorOption>> GetAvailableAuthorsAsync(
+        string externalMediaId,
+        Dictionary<string, string> settings,
+        CancellationToken cancellationToken = default)
+    {
+        var (ownerId, videoId) = ParseExternalId(externalMediaId);
+        using var lease = await AcquireServiceLeaseAsync(settings, cancellationToken);
+        var service = lease.Service;
+
+        var selfTask = service.GetCurrentUserAsync(cancellationToken);
+        var replyAsTask = service.GetReplyAsListAsync(ownerId, videoId, cancellationToken);
+
+        VkUserItem? self = null;
+        try
+        {
+            self = await selfTask;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Не удалось получить профиль текущего пользователя VK");
+        }
+
+        var selfName = self != null
+            ? $"{self.FirstName} {self.LastName}".Trim()
+            : string.Empty;
+
+        if (string.IsNullOrWhiteSpace(selfName))
+        {
+            selfName = "Свой профиль";
+        }
+
+        var result = new List<CommentAuthorOption>
+        {
+            new(AuthorIdSelf, selfName, self?.Photo100 ?? self?.Photo50, true),
+        };
+
+        VkReplyAsListResponse? response = null;
+        try
+        {
+            response = await replyAsTask;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Не удалось получить список доступных авторов комментария для {ExternalId}", externalMediaId);
+        }
+
+        if (response?.Items != null)
+        {
+            foreach (var item in response.Items)
+            {
+                var negativeId = -Math.Abs(item.Id);
+                var name = string.IsNullOrWhiteSpace(item.Name) ? item.ScreenName ?? $"club{item.Id}" : item.Name!;
+                var avatar = item.Photo100 ?? item.Photo50;
+                result.Add(new(AuthorIdGroupPrefix + negativeId.ToString(CultureInfo.InvariantCulture),
+                    name,
+                    avatar,
+                    false));
+            }
+        }
+
+        return result;
     }
 
     public async Task<CommentDto?> EditCommentAsync(
@@ -575,6 +660,22 @@ public sealed class VkVideoChannel(
         CancellationToken cancellationToken = default)
     {
         throw new NotImplementedException();
+    }
+
+    private static long? ParseAuthorId(string? authorId)
+    {
+        if (string.IsNullOrEmpty(authorId) || string.Equals(authorId, AuthorIdSelf, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        if (authorId.StartsWith(AuthorIdGroupPrefix, StringComparison.OrdinalIgnoreCase)
+            && long.TryParse(authorId.AsSpan(AuthorIdGroupPrefix.Length), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed))
+        {
+            return parsed < 0 ? parsed : -parsed;
+        }
+
+        return null;
     }
 
     private static async Task<CommentDto> FetchSingleCommentAsync(

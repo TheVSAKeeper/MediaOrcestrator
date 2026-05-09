@@ -489,16 +489,23 @@ public sealed class VkVideoService : IDisposable
         long videoId,
         long? replyToComment,
         string message,
+        long? fromOwnerId = null,
         CancellationToken cancellationToken = default)
     {
+        var normalizedFromOwnerId = fromOwnerId is { } id && id != 0
+            ? -Math.Abs(id)
+            : (long?)null;
+
+        var fromGroup = normalizedFromOwnerId.HasValue;
+
         var parameters = new Dictionary<string, string>
         {
             ["video_id"] = videoId.ToString(CultureInfo.InvariantCulture),
             ["owner_id"] = ownerId.ToString(CultureInfo.InvariantCulture),
-            ["from_group"] = "0",
+            ["from_group"] = fromGroup ? "1" : "0",
             ["reply_to_comment"] = replyToComment?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
             ["access_key"] = string.Empty,
-            ["from_owner_id"] = string.Empty,
+            ["from_owner_id"] = fromGroup ? normalizedFromOwnerId!.Value.ToString(CultureInfo.InvariantCulture) : string.Empty,
             ["message"] = message,
             ["attachments"] = string.Empty,
         };
@@ -508,6 +515,38 @@ public sealed class VkVideoService : IDisposable
             parameters,
             VkVideoJsonContext.Default.Int64,
             cancellationToken);
+    }
+
+    public Task<VkReplyAsListResponse> GetReplyAsListAsync(
+        long ownerId,
+        long videoId,
+        CancellationToken cancellationToken = default)
+    {
+        var parameters = new Dictionary<string, string>
+        {
+            ["video"] = string.Create(CultureInfo.InvariantCulture, $"{ownerId}_{videoId}"),
+            ["force"] = "0",
+        };
+
+        return CallApiAsync("videoChannels.getReplyAsList",
+            Operations.GetReplyAsList,
+            parameters,
+            VkVideoJsonContext.Default.VkReplyAsListResponse,
+            cancellationToken);
+    }
+
+    public async Task<VkUserItem?> GetCurrentUserAsync(CancellationToken cancellationToken = default)
+    {
+        var response = await CallApiAsync("users.get",
+            Operations.GetCurrentUser,
+            new()
+            {
+                ["fields"] = "photo_50,photo_100",
+            },
+            VkVideoJsonContext.Default.ListVkUserItem,
+            cancellationToken);
+
+        return response.FirstOrDefault();
     }
 
     public Task EditVideoCommentAsync(
@@ -1484,6 +1523,8 @@ public sealed class VkVideoService : IDisposable
         public const string RestoreComment = "vkvideo.comment.restore";
         public const string LikeComment = "vkvideo.comment.like";
         public const string UnlikeComment = "vkvideo.comment.unlike";
+        public const string GetReplyAsList = "vkvideo.comment.reply-as-list";
+        public const string GetCurrentUser = "vkvideo.user.get-current";
     }
 
     private sealed record CatalogSectionsResult(

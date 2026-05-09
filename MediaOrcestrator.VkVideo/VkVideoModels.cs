@@ -564,3 +564,48 @@ public sealed class VkCommentGroup
     [JsonPropertyName("photo_100")]
     public string? Photo100 { get; set; }
 }
+
+public sealed class VkReplyAsListResponse
+{
+    [JsonPropertyName("count")]
+    public int Count { get; set; }
+
+    [JsonPropertyName("items")]
+    public List<VkReplyAsItem> Items { get; set; } = [];
+}
+
+public sealed class VkUserItem
+{
+    [JsonPropertyName("id")]
+    public long Id { get; set; }
+
+    [JsonPropertyName("first_name")]
+    public string? FirstName { get; set; }
+
+    [JsonPropertyName("last_name")]
+    public string? LastName { get; set; }
+
+    [JsonPropertyName("photo_100")]
+    public string? Photo100 { get; set; }
+
+    [JsonPropertyName("photo_50")]
+    public string? Photo50 { get; set; }
+}
+
+public sealed class VkReplyAsItem
+{
+    [JsonPropertyName("id")]
+    public long Id { get; set; }
+
+    [JsonPropertyName("name")]
+    public string? Name { get; set; }
+
+    [JsonPropertyName("screen_name")]
+    public string? ScreenName { get; set; }
+
+    [JsonPropertyName("photo_100")]
+    public string? Photo100 { get; set; }
+
+    [JsonPropertyName("photo_50")]
+    public string? Photo50 { get; set; }
+}
