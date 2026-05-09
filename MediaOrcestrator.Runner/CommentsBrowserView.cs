@@ -71,12 +71,16 @@ public sealed partial class CommentsBrowserView : UserControl
 
     private static readonly string HtmlTemplate = LoadTemplate();
 
+    private static readonly string EmptyDataJson = """{"search":"","groups":[]}""";
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         WriteIndented = false,
     };
+
+    private bool _prewarmed;
 
     public CommentsBrowserView()
     {
@@ -102,52 +106,7 @@ public sealed partial class CommentsBrowserView : UserControl
         return media?.Id ?? $"__orphan__|{sourceId}|{externalMediaId}";
     }
 
-    public bool TryApplyLikeUpdate(string commentRecordId, bool likedByMe, int likeCount)
-    {
-        return InvokeApply("__applyLike", commentRecordId, likedByMe, likeCount);
-    }
-
-    public bool TryApplyEdit(string commentRecordId, string newText)
-    {
-        return InvokeApply("__applyEdit", commentRecordId, newText);
-    }
-
-    public bool TryApplyDeleted(string commentRecordId, bool isDeleted)
-    {
-        return InvokeApply("__applyDeleted", commentRecordId, isDeleted);
-    }
-
-    public bool TryApplyCreate(
-        Orcestrator orcestrator,
-        CommentRecord newRecord,
-        string groupKey,
-        string? parentCompositeId)
-    {
-        var doc = uiWebBrowser.Document;
-        if (doc == null)
-        {
-            return false;
-        }
-
-        try
-        {
-            var sourcesById = orcestrator.GetSources().ToDictionary(x => x.Id);
-            var sourceTitles = sourcesById.ToDictionary(x => x.Key, x => x.Value.TitleFull);
-            var dto = MapRecordToDto(newRecord, sourcesById, sourceTitles);
-            var json = JsonSerializer.Serialize(dto, JsonOptions);
-
-            var result = doc.InvokeScript("__applyCreate",
-                [json, groupKey, parentCompositeId ?? string.Empty]);
-
-            return result is true;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    public void Render(
+    public static string BuildRenderJson(
         Orcestrator orcestrator,
         IReadOnlyList<CommentRecord> records,
         CommentsRenderOptions? options = null)
@@ -267,7 +226,82 @@ public sealed partial class CommentsBrowserView : UserControl
 
         var groups = sortedGroups.Select(g => g.Group).ToList();
 
-        var json = JsonSerializer.Serialize(new RenderData(options.Search, groups), JsonOptions);
+        return JsonSerializer.Serialize(new RenderData(options.Search, groups), JsonOptions);
+    }
+
+    public void Prewarm()
+    {
+        if (_prewarmed)
+        {
+            return;
+        }
+
+        _prewarmed = true;
+        uiWebBrowser.DocumentText = HtmlTemplate.Replace("{{data}}", EscapeForInlineScript(EmptyDataJson));
+    }
+
+    public bool TryApplyLikeUpdate(string commentRecordId, bool likedByMe, int likeCount)
+    {
+        return InvokeApply("__applyLike", commentRecordId, likedByMe, likeCount);
+    }
+
+    public bool TryApplyEdit(string commentRecordId, string newText)
+    {
+        return InvokeApply("__applyEdit", commentRecordId, newText);
+    }
+
+    public bool TryApplyDeleted(string commentRecordId, bool isDeleted)
+    {
+        return InvokeApply("__applyDeleted", commentRecordId, isDeleted);
+    }
+
+    public bool TryApplyCreate(
+        Orcestrator orcestrator,
+        CommentRecord newRecord,
+        string groupKey,
+        string? parentCompositeId)
+    {
+        var doc = uiWebBrowser.Document;
+        if (doc == null)
+        {
+            return false;
+        }
+
+        try
+        {
+            var sourcesById = orcestrator.GetSources().ToDictionary(x => x.Id);
+            var sourceTitles = sourcesById.ToDictionary(x => x.Key, x => x.Value.TitleFull);
+            var dto = MapRecordToDto(newRecord, sourcesById, sourceTitles);
+            var json = JsonSerializer.Serialize(dto, JsonOptions);
+
+            var result = doc.InvokeScript("__applyCreate",
+                [json, groupKey, parentCompositeId ?? string.Empty]);
+
+            return result is true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public void Render(
+        Orcestrator orcestrator,
+        IReadOnlyList<CommentRecord> records,
+        CommentsRenderOptions? options = null)
+    {
+        var json = BuildRenderJson(orcestrator, records, options);
+        ApplyJson(json);
+    }
+
+    public void ApplyJson(string json)
+    {
+        if (InvokeApply("__applyAll", json))
+        {
+            return;
+        }
+
+        _prewarmed = true;
         uiWebBrowser.DocumentText = HtmlTemplate.Replace("{{data}}", EscapeForInlineScript(json));
     }
 

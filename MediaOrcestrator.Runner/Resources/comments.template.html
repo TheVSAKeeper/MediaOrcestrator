@@ -1469,6 +1469,18 @@
                 }
             };
 
+            window.__applyAll = function (json) {
+                try {
+                    var parsed = json ? JSON.parse(json) : null;
+                    data.search = parsed && parsed.search ? parsed.search : "";
+                    data.groups = parsed && parsed.groups ? parsed.groups : [];
+                    render();
+                    return true;
+                } catch (e) {
+                    return false;
+                }
+            };
+
             window.__applyLike = function (id, liked, count) {
                 try {
                     var nodes = document.getElementsByClassName("comment");
