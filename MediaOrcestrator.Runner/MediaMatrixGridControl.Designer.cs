@@ -6,19 +6,14 @@ namespace MediaOrcestrator.Runner
     partial class MediaMatrixGridControl : UserControl
     {
         private System.ComponentModel.IContainer components = null;
-        private ContextMenuStrip _contextMenu;
 
         protected override void Dispose(bool disposing)
         {
             if (disposing)
             {
                 components?.Dispose();
-
-                if (_contextMenu != null)
-                {
-                    _contextMenu.Dispose();
-                    _contextMenu = null;
-                }
+                _menuController?.Dispose();
+                _menuController = null;
             }
             base.Dispose(disposing);
         }

@@ -1,23 +1,18 @@
 ﻿using MediaOrcestrator.Domain;
-using MediaOrcestrator.Domain.Comments;
 using MediaOrcestrator.Domain.Merging;
+using MediaOrcestrator.Runner.MediaContextMenu;
 using Microsoft.Extensions.Logging;
 
 namespace MediaOrcestrator.Runner;
 
-public partial class MediaMatrixGridControl : UserControl
+public partial class MediaMatrixGridControl : UserControl, IMediaActionUi
 {
     private Orcestrator? _orcestrator;
-    private SyncRetryRunner? _retryRunner;
     private ILogger<MediaMatrixGridControl>? _logger;
-    private BatchRenameService? _batchRenameService;
-    private BatchPreviewService? _batchPreviewService;
-    private CoverGenerator? _coverGenerator;
-    private CoverTemplateStore? _coverTemplateStore;
-    private MediaMergeService? _mergeService;
-    private ActionHolder _actionHolder;
-    private CommentsService? _commentsService;
     private ILoggerFactory? _loggerFactory;
+    private MediaMergeService? _mergeService;
+    private MediaActionContext? _menuContext;
+    private MediaContextMenuController? _menuController;
     private CancellationTokenSource? _convertCts;
 
     public MediaMatrixGridControl()
@@ -27,19 +22,29 @@ public partial class MediaMatrixGridControl : UserControl
         uiCancelConvertItem.Click += (_, _) => _convertCts?.Cancel();
     }
 
+    IWin32Window? IMediaActionUi.Owner => FindForm() ?? (IWin32Window)this;
+
     public void Initialize(MediaMatrixContext context)
     {
         _orcestrator = context.Orcestrator;
-        _retryRunner = context.RetryRunner;
         _logger = context.Logger;
-        _batchRenameService = context.BatchRenameService;
-        _batchPreviewService = context.BatchPreviewService;
-        _coverGenerator = context.CoverGenerator;
-        _coverTemplateStore = context.CoverTemplateStore;
-        _mergeService = context.MergeService;
-        _actionHolder = context.ActionHolder;
-        _commentsService = context.CommentsService;
         _loggerFactory = context.LoggerFactory;
+        _mergeService = context.MergeService;
+
+        _menuContext = new(context.Orcestrator,
+            context.RetryRunner,
+            context.BatchRenameService,
+            context.BatchPreviewService,
+            context.CoverGenerator,
+            context.CoverTemplateStore,
+            context.MergeService,
+            context.ActionHolder,
+            context.CommentsService,
+            context.LoggerFactory,
+            context.Logger,
+            this);
+
+        _menuController = new(_menuContext);
 
         using (Splash.Current.StartSpan("Фильтр"))
         {
@@ -64,7 +69,7 @@ public partial class MediaMatrixGridControl : UserControl
         }
 
         _logger?.LogInformation("Начато обновление списка медиа...");
-        UpdateLoadingIndicator(true);
+        ((IMediaActionUi)this).SetLoading(true);
 
         try
         {
@@ -98,13 +103,13 @@ public partial class MediaMatrixGridControl : UserControl
         }
         finally
         {
-            UpdateLoadingIndicator(false);
+            ((IMediaActionUi)this).SetLoading(false);
         }
     }
 
     private void uiMediaGrid_MouseClick(object sender, MouseEventArgs e)
     {
-        if (e.Button != MouseButtons.Right)
+        if (e.Button != MouseButtons.Right || _menuController == null || _orcestrator == null)
         {
             return;
         }
@@ -123,33 +128,20 @@ public partial class MediaMatrixGridControl : UserControl
         }
 
         var selectedMedia = uiMediaGrid.GetSelectedMedia();
-        var screenLocation = uiMediaGrid.PointToScreen(e.Location);
-
-        if (selectedMedia.Count > 1)
+        if (selectedMedia.Count == 0)
         {
-            ShowBatchContextMenu(selectedMedia, screenLocation);
             return;
         }
 
-        if (uiMediaGrid.GetMediaAtRow(ht.RowIndex) is { } media)
-        {
-            Source? specificSource = null;
-            var sources = uiMediaGrid.CurrentSources;
-            if (sources != null)
-            {
-                var sourceStartIdx = uiMediaGrid.Columns.Count - sources.Count;
-                if (ht.ColumnIndex >= sourceStartIdx)
-                {
-                    var sourceColumnIndex = ht.ColumnIndex - sourceStartIdx;
-                    if (sourceColumnIndex < sources.Count)
-                    {
-                        specificSource = sources[sourceColumnIndex];
-                    }
-                }
-            }
+        var screenLocation = uiMediaGrid.PointToScreen(e.Location);
+        var specificSource = ResolveSpecificSource(ht.ColumnIndex, selectedMedia.Count);
 
-            ShowContextMenu(media, screenLocation, specificSource);
-        }
+        var selection = new MediaSelection(selectedMedia, specificSource)
+        {
+            InSelectionOrder = uiMediaGrid.GetSelectedMediaBySelectionOrder(),
+        };
+
+        _menuController.Show(selection, screenLocation);
     }
 
     private void uiRefreshButton_Click(object sender, EventArgs e)
@@ -171,7 +163,10 @@ public partial class MediaMatrixGridControl : UserControl
             return;
         }
 
-        MergeSelectedMedia(selectedMediaList);
+        if (_menuContext != null)
+        {
+            MergeRunner.Run(selectedMediaList, _menuContext);
+        }
     }
 
     private void uiMergeAssistantButton_Click(object sender, EventArgs e)
@@ -275,69 +270,52 @@ public partial class MediaMatrixGridControl : UserControl
         return result;
     }
 
-    private void MergeSelectedMedia(List<Media> selectedMediaList)
+    void IMediaActionUi.SetLoading(bool isLoading)
     {
-        if (_mergeService == null || _orcestrator == null)
+        UpdateLoadingIndicator(isLoading);
+    }
+
+    void IMediaActionUi.NotifyDataChanged()
+    {
+        RefreshData();
+    }
+
+    void IMediaActionUi.ShowConvertProgress(double percent, string text)
+    {
+        ShowConvertProgress(percent, text);
+    }
+
+    void IMediaActionUi.HideConvertProgress()
+    {
+        HideConvertProgress();
+    }
+
+    void IMediaActionUi.RegisterConvertCancellation(CancellationTokenSource? cts)
+    {
+        _convertCts = cts;
+    }
+
+    private Source? ResolveSpecificSource(int columnIndex, int selectedCount)
+    {
+        if (selectedCount > 1)
         {
-            return;
+            return null;
         }
 
-        _logger?.LogInformation("Запуск операции объединения медиа. Выбрано элементов: {Count}", selectedMediaList.Count);
-
-        try
+        var sources = uiMediaGrid.CurrentSources;
+        if (sources == null)
         {
-            var mergePreview = _mergeService.BuildPreview(selectedMediaList);
-            var allSources = _orcestrator.GetSources();
-
-            var mediaList = string.Join("\n", mergePreview.SourceMedias.Select(FormatMedia));
-            var conflictsNote = mergePreview.HasConflicts
-                ? "\n⚠ Дублирующиеся источники будут пропущены."
-                : string.Empty;
-
-            var confirmationMessage = $"""
-                                       Целевое (сохранится):
-                                       {FormatMedia(mergePreview.TargetMedia)}
-
-                                       Будут присоединены и удалены:
-                                       {mediaList}
-                                       {conflictsNote}
-                                       """;
-
-            var result = MessageBox.Show(confirmationMessage,
-                $"Объединение {selectedMediaList.Count} медиа",
-                MessageBoxButtons.YesNo,
-                mergePreview.HasConflicts ? MessageBoxIcon.Warning : MessageBoxIcon.Question);
-
-            if (result != DialogResult.Yes)
-            {
-                _logger?.LogInformation("Объединение медиа отменено пользователем.");
-                return;
-            }
-
-            _mergeService.Apply(mergePreview, true);
-            RefreshData();
-
-            string FormatMedia(Media m)
-            {
-                var sourceNames = m.Sources
-                    .Select(s => allSources.FirstOrDefault(x => x.Id == s.SourceId)?.Title ?? s.SourceId)
-                    .ToList();
-
-                return $"- {m.Title} [{string.Join(", ", sourceNames)}]";
-            }
+            return null;
         }
-        catch (Exception ex)
+
+        var sourceStartIdx = uiMediaGrid.Columns.Count - sources.Count;
+        if (columnIndex < sourceStartIdx)
         {
-            _logger?.LogError(ex, "Ошибка при объединении медиа.");
-            MessageBox.Show($"""
-                             Произошла ошибка при объединении медиа:
-
-                             {ex.Message}
-                             """,
-                "Ошибка",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
+            return null;
         }
+
+        var sourceColumnIndex = columnIndex - sourceStartIdx;
+        return sourceColumnIndex < sources.Count ? sources[sourceColumnIndex] : null;
     }
 
     private void UpdateLoadingIndicator(bool isLoading)
@@ -367,5 +345,33 @@ public partial class MediaMatrixGridControl : UserControl
             uiTotalCountLabel.Text = $"Всего: {total}";
             uiFilteredCountLabel.Text = $"Отфильтровано: {filtered}";
         }
+    }
+
+    private void ShowConvertProgress(double percent, string text)
+    {
+        if (uiStatusStrip.InvokeRequired)
+        {
+            uiStatusStrip.Invoke(() => ShowConvertProgress(percent, text));
+            return;
+        }
+
+        uiConvertProgressBar.Value = (int)Math.Min(percent, 100);
+        uiConvertStatusLabel.Text = text;
+        uiConvertProgressBar.Visible = true;
+        uiConvertStatusLabel.Visible = true;
+    }
+
+    private void HideConvertProgress()
+    {
+        if (uiStatusStrip.InvokeRequired)
+        {
+            uiStatusStrip.Invoke(HideConvertProgress);
+            return;
+        }
+
+        uiConvertProgressBar.Visible = false;
+        uiConvertStatusLabel.Visible = false;
+        uiConvertProgressBar.Value = 0;
+        uiConvertStatusLabel.Text = "";
     }
 }
