@@ -381,7 +381,7 @@ public partial class CommentsHtmlControl : UserControl
             }
 
             uiBrowserView.ApplyJson(json);
-            PrefetchAuthors(records);
+            WarmAuthors(records);
 
             uiStatusLabel.Text = records.Count == 0
                 ? "Ничего не найдено"
@@ -678,10 +678,9 @@ public partial class CommentsHtmlControl : UserControl
 
     private IReadOnlyList<CommentAuthorView> ResolveCommentAuthors(string sourceId, string externalMediaId)
     {
-        var key = sourceId + "|" + externalMediaId;
         var now = DateTime.UtcNow;
 
-        if (_authorsCache.TryGetValue(key, out var cached) && now - cached.FetchedAt < AuthorsCacheTtl)
+        if (_authorsCache.TryGetValue(sourceId, out var cached) && now - cached.FetchedAt < AuthorsCacheTtl)
         {
             return cached.Authors;
         }
@@ -694,7 +693,7 @@ public partial class CommentsHtmlControl : UserControl
         var source = _orcestrator.GetSources().FirstOrDefault(s => s.Id == sourceId);
         if (source?.Type is not ISupportsCommentAuthors)
         {
-            _authorsCache[key] = (now, []);
+            _authorsCache[sourceId] = (now, []);
             return [];
         }
 
@@ -719,22 +718,22 @@ public partial class CommentsHtmlControl : UserControl
                 .Select(a => new CommentAuthorView(a.Id, a.Name, a.AvatarUrl, a.IsDefault))
                 .ToList();
 
-            _authorsCache[key] = (now, view);
+            _authorsCache[sourceId] = (now, view);
             return view;
         }
         catch (OperationCanceledException)
         {
-            _logger?.LogWarning("Превышено время ожидания списка авторов для {Source}/{Media}", sourceId, externalMediaId);
+            _logger?.LogWarning("Превышено время ожидания списка авторов для {Source}", sourceId);
             return [];
         }
         catch (Exception ex)
         {
-            _logger?.LogWarning(ex, "Не удалось получить список авторов для {Source}/{Media}", sourceId, externalMediaId);
+            _logger?.LogWarning(ex, "Не удалось получить список авторов для {Source}", sourceId);
             return [];
         }
     }
 
-    private void PrefetchAuthors(IReadOnlyList<CommentRecord> records)
+    private void WarmAuthors(IReadOnlyList<CommentRecord> records)
     {
         if (_orcestrator == null || _commentsService == null)
         {
@@ -749,34 +748,33 @@ public partial class CommentsHtmlControl : UserControl
             var sourcesById = orcestrator.GetSources().ToDictionary(s => s.Id);
             var now = DateTime.UtcNow;
 
-            var pairs = records
-                .Select(r => (r.SourceId, r.ExternalMediaId))
-                .Distinct()
-                .Where(p =>
+            var sourceIds = records
+                .Select(r => r.SourceId)
+                .Distinct(StringComparer.Ordinal)
+                .Where(sid =>
                 {
-                    if (!sourcesById.TryGetValue(p.SourceId, out var src) || src.Type is not ISupportsCommentAuthors)
+                    if (!sourcesById.TryGetValue(sid, out var src) || src.Type is not ISupportsCommentAuthors)
                     {
                         return false;
                     }
 
-                    var key = p.SourceId + "|" + p.ExternalMediaId;
-                    return !_authorsCache.TryGetValue(key, out var cached)
+                    return !_authorsCache.TryGetValue(sid, out var cached)
                            || now - cached.FetchedAt >= AuthorsCacheTtl;
                 })
                 .ToList();
 
-            if (pairs.Count == 0)
+            if (sourceIds.Count == 0)
             {
                 return;
             }
 
-            var linksByKey = orcestrator.GetMedias()
+            var sampleLinkBySource = orcestrator.GetMedias()
                 .SelectMany(m => m.Sources)
                 .Where(l => !string.IsNullOrEmpty(l.SourceId) && !string.IsNullOrEmpty(l.ExternalId))
-                .GroupBy(l => (l.SourceId, l.ExternalId))
-                .ToDictionary(g => g.Key, g => g.First());
+                .GroupBy(l => l.SourceId, StringComparer.Ordinal)
+                .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
 
-            foreach (var (sourceId, externalMediaId) in pairs)
+            foreach (var sourceId in sourceIds)
             {
                 try
                 {
@@ -785,7 +783,7 @@ public partial class CommentsHtmlControl : UserControl
                         continue;
                     }
 
-                    if (!linksByKey.TryGetValue((sourceId, externalMediaId), out var link))
+                    if (!sampleLinkBySource.TryGetValue(sourceId, out var link))
                     {
                         continue;
                     }
@@ -796,14 +794,14 @@ public partial class CommentsHtmlControl : UserControl
                         .Select(a => new CommentAuthorView(a.Id, a.Name, a.AvatarUrl, a.IsDefault))
                         .ToList();
 
-                    _authorsCache[sourceId + "|" + externalMediaId] = (DateTime.UtcNow, view);
+                    _authorsCache[sourceId] = (DateTime.UtcNow, view);
                 }
                 catch (OperationCanceledException)
                 {
                 }
                 catch (Exception ex)
                 {
-                    _logger?.LogDebug(ex, "Prefetch авторов не удался для {Source}/{Media}", sourceId, externalMediaId);
+                    _logger?.LogDebug(ex, "Прогрев авторов не удался для {Source}", sourceId);
                 }
             }
         });

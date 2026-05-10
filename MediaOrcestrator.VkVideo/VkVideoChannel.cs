@@ -240,60 +240,8 @@ public sealed class VkVideoChannel(
     {
         var (ownerId, videoId) = ParseExternalId(externalMediaId);
         using var lease = await AcquireServiceLeaseAsync(settings, cancellationToken);
-        var service = lease.Service;
-
-        var selfTask = service.GetCurrentUserAsync(cancellationToken);
-        var replyAsTask = service.GetReplyAsListAsync(ownerId, videoId, cancellationToken);
-
-        VkUserItem? self = null;
-        try
-        {
-            self = await selfTask;
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Не удалось получить профиль текущего пользователя VK");
-        }
-
-        var selfName = self != null
-            ? $"{self.FirstName} {self.LastName}".Trim()
-            : string.Empty;
-
-        if (string.IsNullOrWhiteSpace(selfName))
-        {
-            selfName = "Свой профиль";
-        }
-
-        var result = new List<CommentAuthorOption>
-        {
-            new(AuthorIdSelf, selfName, self?.Photo100 ?? self?.Photo50, true),
-        };
-
-        VkReplyAsListResponse? response = null;
-        try
-        {
-            response = await replyAsTask;
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Не удалось получить список доступных авторов комментария для {ExternalId}", externalMediaId);
-        }
-
-        if (response?.Items != null)
-        {
-            foreach (var item in response.Items)
-            {
-                var negativeId = -Math.Abs(item.Id);
-                var name = string.IsNullOrWhiteSpace(item.Name) ? item.ScreenName ?? $"club{item.Id}" : item.Name!;
-                var avatar = item.Photo100 ?? item.Photo50;
-                result.Add(new(AuthorIdGroupPrefix + negativeId.ToString(CultureInfo.InvariantCulture),
-                    name,
-                    avatar,
-                    false));
-            }
-        }
-
-        return result;
+        return await lease.Entry.GetOrFetchAuthorsAsync(ct => FetchAuthorsAsync(lease.Service, ownerId, videoId, ct),
+            cancellationToken);
     }
 
     public async Task<CommentDto?> EditCommentAsync(
@@ -1015,6 +963,66 @@ public sealed class VkVideoChannel(
         return Path.Combine(settings["_system_state_path"], "auth_state");
     }
 
+    private async Task<IReadOnlyList<CommentAuthorOption>> FetchAuthorsAsync(
+        VkVideoService service,
+        long ownerId,
+        long videoId,
+        CancellationToken cancellationToken)
+    {
+        var selfTask = service.GetCurrentUserAsync(cancellationToken);
+        var replyAsTask = service.GetReplyAsListAsync(ownerId, videoId, cancellationToken);
+
+        VkUserItem? self = null;
+        try
+        {
+            self = await selfTask;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Не удалось получить профиль текущего пользователя VK");
+        }
+
+        var selfName = self != null
+            ? $"{self.FirstName} {self.LastName}".Trim()
+            : string.Empty;
+
+        if (string.IsNullOrWhiteSpace(selfName))
+        {
+            selfName = "Свой профиль";
+        }
+
+        var result = new List<CommentAuthorOption>
+        {
+            new(AuthorIdSelf, selfName, self?.Photo100 ?? self?.Photo50, true),
+        };
+
+        VkReplyAsListResponse? response = null;
+        try
+        {
+            response = await replyAsTask;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Не удалось получить список доступных авторов комментария");
+        }
+
+        if (response?.Items != null)
+        {
+            foreach (var item in response.Items)
+            {
+                var negativeId = -Math.Abs(item.Id);
+                var name = string.IsNullOrWhiteSpace(item.Name) ? item.ScreenName ?? $"club{item.Id}" : item.Name!;
+                var avatar = item.Photo100 ?? item.Photo50;
+                result.Add(new(AuthorIdGroupPrefix + negativeId.ToString(CultureInfo.InvariantCulture),
+                    name,
+                    avatar,
+                    false));
+            }
+        }
+
+        return result;
+    }
+
     private string PreparePreviewForUpload(
         string previewPath,
         bool isShorts)
@@ -1163,6 +1171,8 @@ public sealed class VkVideoChannel(
     {
         public VkVideoService Service => entry.Service;
 
+        public CachedEntry Entry => entry;
+
         public void Dispose()
         {
             entry.Release();
@@ -1175,13 +1185,46 @@ public sealed class VkVideoChannel(
 
     private sealed class CachedEntry(VkVideoService service, DateTime lastWriteUtc)
     {
+        private static readonly TimeSpan AuthorsTtl = TimeSpan.FromMinutes(10);
+
         private readonly object _gate = new();
+        private readonly SemaphoreSlim _authorsLock = new(1, 1);
         private int _refCount;
         private bool _evicted;
+        private (DateTime FetchedAt, IReadOnlyList<CommentAuthorOption> Authors)? _authorsSnapshot;
 
         public VkVideoService Service { get; } = service;
 
         public DateTime LastWriteUtc { get; } = lastWriteUtc;
+
+        public async Task<IReadOnlyList<CommentAuthorOption>> GetOrFetchAuthorsAsync(
+            Func<CancellationToken, Task<IReadOnlyList<CommentAuthorOption>>> fetcher,
+            CancellationToken cancellationToken)
+        {
+            var snapshot = _authorsSnapshot;
+            if (snapshot.HasValue && DateTime.UtcNow - snapshot.Value.FetchedAt < AuthorsTtl)
+            {
+                return snapshot.Value.Authors;
+            }
+
+            await _authorsLock.WaitAsync(cancellationToken);
+            try
+            {
+                snapshot = _authorsSnapshot;
+                if (snapshot.HasValue && DateTime.UtcNow - snapshot.Value.FetchedAt < AuthorsTtl)
+                {
+                    return snapshot.Value.Authors;
+                }
+
+                var fresh = await fetcher(cancellationToken);
+                _authorsSnapshot = (DateTime.UtcNow, fresh);
+                return fresh;
+            }
+            finally
+            {
+                _authorsLock.Release();
+            }
+        }
 
         public bool TryAcquire()
         {

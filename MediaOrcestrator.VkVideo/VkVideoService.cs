@@ -30,6 +30,7 @@ public sealed class VkVideoService : IDisposable
     private readonly string _cookieString;
     private readonly TokenBucketRateLimiter _rateLimiter;
 
+    private readonly SemaphoreSlim _tokenLock = new(1, 1);
     private string? _accessToken;
     private DateTimeOffset _tokenExpires = DateTimeOffset.MinValue;
 
@@ -1134,38 +1135,51 @@ public sealed class VkVideoService : IDisposable
             return _accessToken;
         }
 
-        for (var attempt = 0; attempt < 2; attempt++)
+        await _tokenLock.WaitAsync(cancellationToken);
+        try
         {
-            _logger.RequestingAccessToken();
-
-            using var request = CreateApiRequest(HttpMethod.Post, "https://cabinet.vkvideo.ru/al_video.php?act=web_token");
-            request.Content = new FormUrlEncodedContent(new Dictionary<string, string>
+            if (_accessToken != null && DateTimeOffset.UtcNow < _tokenExpires.AddMinutes(-1))
             {
-                ["version"] = "1",
-                ["app_id"] = ClientId,
-            });
-
-            using var response = await SendApiAsync(Operations.GetAccessToken, request, cancellationToken);
-            var bodyBytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
-            var body = Encoding.UTF8.GetString(bodyBytes);
-
-            if (!IsHtmlResponse(body))
-            {
-                return ParseWebTokenResponse(bodyBytes, body, response.StatusCode);
+                return _accessToken;
             }
 
-            _logger.WebTokenHtmlResponse(attempt + 1, response.StatusCode);
-
-            if (attempt == 0 && await TrySolveChallengeAsync(response, body, cancellationToken))
+            for (var attempt = 0; attempt < 2; attempt++)
             {
-                _logger.RetryingWebTokenAfterChallenge();
-                continue;
+                _logger.RequestingAccessToken();
+
+                using var request = CreateApiRequest(HttpMethod.Post, "https://cabinet.vkvideo.ru/al_video.php?act=web_token");
+                request.Content = new FormUrlEncodedContent(new Dictionary<string, string>
+                {
+                    ["version"] = "1",
+                    ["app_id"] = ClientId,
+                });
+
+                using var response = await SendApiAsync(Operations.GetAccessToken, request, cancellationToken);
+                var bodyBytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+                var body = Encoding.UTF8.GetString(bodyBytes);
+
+                if (!IsHtmlResponse(body))
+                {
+                    return ParseWebTokenResponse(bodyBytes, body, response.StatusCode);
+                }
+
+                _logger.WebTokenHtmlResponse(attempt + 1, response.StatusCode);
+
+                if (attempt == 0 && await TrySolveChallengeAsync(response, body, cancellationToken))
+                {
+                    _logger.RetryingWebTokenAfterChallenge();
+                    continue;
+                }
+
+                ThrowHtmlResponseError(body, "web_token");
             }
 
-            ThrowHtmlResponseError(body, "web_token");
+            throw new InvalidOperationException("Не удалось получить access_token после решения challenge.");
         }
-
-        throw new InvalidOperationException("Не удалось получить access_token после решения challenge.");
+        finally
+        {
+            _tokenLock.Release();
+        }
     }
 
     private Task<T> CallApiAsync<T>(
