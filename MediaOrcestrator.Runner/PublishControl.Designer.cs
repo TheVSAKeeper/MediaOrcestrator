@@ -51,6 +51,7 @@
             uiPublishButton = new Button();
             uiPublishProgressBar = new ProgressBar();
             uiStatusLabel = new Label();
+            uiRunChainCheckBox = new CheckBox();
             uiToolTip = new ToolTip(components);
             uiVideoDropPanel.SuspendLayout();
             uiCoverDropPanel.SuspendLayout();
@@ -282,13 +283,27 @@
             uiToolTip.SetToolTip(uiClearCoverButton, "Убрать выбранную обложку");
             uiClearCoverButton.Click += uiClearCoverButton_Click;
             //
+            // uiRunChainCheckBox
+            //
+            uiRunChainCheckBox.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+            uiRunChainCheckBox.AutoSize = true;
+            uiRunChainCheckBox.Checked = true;
+            uiRunChainCheckBox.CheckState = CheckState.Checked;
+            uiRunChainCheckBox.Location = new Point(12, 492);
+            uiRunChainCheckBox.Name = "uiRunChainCheckBox";
+            uiRunChainCheckBox.Size = new Size(290, 19);
+            uiRunChainCheckBox.TabIndex = 16;
+            uiRunChainCheckBox.Text = "Запустить цепочку синхронизации после публикации";
+            uiRunChainCheckBox.UseVisualStyleBackColor = true;
+            uiToolTip.SetToolTip(uiRunChainCheckBox, "После публикации обойти исходящие связи источника и синхронизировать новое медиа по цепочке");
+            //
             // uiPublishButton
             //
             uiPublishButton.Font = new Font("Segoe UI", 9.75F, FontStyle.Bold);
-            uiPublishButton.Location = new Point(12, 504);
+            uiPublishButton.Location = new Point(12, 530);
             uiPublishButton.Name = "uiPublishButton";
             uiPublishButton.Size = new Size(180, 34);
-            uiPublishButton.TabIndex = 16;
+            uiPublishButton.TabIndex = 17;
             uiPublishButton.Text = "Опубликовать";
             uiPublishButton.UseVisualStyleBackColor = true;
             uiToolTip.SetToolTip(uiPublishButton, "Опубликовать (Ctrl+Enter)");
@@ -297,12 +312,12 @@
             // uiPublishProgressBar
             //
             uiPublishProgressBar.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            uiPublishProgressBar.Location = new Point(198, 507);
+            uiPublishProgressBar.Location = new Point(198, 533);
             uiPublishProgressBar.MarqueeAnimationSpeed = 30;
             uiPublishProgressBar.Name = "uiPublishProgressBar";
             uiPublishProgressBar.Size = new Size(678, 6);
             uiPublishProgressBar.Style = ProgressBarStyle.Marquee;
-            uiPublishProgressBar.TabIndex = 17;
+            uiPublishProgressBar.TabIndex = 18;
             uiPublishProgressBar.Visible = false;
             //
             // uiStatusLabel
@@ -310,10 +325,10 @@
             uiStatusLabel.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             uiStatusLabel.AutoEllipsis = true;
             uiStatusLabel.ForeColor = Color.DimGray;
-            uiStatusLabel.Location = new Point(198, 517);
+            uiStatusLabel.Location = new Point(198, 543);
             uiStatusLabel.Name = "uiStatusLabel";
             uiStatusLabel.Size = new Size(678, 21);
-            uiStatusLabel.TabIndex = 18;
+            uiStatusLabel.TabIndex = 19;
             uiStatusLabel.Text = "—";
             uiStatusLabel.TextAlign = ContentAlignment.MiddleLeft;
             //
@@ -324,6 +339,7 @@
             Controls.Add(uiPublishProgressBar);
             Controls.Add(uiStatusLabel);
             Controls.Add(uiPublishButton);
+            Controls.Add(uiRunChainCheckBox);
             Controls.Add(uiClearCoverButton);
             Controls.Add(uiBrowseCoverButton);
             Controls.Add(uiCoverDropPanel);
@@ -341,7 +357,7 @@
             Controls.Add(uiSourceComboBox);
             Controls.Add(uiSourceLabel);
             Name = "PublishControl";
-            Size = new Size(891, 557);
+            Size = new Size(891, 583);
             uiVideoDropPanel.ResumeLayout(false);
             uiCoverDropPanel.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)uiCoverPreviewPictureBox).EndInit();
@@ -373,6 +389,7 @@
         private Button uiPublishButton;
         private ProgressBar uiPublishProgressBar;
         private Label uiStatusLabel;
+        private CheckBox uiRunChainCheckBox;
         private ToolTip uiToolTip;
     }
 }

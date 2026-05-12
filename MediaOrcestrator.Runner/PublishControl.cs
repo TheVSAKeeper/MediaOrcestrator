@@ -14,6 +14,9 @@ public partial class PublishControl : UserControl
     private const int DescriptionPreviewLength = 100;
 
     private readonly Orcestrator? _orcestrator;
+    private readonly SyncRetryRunner? _retryRunner;
+    private readonly SyncPlanner? _syncPlanner;
+    private readonly ActionHolder? _actionHolder;
     private readonly ILogger<PublishControl>? _logger;
     private readonly List<string> _titleSuggestions = [];
     private readonly Dictionary<string, string> _titleToDescription = new(StringComparer.Ordinal);
@@ -35,9 +38,12 @@ public partial class PublishControl : UserControl
         InitializeComponent();
     }
 
-    public PublishControl(Orcestrator orcestrator, ILogger<PublishControl> logger) : this()
+    public PublishControl(Orcestrator orcestrator, SyncRetryRunner retryRunner, SyncPlanner syncPlanner, ActionHolder actionHolder, ILogger<PublishControl> logger) : this()
     {
         _orcestrator = orcestrator;
+        _retryRunner = retryRunner;
+        _syncPlanner = syncPlanner;
+        _actionHolder = actionHolder;
         _logger = logger;
     }
 
@@ -358,11 +364,17 @@ public partial class PublishControl : UserControl
 
         try
         {
-            await Task.Run(() => _orcestrator.PublishMediaAsync(source, title, description, videoPath, coverPath, token), token);
+            var published = await Task.Run(() => _orcestrator.PublishMediaAsync(source, title, description, videoPath, coverPath, token), token);
 
             SetStatus($"Опубликовано в «{source.TitleFull}».", false);
             _logger.LogInformation("Медиа «{Title}» опубликовано в {Source}", title, source.TitleFull);
             InvalidateMediasCache();
+
+            if (uiRunChainCheckBox.Checked)
+            {
+                await RunPostPublishChainAsync(published, source, token);
+            }
+
             ResetForm();
             MediaPublished?.Invoke(this, EventArgs.Empty);
         }
@@ -391,6 +403,19 @@ public partial class PublishControl : UserControl
         }
     }
 
+    private static IEnumerable<SyncIntent> EnumerateChain(List<SyncIntent> intents)
+    {
+        foreach (var intent in intents.Where(intent => intent.IsSelected))
+        {
+            yield return intent;
+
+            foreach (var child in EnumerateChain(intent.NextIntents))
+            {
+                yield return child;
+            }
+        }
+    }
+
     private static string? TryFormatFileSize(string path)
     {
         try
@@ -416,6 +441,68 @@ public partial class PublishControl : UserControl
         }
 
         return $"{size:F1} {units[unitIndex]}";
+    }
+
+    private async Task RunPostPublishChainAsync(Media media, Source publishedSource, CancellationToken cancellationToken)
+    {
+        if (_orcestrator == null || _retryRunner == null || _syncPlanner == null || _actionHolder == null || _logger == null)
+        {
+            return;
+        }
+
+        var relations = _orcestrator.GetRelations();
+        var roots = _syncPlanner.Plan([media], relations);
+        var chain = EnumerateChain(roots).ToList();
+        if (chain.Count == 0)
+        {
+            return;
+        }
+
+        using var chainCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var chainToken = chainCts.Token;
+        var actionName = $"Цепочка после публикации: «{media.Title}» от {publishedSource.TitleFull}";
+        var running = _actionHolder.Register(actionName, "В процессе", chain.Count, chainCts);
+
+        SyncIntent? failedIntent = null;
+
+        try
+        {
+            for (var i = 0; i < chain.Count; i++)
+            {
+                chainToken.ThrowIfCancellationRequested();
+
+                var intent = chain[i];
+                var step = $"{i + 1}/{chain.Count}";
+                var stepLabel = $"{intent.From.TitleFull} → {intent.To.TitleFull}";
+                SetStatus($"Цепочка {step}: {stepLabel}...", false);
+                _actionHolder.SetStatus(running.Id, $"{step}: {stepLabel}");
+
+                failedIntent = intent;
+                await _retryRunner.RunAsync(intent.Media, intent.Relation, cancellationToken: chainToken);
+                failedIntent = null;
+
+                _logger.LogInformation("Цепочка: «{Title}» прошла {From} → {To}",
+                    intent.Media.Title, intent.From.TitleFull, intent.To.TitleFull);
+
+                running.ProgressPlus();
+            }
+
+            SetStatus($"Цепочка завершена ({chain.Count} шаг(ов)).", false);
+            running.Finish();
+        }
+        catch (OperationCanceledException)
+        {
+            running.Finish("Отменено");
+            throw;
+        }
+        catch (Exception exception) when (failedIntent != null)
+        {
+            _logger.LogError(exception, "Цепочка: «{Title}» сорвалась на {From} → {To}",
+                media.Title, failedIntent.From.TitleFull, failedIntent.To.TitleFull);
+
+            SetStatus($"Цепочка прервана на {failedIntent.To.TitleFull}: {exception.Message}", true);
+            running.Finish($"Ошибка на {failedIntent.To.TitleFull}");
+        }
     }
 
     private void FilterTitleSuggestions()
