@@ -78,11 +78,12 @@ internal sealed class YoutubeExplodeReadService(
             video.Title,
             video.Url,
             previewUrl,
-            duration: video.Duration,
-            author: video.Author.ChannelTitle,
-            creationDate: video.UploadDate.ToString("O"),
-            viewCount: video.Engagement.ViewCount,
-            tempDataPath: tempDataPath);
+            video.Description,
+            video.Duration,
+            video.Author.ChannelTitle,
+            video.UploadDate.ToString("O"),
+            video.Engagement.ViewCount,
+            tempDataPath);
     }
 
     private static MediaDto CreateBasicMediaDto(PlaylistVideo video)
