@@ -69,6 +69,11 @@
             uiLogsTabPage = new TabPage();
             uiLogsToolbarPanel = new Panel();
             uiReportIssueButton = new Button();
+            uiGoToBottomButton = new Button();
+            uiLogLevelComboBox = new ComboBox();
+            uiLogSourceTextBox = new TextBox();
+            uiLogWordWrapCheckBox = new CheckBox();
+            uiOpenLogsFolderButton = new Button();
             uiCommentsTabPage = new TabPage();
             uiCommentsViewControl = new CommentsViewControl();
             uiCommentsHtmlTabPage = new TabPage();
@@ -555,15 +560,20 @@
             // 
             // uiLogsToolbarPanel
             // 
+            uiLogsToolbarPanel.Controls.Add(uiOpenLogsFolderButton);
+            uiLogsToolbarPanel.Controls.Add(uiLogWordWrapCheckBox);
+            uiLogsToolbarPanel.Controls.Add(uiLogSourceTextBox);
+            uiLogsToolbarPanel.Controls.Add(uiLogLevelComboBox);
+            uiLogsToolbarPanel.Controls.Add(uiGoToBottomButton);
             uiLogsToolbarPanel.Controls.Add(uiReportIssueButton);
             uiLogsToolbarPanel.Dock = DockStyle.Top;
             uiLogsToolbarPanel.Location = new Point(3, 3);
             uiLogsToolbarPanel.Name = "uiLogsToolbarPanel";
             uiLogsToolbarPanel.Size = new Size(1206, 34);
             uiLogsToolbarPanel.TabIndex = 0;
-            // 
+            //
             // uiReportIssueButton
-            // 
+            //
             uiReportIssueButton.Location = new Point(3, 4);
             uiReportIssueButton.Name = "uiReportIssueButton";
             uiReportIssueButton.Size = new Size(200, 26);
@@ -571,6 +581,60 @@
             uiReportIssueButton.Text = "Сообщить о проблеме";
             uiReportIssueButton.UseVisualStyleBackColor = true;
             uiReportIssueButton.Click += uiReportIssueButton_Click;
+            //
+            // uiGoToBottomButton
+            //
+            uiGoToBottomButton.Location = new Point(209, 4);
+            uiGoToBottomButton.Name = "uiGoToBottomButton";
+            uiGoToBottomButton.Size = new Size(160, 26);
+            uiGoToBottomButton.TabIndex = 1;
+            uiGoToBottomButton.Text = "Перейти вниз";
+            uiGoToBottomButton.UseVisualStyleBackColor = true;
+            uiGoToBottomButton.Click += uiGoToBottomButton_Click;
+            //
+            // uiLogLevelComboBox
+            //
+            uiLogLevelComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
+            uiLogLevelComboBox.FormattingEnabled = true;
+            uiLogLevelComboBox.Items.AddRange(new object[] { "Отладка", "Информация", "Предупреждение", "Ошибка", "Критическая" });
+            uiLogLevelComboBox.Location = new Point(375, 5);
+            uiLogLevelComboBox.Name = "uiLogLevelComboBox";
+            uiLogLevelComboBox.Size = new Size(140, 23);
+            uiLogLevelComboBox.TabIndex = 2;
+            uiLogLevelComboBox.SelectedIndex = 0;
+            uiLogLevelComboBox.SelectedIndexChanged += uiLogLevelComboBox_SelectedIndexChanged;
+            //
+            // uiLogSourceTextBox
+            //
+            uiLogSourceTextBox.Location = new Point(521, 6);
+            uiLogSourceTextBox.Name = "uiLogSourceTextBox";
+            uiLogSourceTextBox.PlaceholderText = "Компонент: Foo, !Bar";
+            uiLogSourceTextBox.Size = new Size(240, 23);
+            uiLogSourceTextBox.TabIndex = 3;
+            uiLogSourceTextBox.TextChanged += uiLogSourceTextBox_TextChanged;
+            //
+            // uiLogWordWrapCheckBox
+            //
+            uiLogWordWrapCheckBox.AutoSize = true;
+            uiLogWordWrapCheckBox.Checked = true;
+            uiLogWordWrapCheckBox.CheckState = CheckState.Checked;
+            uiLogWordWrapCheckBox.Location = new Point(767, 8);
+            uiLogWordWrapCheckBox.Name = "uiLogWordWrapCheckBox";
+            uiLogWordWrapCheckBox.Size = new Size(110, 19);
+            uiLogWordWrapCheckBox.TabIndex = 4;
+            uiLogWordWrapCheckBox.Text = "Перенос строк";
+            uiLogWordWrapCheckBox.UseVisualStyleBackColor = true;
+            uiLogWordWrapCheckBox.CheckedChanged += uiLogWordWrapCheckBox_CheckedChanged;
+            //
+            // uiOpenLogsFolderButton
+            //
+            uiOpenLogsFolderButton.Location = new Point(883, 4);
+            uiOpenLogsFolderButton.Name = "uiOpenLogsFolderButton";
+            uiOpenLogsFolderButton.Size = new Size(180, 26);
+            uiOpenLogsFolderButton.TabIndex = 5;
+            uiOpenLogsFolderButton.Text = "Открыть папку логов";
+            uiOpenLogsFolderButton.UseVisualStyleBackColor = true;
+            uiOpenLogsFolderButton.Click += uiOpenLogsFolderButton_Click;
             // 
             // uiToolsTabPage
             // 
@@ -768,6 +832,11 @@
         private TabPage uiLogsTabPage;
         private Panel uiLogsToolbarPanel;
         private Button uiReportIssueButton;
+        private Button uiGoToBottomButton;
+        private ComboBox uiLogLevelComboBox;
+        private TextBox uiLogSourceTextBox;
+        private CheckBox uiLogWordWrapCheckBox;
+        private Button uiOpenLogsFolderButton;
         private TabPage uiCommentsTabPage;
         private CommentsViewControl uiCommentsViewControl;
         private TabPage uiCommentsHtmlTabPage;

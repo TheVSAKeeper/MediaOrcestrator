@@ -5,17 +5,29 @@ using MediaOrcestrator.Modules;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Playwright;
+using Serilog.Events;
+using System.Diagnostics;
 
 namespace MediaOrcestrator.Runner;
 
 public partial class MainForm : Form
 {
+    private static readonly LogEventLevel[] LogLevels =
+    {
+        LogEventLevel.Debug,
+        LogEventLevel.Information,
+        LogEventLevel.Warning,
+        LogEventLevel.Error,
+        LogEventLevel.Fatal,
+    };
+
     private readonly Orcestrator _orcestrator;
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<MainForm> _logger;
     private readonly AppUpdateManager _updateManager;
     private readonly Dictionary<string, AuditSourceRow> _auditRows = new();
     private readonly PublishControl? _publishControl;
+    private LogViewContext? _logContext;
     private bool _isSyncRunning;
 
     public MainForm(Orcestrator orcestrator, IServiceProvider serviceProvider, ILogger<MainForm> logger, AppUpdateManager updateManager)
@@ -36,9 +48,11 @@ public partial class MainForm : Form
 
     public Action? StartupCompleted { get; set; }
 
-    public void AttachLogControl(RichTextBox logControl)
+    public void AttachLogControl(LogViewContext context)
     {
-        uiLogsTabPage.Controls.Add(logControl);
+        _logContext = context;
+        uiLogsTabPage.Controls.Add(context.Control);
+        context.Control.WordWrap = uiLogWordWrapCheckBox.Checked;
     }
 
     protected override void OnShown(EventArgs e)
@@ -47,6 +61,72 @@ public partial class MainForm : Form
 
         TopMost = true;
         TopMost = false;
+    }
+
+    private void uiGoToBottomButton_Click(object? sender, EventArgs e)
+    {
+        if (_logContext == null)
+        {
+            return;
+        }
+
+        var control = _logContext.Control;
+        control.SelectionStart = control.TextLength;
+        control.SelectionLength = 0;
+        control.ScrollToCaret();
+
+        _logContext.SinkOptions.AutoScroll = true;
+    }
+
+    private void uiLogLevelComboBox_SelectedIndexChanged(object? sender, EventArgs e)
+    {
+        if (_logContext == null)
+        {
+            return;
+        }
+
+        var index = uiLogLevelComboBox.SelectedIndex;
+        if (index < 0 || index >= LogLevels.Length)
+        {
+            return;
+        }
+
+        _logContext.LevelSwitch.MinimumLevel = LogLevels[index];
+        _logContext.BufferingSink.ReapplyFilter();
+    }
+
+    private void uiLogSourceTextBox_TextChanged(object? sender, EventArgs e)
+    {
+        if (_logContext == null)
+        {
+            return;
+        }
+
+        _logContext.SourceFilter.SetFilter(uiLogSourceTextBox.Text);
+        _logContext.BufferingSink.ReapplyFilter();
+    }
+
+    private void uiLogWordWrapCheckBox_CheckedChanged(object? sender, EventArgs e)
+    {
+        if (_logContext != null)
+        {
+            _logContext.Control.WordWrap = uiLogWordWrapCheckBox.Checked;
+        }
+    }
+
+    private void uiOpenLogsFolderButton_Click(object? sender, EventArgs e)
+    {
+        try
+        {
+            var path = Path.Combine(AppContext.BaseDirectory, "logs");
+            Directory.CreateDirectory(path);
+            Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Не удалось открыть папку логов");
+            MessageBox.Show(this, $"Не удалось открыть папку логов: {ex.Message}", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
     }
 
     private void MainForm_Load(object sender, EventArgs e)

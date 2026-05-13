@@ -6,7 +6,9 @@ using MediaOrcestrator.Modules;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Serilog;
+using Serilog.Core;
 using Serilog.Events;
+using Serilog.Sinks.RichTextBoxForms;
 using Serilog.Sinks.RichTextBoxForms.Themes;
 using System.Text;
 using ILogger = Serilog.ILogger;
@@ -27,12 +29,28 @@ file static class Program
         SplashTransaction? splash = null;
 
         // TODO: Выглядит не очень
-        var logControl = new RichTextBox();
+        var logControl = new LogRichTextBox();
         logControl.BackColor = SystemColors.Window;
         logControl.Dock = DockStyle.Fill;
         logControl.Font = new("Cascadia Mono", 10.8F, FontStyle.Regular, GraphicsUnit.Point);
         logControl.Location = new(0, 0);
         logControl.Name = "uiLogControl";
+
+        var logSinkOptions = new RichTextBoxSinkOptions(ThemePresets.Literate,
+            true,
+            1217,
+            "[{Timestamp:HH:mm:ss} {Level:u3}] [{SourceContext}] {Message:lj}{NewLine}{Exception}");
+
+        var logSink = new RichTextBoxSink(logControl, logSinkOptions);
+
+        logControl.VScroll += (_, _) => logSinkOptions.AutoScroll = ShouldAutoScroll(logControl);
+        logControl.MouseWheel += (_, _) => logSinkOptions.AutoScroll = ShouldAutoScroll(logControl);
+        logControl.KeyUp += (_, _) => logSinkOptions.AutoScroll = ShouldAutoScroll(logControl);
+        logControl.SelectionChanged += (_, _) => logSinkOptions.AutoScroll = ShouldAutoScroll(logControl);
+
+        var logLevelSwitch = new LoggingLevelSwitch(LogEventLevel.Debug);
+        var logSourceFilter = new SourceContextLogEventFilter();
+        var logBufferingSink = new BufferingLogSink(logSinkOptions.MaxLogLines, logSink, logLevelSwitch, logSourceFilter);
 
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Debug()
@@ -45,10 +63,7 @@ file static class Program
                 rollingInterval: RollingInterval.Day,
                 retainedFileCountLimit: 30,
                 encoding: Encoding.UTF8)
-            .WriteTo.RichTextBox(logControl,
-                ThemePresets.Literate,
-                maxLogLines: 217,
-                outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{SourceContext}] {Message:lj}{NewLine}{Exception}")
+            .WriteTo.Sink(logBufferingSink)
             .CreateLogger();
 
         try
@@ -172,7 +187,7 @@ file static class Program
             }
 
             var mainForm = serviceProvider.GetRequiredService<MainForm>();
-            mainForm.AttachLogControl(logControl);
+            mainForm.AttachLogControl(new(logControl, logSinkOptions, logLevelSwitch, logSourceFilter, logBufferingSink));
             mainForm.StartupCompleted = splash.Dispose;
 
             Task.Run(async () =>
@@ -200,6 +215,22 @@ file static class Program
                 // Игнорируем ошибки при закрытии логов, так как приложение все равно завершается
             }
         }
+    }
+
+    private static bool ShouldAutoScroll(RichTextBox rtb)
+    {
+        if (rtb.SelectionLength > 0)
+        {
+            return false;
+        }
+
+        if (rtb.TextLength == 0)
+        {
+            return true;
+        }
+
+        var lastCharPos = rtb.GetPositionFromCharIndex(rtb.TextLength - 1);
+        return lastCharPos.Y >= 0 && lastCharPos.Y < rtb.ClientSize.Height;
     }
 
     private static void RegisterGlobalExceptionHandlers()
