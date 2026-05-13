@@ -8,6 +8,8 @@ partial class CommentsHtmlControl
     {
         if (disposing)
         {
+            _applyFiltersCts?.Cancel();
+            _applyFiltersCts?.Dispose();
             _searchDebounce?.Dispose();
             components?.Dispose();
         }
@@ -22,12 +24,15 @@ partial class CommentsHtmlControl
     private TableLayoutPanel uiFetchLayout;
     private Label uiSourceLabel;
     private ComboBox uiSourceComboBox;
-    private CheckBox uiFetchSinceCheckBox;
+    private Label uiFetchSinceTitleLabel;
     private NumericUpDown uiFetchSinceDaysNumeric;
     private Label uiFetchSinceDaysLabel;
-    private CheckBox uiFetchOnlyRecentCheckBox;
+    private Label uiFetchOnlyRecentTitleLabel;
     private NumericUpDown uiFetchOnlyRecentNumeric;
     private Label uiFetchOnlyRecentLabel;
+    private Label uiFetchStaleTitleLabel;
+    private NumericUpDown uiFetchStaleNumeric;
+    private Label uiFetchStaleLabel;
     private Button uiForceFetchAllButton;
     private GroupBox uiViewGroup;
     private TableLayoutPanel uiViewLayout;
@@ -52,6 +57,7 @@ partial class CommentsHtmlControl
     private ToolStripStatusLabel uiStatusLabel;
     private ToolStripProgressBar uiFetchProgressBar;
     private ToolStripStatusLabel uiFetchCounterLabel;
+    private ToolTip uiToolTip;
 
     private void InitializeComponent()
     {
@@ -61,12 +67,15 @@ partial class CommentsHtmlControl
         uiFetchLayout = new TableLayoutPanel();
         uiSourceLabel = new Label();
         uiSourceComboBox = new ComboBox();
-        uiFetchSinceCheckBox = new CheckBox();
+        uiFetchSinceTitleLabel = new Label();
         uiFetchSinceDaysNumeric = new NumericUpDown();
         uiFetchSinceDaysLabel = new Label();
-        uiFetchOnlyRecentCheckBox = new CheckBox();
+        uiFetchOnlyRecentTitleLabel = new Label();
         uiFetchOnlyRecentNumeric = new NumericUpDown();
         uiFetchOnlyRecentLabel = new Label();
+        uiFetchStaleTitleLabel = new Label();
+        uiFetchStaleNumeric = new NumericUpDown();
+        uiFetchStaleLabel = new Label();
         uiForceFetchAllButton = new Button();
         uiViewGroup = new GroupBox();
         uiViewLayout = new TableLayoutPanel();
@@ -91,11 +100,13 @@ partial class CommentsHtmlControl
         uiStatusLabel = new ToolStripStatusLabel();
         uiFetchProgressBar = new ToolStripProgressBar();
         uiFetchCounterLabel = new ToolStripStatusLabel();
+        uiToolTip = new ToolTip(components);
         uiFiltersPanel.SuspendLayout();
         uiFetchGroup.SuspendLayout();
         uiFetchLayout.SuspendLayout();
         ((System.ComponentModel.ISupportInitialize)uiFetchSinceDaysNumeric).BeginInit();
         ((System.ComponentModel.ISupportInitialize)uiFetchOnlyRecentNumeric).BeginInit();
+        ((System.ComponentModel.ISupportInitialize)uiFetchStaleNumeric).BeginInit();
         uiViewGroup.SuspendLayout();
         uiViewLayout.SuspendLayout();
         uiLimitInline.SuspendLayout();
@@ -119,8 +130,8 @@ partial class CommentsHtmlControl
         uiFiltersPanel.Name = "uiFiltersPanel";
         uiFiltersPanel.Padding = new Padding(4, 0, 4, 0);
         uiFiltersPanel.RowCount = 1;
-        uiFiltersPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 120F));
-        uiFiltersPanel.Size = new Size(1100, 120);
+        uiFiltersPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 150F));
+        uiFiltersPanel.Size = new Size(1100, 150);
         uiFiltersPanel.TabIndex = 0;
         //
         // uiFetchGroup
@@ -131,7 +142,7 @@ partial class CommentsHtmlControl
         uiFetchGroup.Name = "uiFetchGroup";
         uiFetchGroup.TabIndex = 0;
         uiFetchGroup.TabStop = false;
-        uiFetchGroup.Text = "Загрузка с сервера";
+        uiFetchGroup.Text = "Загрузка комментариев";
         //
         // uiFetchLayout
         //
@@ -145,17 +156,21 @@ partial class CommentsHtmlControl
         uiFetchLayout.Controls.Add(uiSourceLabel, 0, 0);
         uiFetchLayout.Controls.Add(uiSourceComboBox, 1, 0);
         uiFetchLayout.SetColumnSpan(uiSourceComboBox, 5);
-        uiFetchLayout.Controls.Add(uiFetchSinceCheckBox, 0, 1);
+        uiFetchLayout.Controls.Add(uiFetchSinceTitleLabel, 0, 1);
         uiFetchLayout.Controls.Add(uiFetchSinceDaysNumeric, 1, 1);
         uiFetchLayout.Controls.Add(uiFetchSinceDaysLabel, 2, 1);
-        uiFetchLayout.Controls.Add(uiFetchOnlyRecentCheckBox, 3, 1);
+        uiFetchLayout.Controls.Add(uiFetchOnlyRecentTitleLabel, 3, 1);
         uiFetchLayout.Controls.Add(uiFetchOnlyRecentNumeric, 4, 1);
         uiFetchLayout.Controls.Add(uiFetchOnlyRecentLabel, 5, 1);
-        uiFetchLayout.Controls.Add(uiForceFetchAllButton, 0, 2);
+        uiFetchLayout.Controls.Add(uiFetchStaleTitleLabel, 0, 2);
+        uiFetchLayout.Controls.Add(uiFetchStaleNumeric, 1, 2);
+        uiFetchLayout.Controls.Add(uiFetchStaleLabel, 2, 2);
+        uiFetchLayout.Controls.Add(uiForceFetchAllButton, 0, 3);
         uiFetchLayout.SetColumnSpan(uiForceFetchAllButton, 6);
         uiFetchLayout.Dock = DockStyle.Fill;
         uiFetchLayout.Name = "uiFetchLayout";
-        uiFetchLayout.RowCount = 3;
+        uiFetchLayout.RowCount = 4;
+        uiFetchLayout.RowStyles.Add(new RowStyle());
         uiFetchLayout.RowStyles.Add(new RowStyle());
         uiFetchLayout.RowStyles.Add(new RowStyle());
         uiFetchLayout.RowStyles.Add(new RowStyle());
@@ -179,26 +194,28 @@ partial class CommentsHtmlControl
         uiSourceComboBox.TabIndex = 1;
         uiSourceComboBox.SelectedIndexChanged += uiSourceComboBox_SelectedIndexChanged;
         //
-        // uiFetchSinceCheckBox
+        // uiFetchSinceTitleLabel
         //
-        uiFetchSinceCheckBox.AutoSize = true;
-        uiFetchSinceCheckBox.Margin = new Padding(0, 6, 6, 0);
-        uiFetchSinceCheckBox.Name = "uiFetchSinceCheckBox";
-        uiFetchSinceCheckBox.TabIndex = 2;
-        uiFetchSinceCheckBox.Text = "Не старше";
-        uiFetchSinceCheckBox.UseVisualStyleBackColor = true;
-        uiFetchSinceCheckBox.CheckedChanged += uiFetchSinceCheckBox_CheckedChanged;
+        uiFetchSinceTitleLabel.AutoSize = true;
+        uiFetchSinceTitleLabel.Margin = new Padding(0, 7, 6, 0);
+        uiFetchSinceTitleLabel.Name = "uiFetchSinceTitleLabel";
+        uiFetchSinceTitleLabel.TabIndex = 2;
+        uiFetchSinceTitleLabel.Text = "Медиа не старше";
         //
         // uiFetchSinceDaysNumeric
         //
-        uiFetchSinceDaysNumeric.Enabled = false;
         uiFetchSinceDaysNumeric.Margin = new Padding(0, 3, 6, 3);
         uiFetchSinceDaysNumeric.Maximum = new decimal(new int[] { 3650, 0, 0, 0 });
-        uiFetchSinceDaysNumeric.Minimum = new decimal(new int[] { 1, 0, 0, 0 });
+        uiFetchSinceDaysNumeric.Minimum = new decimal(new int[] { 0, 0, 0, 0 });
         uiFetchSinceDaysNumeric.Name = "uiFetchSinceDaysNumeric";
         uiFetchSinceDaysNumeric.Size = new Size(70, 23);
         uiFetchSinceDaysNumeric.TabIndex = 3;
-        uiFetchSinceDaysNumeric.Value = new decimal(new int[] { 30, 0, 0, 0 });
+        uiFetchSinceDaysNumeric.Value = new decimal(new int[] { 0, 0, 0, 0 });
+        uiFetchSinceDaysNumeric.ValueChanged += uiFetchSettingsValueChanged;
+        uiToolTip.SetToolTip(uiFetchSinceDaysNumeric,
+            "Загружать комментарии только для медиа, опубликованных не позже N дней назад. 0 = без фильтра."
+            + Environment.NewLine
+            + "Использует CreationDate из метаданных. Медиа без этого поля будут пропущены.");
         //
         // uiFetchSinceDaysLabel
         //
@@ -208,26 +225,28 @@ partial class CommentsHtmlControl
         uiFetchSinceDaysLabel.TabIndex = 4;
         uiFetchSinceDaysLabel.Text = "дн.";
         //
-        // uiFetchOnlyRecentCheckBox
+        // uiFetchOnlyRecentTitleLabel
         //
-        uiFetchOnlyRecentCheckBox.AutoSize = true;
-        uiFetchOnlyRecentCheckBox.Margin = new Padding(16, 6, 6, 0);
-        uiFetchOnlyRecentCheckBox.Name = "uiFetchOnlyRecentCheckBox";
-        uiFetchOnlyRecentCheckBox.TabIndex = 5;
-        uiFetchOnlyRecentCheckBox.Text = "Только последние";
-        uiFetchOnlyRecentCheckBox.UseVisualStyleBackColor = true;
-        uiFetchOnlyRecentCheckBox.CheckedChanged += uiFetchOnlyRecentCheckBox_CheckedChanged;
+        uiFetchOnlyRecentTitleLabel.AutoSize = true;
+        uiFetchOnlyRecentTitleLabel.Margin = new Padding(16, 7, 6, 0);
+        uiFetchOnlyRecentTitleLabel.Name = "uiFetchOnlyRecentTitleLabel";
+        uiFetchOnlyRecentTitleLabel.TabIndex = 5;
+        uiFetchOnlyRecentTitleLabel.Text = "Только последние";
         //
         // uiFetchOnlyRecentNumeric
         //
-        uiFetchOnlyRecentNumeric.Enabled = false;
         uiFetchOnlyRecentNumeric.Margin = new Padding(0, 3, 6, 3);
         uiFetchOnlyRecentNumeric.Maximum = new decimal(new int[] { 100000, 0, 0, 0 });
-        uiFetchOnlyRecentNumeric.Minimum = new decimal(new int[] { 1, 0, 0, 0 });
+        uiFetchOnlyRecentNumeric.Minimum = new decimal(new int[] { 0, 0, 0, 0 });
         uiFetchOnlyRecentNumeric.Name = "uiFetchOnlyRecentNumeric";
         uiFetchOnlyRecentNumeric.Size = new Size(80, 23);
         uiFetchOnlyRecentNumeric.TabIndex = 6;
-        uiFetchOnlyRecentNumeric.Value = new decimal(new int[] { 50, 0, 0, 0 });
+        uiFetchOnlyRecentNumeric.Value = new decimal(new int[] { 0, 0, 0, 0 });
+        uiFetchOnlyRecentNumeric.ValueChanged += uiFetchSettingsValueChanged;
+        uiToolTip.SetToolTip(uiFetchOnlyRecentNumeric,
+            "Брать только N самых новых медиа по порядку в источнике (SortNumber). 0 = без фильтра."
+            + Environment.NewLine
+            + "Применяется поверх фильтра «Медиа не старше».");
         //
         // uiFetchOnlyRecentLabel
         //
@@ -237,6 +256,37 @@ partial class CommentsHtmlControl
         uiFetchOnlyRecentLabel.TabIndex = 7;
         uiFetchOnlyRecentLabel.Text = "медиа";
         //
+        // uiFetchStaleTitleLabel
+        //
+        uiFetchStaleTitleLabel.AutoSize = true;
+        uiFetchStaleTitleLabel.Margin = new Padding(0, 7, 6, 0);
+        uiFetchStaleTitleLabel.Name = "uiFetchStaleTitleLabel";
+        uiFetchStaleTitleLabel.TabIndex = 8;
+        uiFetchStaleTitleLabel.Text = "Не обновлялись более";
+        //
+        // uiFetchStaleNumeric
+        //
+        uiFetchStaleNumeric.Margin = new Padding(0, 3, 6, 3);
+        uiFetchStaleNumeric.Maximum = new decimal(new int[] { 3650, 0, 0, 0 });
+        uiFetchStaleNumeric.Minimum = new decimal(new int[] { 0, 0, 0, 0 });
+        uiFetchStaleNumeric.Name = "uiFetchStaleNumeric";
+        uiFetchStaleNumeric.Size = new Size(70, 23);
+        uiFetchStaleNumeric.TabIndex = 9;
+        uiFetchStaleNumeric.Value = new decimal(new int[] { 0, 0, 0, 0 });
+        uiFetchStaleNumeric.ValueChanged += uiFetchSettingsValueChanged;
+        uiToolTip.SetToolTip(uiFetchStaleNumeric,
+            "Загружать только те медиа, чьи комментарии не обновлялись дольше N дней. 0 = без фильтра."
+            + Environment.NewLine
+            + "Медиа без записи о времени последнего обновления тоже попадают в выборку.");
+        //
+        // uiFetchStaleLabel
+        //
+        uiFetchStaleLabel.AutoSize = true;
+        uiFetchStaleLabel.Margin = new Padding(0, 7, 0, 0);
+        uiFetchStaleLabel.Name = "uiFetchStaleLabel";
+        uiFetchStaleLabel.TabIndex = 10;
+        uiFetchStaleLabel.Text = "дн.";
+        //
         // uiForceFetchAllButton
         //
         uiForceFetchAllButton.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
@@ -245,9 +295,13 @@ partial class CommentsHtmlControl
         uiForceFetchAllButton.Name = "uiForceFetchAllButton";
         uiForceFetchAllButton.Size = new Size(190, 25);
         uiForceFetchAllButton.TabIndex = 8;
-        uiForceFetchAllButton.Text = "Загрузить все из источника";
+        uiForceFetchAllButton.Text = "Загрузить из источника";
         uiForceFetchAllButton.UseVisualStyleBackColor = true;
         uiForceFetchAllButton.Click += uiForceFetchAllButton_Click;
+        uiToolTip.SetToolTip(uiForceFetchAllButton,
+            "Загрузить комментарии для медиа выбранного источника, отфильтрованных настройками выше."
+            + Environment.NewLine
+            + "Для каждого попавшего медиа всегда загружаются все его комментарии.");
         //
         // uiViewGroup
         //
@@ -322,7 +376,7 @@ partial class CommentsHtmlControl
         uiLimitLabel.Margin = new Padding(0, 7, 6, 0);
         uiLimitLabel.Name = "uiLimitLabel";
         uiLimitLabel.TabIndex = 4;
-        uiLimitLabel.Text = "Лимит:";
+        uiLimitLabel.Text = "Показывать:";
         //
         // uiLimitInline
         //
@@ -347,6 +401,11 @@ partial class CommentsHtmlControl
         uiLimitNumeric.Size = new Size(80, 23);
         uiLimitNumeric.TabIndex = 0;
         uiLimitNumeric.Value = new decimal(new int[] { 1000, 0, 0, 0 });
+        uiLimitNumeric.ValueChanged += uiFetchSettingsValueChanged;
+        uiToolTip.SetToolTip(uiLimitNumeric,
+            "Сколько комментариев показывать в списке."
+            + Environment.NewLine
+            + "Загрузка из источника всегда тянет все комментарии медиа целиком.");
         //
         // uiRefreshButton
         //
@@ -415,6 +474,7 @@ partial class CommentsHtmlControl
         uiMediaSortInvertButton.Text = "↓";
         uiMediaSortInvertButton.UseVisualStyleBackColor = true;
         uiMediaSortInvertButton.Click += uiMediaSortInvertButton_Click;
+        uiToolTip.SetToolTip(uiMediaSortInvertButton, "Обратный порядок сортировки медиа.");
         //
         // uiCommentSortLabel
         //
@@ -443,11 +503,15 @@ partial class CommentsHtmlControl
         uiCommentSortInvertButton.Text = "↓";
         uiCommentSortInvertButton.UseVisualStyleBackColor = true;
         uiCommentSortInvertButton.Click += uiCommentSortInvertButton_Click;
+        uiToolTip.SetToolTip(uiCommentSortInvertButton,
+            "Обратный порядок корневых комментариев."
+            + Environment.NewLine
+            + "Ответы внутри ветки всегда идут хронологически.");
         //
         // uiBrowserView
         //
         uiBrowserView.Dock = DockStyle.Fill;
-        uiBrowserView.Location = new Point(0, 120);
+        uiBrowserView.Location = new Point(0, 150);
         uiBrowserView.Name = "uiBrowserView";
         uiBrowserView.Size = new Size(1100, 508);
         uiBrowserView.TabIndex = 1;
@@ -500,6 +564,7 @@ partial class CommentsHtmlControl
         uiFetchLayout.PerformLayout();
         ((System.ComponentModel.ISupportInitialize)uiFetchSinceDaysNumeric).EndInit();
         ((System.ComponentModel.ISupportInitialize)uiFetchOnlyRecentNumeric).EndInit();
+        ((System.ComponentModel.ISupportInitialize)uiFetchStaleNumeric).EndInit();
         uiViewGroup.ResumeLayout(false);
         uiViewGroup.PerformLayout();
         uiViewLayout.ResumeLayout(false);

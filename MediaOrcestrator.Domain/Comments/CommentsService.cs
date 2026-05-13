@@ -9,7 +9,9 @@ public sealed class CommentsService(
     CommentsRepository repository,
     ILogger<CommentsService> logger)
 {
-    private static readonly TimeSpan DefaultCacheTtl = TimeSpan.MaxValue; // TimeSpan.FromHours(24);
+    private static readonly TimeSpan DefaultCacheTtl = TimeSpan.FromHours(24);
+
+    private readonly SemaphoreSlim _mediaUpdateGate = new(1, 1);
 
     public List<CommentRecord> GetCached(MediaSourceLink link)
     {
@@ -19,6 +21,11 @@ public sealed class CommentsService(
     public List<CommentRecord> GetByMedia(string sourceId, string externalMediaId)
     {
         return repository.GetByMedia(sourceId, externalMediaId);
+    }
+
+    public CommentRecord? GetById(string id)
+    {
+        return repository.GetById(id);
     }
 
     public List<CommentRecord> Query(
@@ -69,12 +76,45 @@ public sealed class CommentsService(
             }
         }
 
-        repository.ReplaceAll(source.Id, link.ExternalId, fetched);
+        repository.ReplaceAll(source.Id, link.ExternalId, fetched, source.Type is not ISupportsCommentLikes);
 
-        link.CommentsFetchedAt = DateTime.UtcNow;
-        link.CommentsCount = fetched.Count;
+        await _mediaUpdateGate.WaitAsync(cancellationToken);
+        try
+        {
+            var medias = db.GetCollection<Media>("medias");
+            var fresh = medias.FindById(media.Id);
 
-        db.GetCollection<Media>("medias").Update(media);
+            if (fresh != null)
+            {
+                var freshLink = fresh.Sources.FirstOrDefault(l => l.SourceId == source.Id && l.ExternalId == link.ExternalId);
+
+                if (freshLink != null)
+                {
+                    freshLink.CommentsFetchedAt = DateTime.UtcNow;
+                    freshLink.CommentsCount = fetched.Count;
+                    medias.Update(fresh);
+
+                    link.CommentsFetchedAt = freshLink.CommentsFetchedAt;
+                    link.CommentsCount = freshLink.CommentsCount;
+                }
+                else
+                {
+                    link.CommentsFetchedAt = DateTime.UtcNow;
+                    link.CommentsCount = fetched.Count;
+                    medias.Update(media);
+                }
+            }
+            else
+            {
+                link.CommentsFetchedAt = DateTime.UtcNow;
+                link.CommentsCount = fetched.Count;
+                medias.Update(media);
+            }
+        }
+        finally
+        {
+            _mediaUpdateGate.Release();
+        }
 
         progress?.Report($"«{source.TitleFull}»: загружено {fetched.Count} комментариев");
         logger.LogInformation("Загружено {Count} комментариев media={MediaId} source={SourceId}",

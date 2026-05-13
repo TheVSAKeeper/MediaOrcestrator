@@ -2,6 +2,7 @@
 using MediaOrcestrator.Domain.Comments;
 using MediaOrcestrator.Modules;
 using Microsoft.Extensions.Logging;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
 using Timer = System.Windows.Forms.Timer;
@@ -17,16 +18,19 @@ public partial class CommentsHtmlControl : UserControl
 
     private readonly Timer _searchDebounce = new() { Interval = SearchDebounceMs };
 
-    private readonly Dictionary<string, (DateTime FetchedAt, IReadOnlyList<CommentAuthorView> Authors)> _authorsCache = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<(string SourceId, string ExternalMediaId), (DateTime FetchedAt, IReadOnlyList<CommentAuthorView> Authors)> _authorsCache = new();
 
     private Orcestrator? _orcestrator;
     private CommentsService? _commentsService;
     private ActionHolder? _actionHolder;
     private ILogger? _logger;
+    private CommentsViewSettings _settings = new();
     private bool _invertMediaSort;
     private bool _invertCommentSort;
     private bool _loaded;
+    private bool _suppressSettingsSave;
     private int _applyFiltersVersion;
+    private CancellationTokenSource? _applyFiltersCts;
 
     public CommentsHtmlControl()
     {
@@ -86,6 +90,8 @@ public partial class CommentsHtmlControl : UserControl
         _actionHolder = actionHolder;
         _logger = logger;
 
+        _settings = CommentsViewSettings.Load();
+
         uiBrowserView.AuthorsResolver = ResolveCommentAuthors;
 
         using (Splash.Current.StartSpan("Сортировки"))
@@ -97,6 +103,8 @@ public partial class CommentsHtmlControl : UserControl
         {
             ReloadSourcesCombo();
         }
+
+        ApplySettingsToUi();
 
         using (Splash.Current.StartSpan("Прогрев браузера"))
         {
@@ -119,6 +127,7 @@ public partial class CommentsHtmlControl : UserControl
 
     private void uiSortChanged(object? sender, EventArgs e)
     {
+        SaveSettings();
         ApplyFilters();
     }
 
@@ -129,18 +138,21 @@ public partial class CommentsHtmlControl : UserControl
 
     private void uiSourceComboBox_SelectedIndexChanged(object? sender, EventArgs e)
     {
+        SaveSettings();
         UpdateForceFetchButtonState();
         ApplyFilters();
     }
 
     private void uiSearchTextBox_TextChanged(object? sender, EventArgs e)
     {
+        SaveSettings();
         _searchDebounce.Stop();
         _searchDebounce.Start();
     }
 
     private void uiMediaSearchTextBox_TextChanged(object? sender, EventArgs e)
     {
+        SaveSettings();
         _searchDebounce.Stop();
         _searchDebounce.Start();
     }
@@ -161,6 +173,7 @@ public partial class CommentsHtmlControl : UserControl
     {
         _invertMediaSort = !_invertMediaSort;
         uiMediaSortInvertButton.Text = _invertMediaSort ? "↑" : "↓";
+        SaveSettings();
         ApplyFilters();
     }
 
@@ -168,17 +181,13 @@ public partial class CommentsHtmlControl : UserControl
     {
         _invertCommentSort = !_invertCommentSort;
         uiCommentSortInvertButton.Text = _invertCommentSort ? "↑" : "↓";
+        SaveSettings();
         ApplyFilters();
     }
 
-    private void uiFetchSinceCheckBox_CheckedChanged(object? sender, EventArgs e)
+    private void uiFetchSettingsValueChanged(object? sender, EventArgs e)
     {
-        uiFetchSinceDaysNumeric.Enabled = uiFetchSinceCheckBox.Checked;
-    }
-
-    private void uiFetchOnlyRecentCheckBox_CheckedChanged(object? sender, EventArgs e)
-    {
-        uiFetchOnlyRecentNumeric.Enabled = uiFetchOnlyRecentCheckBox.Checked;
+        SaveSettings();
     }
 
     private async void uiForceFetchAllButton_Click(object? sender, EventArgs e)
@@ -200,6 +209,97 @@ public partial class CommentsHtmlControl : UserControl
         }
 
         await FetchAllForSourceAsync(source);
+    }
+
+    private static void SelectComboValue<T>(ComboBox combo, T value) where T : Enum
+    {
+        if (combo.DataSource is not List<SortItem<T>> items)
+        {
+            return;
+        }
+
+        var match = items.FirstOrDefault(x => x.Value.Equals(value));
+        if (match != null)
+        {
+            combo.SelectedItem = match;
+        }
+    }
+
+    private static void BackfillOrphanParents(List<CommentRecord> fetched, CommentsService commentsService, CancellationToken ct)
+    {
+        if (fetched.Count == 0)
+        {
+            return;
+        }
+
+        var known = new HashSet<string>(fetched.Select(r => r.Id), StringComparer.Ordinal);
+        var pending = new Queue<string>();
+
+        foreach (var r in fetched)
+        {
+            if (string.IsNullOrEmpty(r.ParentExternalCommentId))
+            {
+                continue;
+            }
+
+            var parentId = $"{r.SourceId}|{r.ExternalMediaId}|{r.ParentExternalCommentId}";
+
+            if (known.Add(parentId))
+            {
+                pending.Enqueue(parentId);
+            }
+        }
+
+        var safetyLimit = fetched.Count * 2;
+
+        while (pending.Count > 0 && safetyLimit-- > 0)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            var parentId = pending.Dequeue();
+            var parent = commentsService.GetById(parentId);
+
+            if (parent == null)
+            {
+                continue;
+            }
+
+            fetched.Add(parent);
+
+            if (string.IsNullOrEmpty(parent.ParentExternalCommentId))
+            {
+                continue;
+            }
+
+            var grandparentId = $"{parent.SourceId}|{parent.ExternalMediaId}|{parent.ParentExternalCommentId}";
+
+            if (known.Add(grandparentId))
+            {
+                pending.Enqueue(grandparentId);
+            }
+        }
+    }
+
+    private static string BuildFilterSummary(int? sinceDays, int? takeRecent, int? staleDays)
+    {
+        var parts = new List<string>(3);
+
+        if (sinceDays != null)
+        {
+            parts.Add($"медиа не старше {sinceDays.Value} дн.");
+        }
+
+        if (takeRecent != null)
+        {
+            parts.Add($"только последние {takeRecent.Value}");
+        }
+
+        if (staleDays != null)
+        {
+            parts.Add($"не обновлялись > {staleDays.Value} дн.");
+        }
+
+        return string.Join(", ", parts);
     }
 
     private static DateTime? TryGetCreationDate(Media media)
@@ -244,6 +344,61 @@ public partial class CommentsHtmlControl : UserControl
         return rootId;
     }
 
+    private void ApplySettingsToUi()
+    {
+        _suppressSettingsSave = true;
+        try
+        {
+            uiSearchTextBox.Text = _settings.Search;
+            uiMediaSearchTextBox.Text = _settings.MediaSearch;
+            uiLimitNumeric.Value = Math.Clamp(_settings.Limit, (int)uiLimitNumeric.Minimum, (int)uiLimitNumeric.Maximum);
+            uiFetchSinceDaysNumeric.Value = Math.Clamp(_settings.FetchSinceDays, (int)uiFetchSinceDaysNumeric.Minimum, (int)uiFetchSinceDaysNumeric.Maximum);
+            uiFetchOnlyRecentNumeric.Value = Math.Clamp(_settings.FetchOnlyRecent, (int)uiFetchOnlyRecentNumeric.Minimum, (int)uiFetchOnlyRecentNumeric.Maximum);
+            uiFetchStaleNumeric.Value = Math.Clamp(_settings.FetchStaleDays, (int)uiFetchStaleNumeric.Minimum, (int)uiFetchStaleNumeric.Maximum);
+
+            _invertMediaSort = _settings.InvertMediaSort;
+            uiMediaSortInvertButton.Text = _invertMediaSort ? "↑" : "↓";
+            _invertCommentSort = _settings.InvertCommentSort;
+            uiCommentSortInvertButton.Text = _invertCommentSort ? "↑" : "↓";
+
+            SelectComboValue(uiMediaSortComboBox, _settings.MediaSort);
+            SelectComboValue(uiCommentSortComboBox, _settings.CommentSort);
+
+            if (!string.IsNullOrEmpty(_settings.SelectedSourceId)
+                && uiSourceComboBox.DataSource is List<SourceComboItem> items
+                && items.FirstOrDefault(x => x.SourceId == _settings.SelectedSourceId) is { } match)
+            {
+                uiSourceComboBox.SelectedItem = match;
+            }
+        }
+        finally
+        {
+            _suppressSettingsSave = false;
+        }
+    }
+
+    private void SaveSettings()
+    {
+        if (_suppressSettingsSave)
+        {
+            return;
+        }
+
+        _settings.SelectedSourceId = (uiSourceComboBox.SelectedItem as SourceComboItem)?.SourceId;
+        _settings.Search = uiSearchTextBox.Text;
+        _settings.MediaSearch = uiMediaSearchTextBox.Text;
+        _settings.Limit = (int)uiLimitNumeric.Value;
+        _settings.FetchSinceDays = (int)uiFetchSinceDaysNumeric.Value;
+        _settings.FetchOnlyRecent = (int)uiFetchOnlyRecentNumeric.Value;
+        _settings.FetchStaleDays = (int)uiFetchStaleNumeric.Value;
+        _settings.InvertMediaSort = _invertMediaSort;
+        _settings.InvertCommentSort = _invertCommentSort;
+        _settings.MediaSort = (uiMediaSortComboBox.SelectedItem as SortItem<MediaSort>)?.Value ?? MediaSort.ByTitle;
+        _settings.CommentSort = (uiCommentSortComboBox.SelectedItem as SortItem<CommentSort>)?.Value ?? CommentSort.ByDate;
+
+        _settings.Save();
+    }
+
     private void PopulateSortCombos()
     {
         uiMediaSortComboBox.BeginUpdate();
@@ -252,7 +407,7 @@ public partial class CommentsHtmlControl : UserControl
             uiMediaSortComboBox.DataSource = new List<SortItem<MediaSort>>
             {
                 new(MediaSort.ByTitle, "По названию"),
-                new(MediaSort.BySortNumber, "По номеру (SortNumber)"),
+                new(MediaSort.BySortNumber, "По порядку в источнике"),
             };
 
             uiMediaSortComboBox.DisplayMember = nameof(SortItem<MediaSort>.Label);
@@ -268,11 +423,10 @@ public partial class CommentsHtmlControl : UserControl
         {
             uiCommentSortComboBox.DataSource = new List<SortItem<CommentSort>>
             {
-                new(CommentSort.OldestFirst, "Старые сверху"),
-                new(CommentSort.NewestFirst, "Новые сверху"),
-                new(CommentSort.MostLiked, "Популярные сверху"),
-                new(CommentSort.MostReplied, "Обсуждаемые сверху"),
-                new(CommentSort.NoAuthorReply, "Без ответа автора сверху"),
+                new(CommentSort.ByDate, "По дате"),
+                new(CommentSort.ByLikes, "По лайкам"),
+                new(CommentSort.ByReplies, "По числу ответов"),
+                new(CommentSort.WithoutAuthorReply, "Без ответа автора"),
             };
 
             uiCommentSortComboBox.DisplayMember = nameof(SortItem<CommentSort>.Label);
@@ -335,6 +489,11 @@ public partial class CommentsHtmlControl : UserControl
 
         var version = ++_applyFiltersVersion;
 
+        _applyFiltersCts?.Cancel();
+        _applyFiltersCts?.Dispose();
+        _applyFiltersCts = new();
+        var ct = _applyFiltersCts.Token;
+
         var orcestrator = _orcestrator;
         var commentsService = _commentsService;
         var sourceId = (uiSourceComboBox.SelectedItem as SourceComboItem)?.SourceId;
@@ -342,7 +501,7 @@ public partial class CommentsHtmlControl : UserControl
         var mediaSearch = uiMediaSearchTextBox.Text.Trim();
         var limit = (int)uiLimitNumeric.Value;
         var mediaSort = (uiMediaSortComboBox.SelectedItem as SortItem<MediaSort>)?.Value ?? MediaSort.ByTitle;
-        var commentSort = (uiCommentSortComboBox.SelectedItem as SortItem<CommentSort>)?.Value ?? CommentSort.OldestFirst;
+        var commentSort = (uiCommentSortComboBox.SelectedItem as SortItem<CommentSort>)?.Value ?? CommentSort.ByDate;
         var invertMediaSort = _invertMediaSort;
         var invertCommentSort = _invertCommentSort;
 
@@ -352,15 +511,21 @@ public partial class CommentsHtmlControl : UserControl
         {
             var (records, json, truncated) = await Task.Run(() =>
             {
+                ct.ThrowIfCancellationRequested();
+
                 var fetched = commentsService.Query(sourceId,
                     textContains: string.IsNullOrEmpty(search) ? null : search,
                     limit: limit + 1);
+
+                ct.ThrowIfCancellationRequested();
 
                 var isTruncated = fetched.Count > limit;
                 if (isTruncated)
                 {
                     fetched = fetched.Take(limit).ToList();
                 }
+
+                BackfillOrphanParents(fetched, commentsService, ct);
 
                 var renderJson = CommentsBrowserView.BuildRenderJson(orcestrator, fetched, new()
                 {
@@ -373,14 +538,22 @@ public partial class CommentsHtmlControl : UserControl
                 });
 
                 return (Records: fetched, Json: renderJson, Truncated: isTruncated);
-            });
+            }, ct);
 
             if (version != _applyFiltersVersion || IsDisposed)
             {
                 return;
             }
 
-            uiBrowserView.ApplyJson(json);
+            try
+            {
+                uiBrowserView.ApplyJson(json);
+            }
+            catch (ObjectDisposedException)
+            {
+                return;
+            }
+
             WarmAuthors(records);
 
             uiStatusLabel.Text = records.Count == 0
@@ -388,6 +561,9 @@ public partial class CommentsHtmlControl : UserControl
                 : truncated
                     ? $"Комментариев: ≥{records.Count} (увеличьте лимит)"
                     : $"Комментариев: {records.Count}";
+        }
+        catch (OperationCanceledException)
+        {
         }
         catch (Exception ex)
         {
@@ -462,7 +638,7 @@ public partial class CommentsHtmlControl : UserControl
         }
     }
 
-    private void OpenCommentExternal(string sourceId, string externalMediaId, string externalCommentId)
+    private async void OpenCommentExternal(string sourceId, string externalMediaId, string externalCommentId)
     {
         if (_orcestrator == null || _commentsService == null)
         {
@@ -475,8 +651,17 @@ public partial class CommentsHtmlControl : UserControl
             return;
         }
 
-        var allComments = _commentsService.GetByMedia(sourceId, externalMediaId);
-        var rootCommentId = FindRootCommentId(allComments, externalCommentId);
+        var commentsService = _commentsService;
+        var rootCommentId = await Task.Run(() =>
+        {
+            var allComments = commentsService.GetByMedia(sourceId, externalMediaId);
+            return FindRootCommentId(allComments, externalCommentId);
+        });
+
+        if (IsDisposed)
+        {
+            return;
+        }
 
         try
         {
@@ -679,57 +864,88 @@ public partial class CommentsHtmlControl : UserControl
     private IReadOnlyList<CommentAuthorView> ResolveCommentAuthors(string sourceId, string externalMediaId)
     {
         var now = DateTime.UtcNow;
+        var cacheKey = (sourceId, externalMediaId);
 
-        if (_authorsCache.TryGetValue(sourceId, out var cached) && now - cached.FetchedAt < AuthorsCacheTtl)
+        if (_authorsCache.TryGetValue(cacheKey, out var cached) && now - cached.FetchedAt < AuthorsCacheTtl)
         {
             return cached.Authors;
         }
 
+        TriggerAuthorsLoad(sourceId, externalMediaId);
+        return [];
+    }
+
+    private void TriggerAuthorsLoad(string sourceId, string externalMediaId)
+    {
         if (_orcestrator == null || _commentsService == null)
         {
-            return [];
+            return;
         }
 
-        var source = _orcestrator.GetSources().FirstOrDefault(s => s.Id == sourceId);
-        if (source?.Type is not ISupportsCommentAuthors)
-        {
-            _authorsCache[sourceId] = (now, []);
-            return [];
-        }
+        var cacheKey = (sourceId, externalMediaId);
+        var orcestrator = _orcestrator;
+        var commentsService = _commentsService;
 
-        var link = _orcestrator.GetMedias()
-            .SelectMany(m => m.Sources)
-            .FirstOrDefault(l => l.SourceId == sourceId && l.ExternalId == externalMediaId);
-
-        if (link == null)
+        _ = Task.Run(async () =>
         {
-            return [];
+            try
+            {
+                var source = orcestrator.GetSources().FirstOrDefault(s => s.Id == sourceId);
+                if (source?.Type is not ISupportsCommentAuthors)
+                {
+                    _authorsCache[cacheKey] = (DateTime.UtcNow, []);
+                    return;
+                }
+
+                var link = orcestrator.GetMedias()
+                    .SelectMany(m => m.Sources)
+                    .FirstOrDefault(l => l.SourceId == sourceId && l.ExternalId == externalMediaId);
+
+                if (link == null)
+                {
+                    return;
+                }
+
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+                var authors = await commentsService.GetAvailableAuthorsAsync(source, link, cts.Token);
+                var view = authors
+                    .Select(a => new CommentAuthorView(a.Id, a.Name, a.AvatarUrl, a.IsDefault))
+                    .ToList();
+
+                _authorsCache[cacheKey] = (DateTime.UtcNow, view);
+                NotifyAuthorsReady(sourceId, externalMediaId, view);
+            }
+            catch (OperationCanceledException)
+            {
+                _logger?.LogWarning("Превышено время ожидания списка авторов для {Source}/{Media}", sourceId, externalMediaId);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Не удалось получить список авторов для {Source}/{Media}", sourceId, externalMediaId);
+            }
+        });
+    }
+
+    private void NotifyAuthorsReady(string sourceId, string externalMediaId, IReadOnlyList<CommentAuthorView> view)
+    {
+        if (IsDisposed)
+        {
+            return;
         }
 
         try
         {
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-            var authors = Task.Run(async () => await _commentsService.GetAvailableAuthorsAsync(source, link, cts.Token),
-                    cts.Token)
-                .GetAwaiter()
-                .GetResult();
-
-            var view = authors
-                .Select(a => new CommentAuthorView(a.Id, a.Name, a.AvatarUrl, a.IsDefault))
-                .ToList();
-
-            _authorsCache[sourceId] = (now, view);
-            return view;
+            if (InvokeRequired)
+            {
+                BeginInvoke(() => uiBrowserView.NotifyAuthors(sourceId, externalMediaId, view));
+            }
+            else
+            {
+                uiBrowserView.NotifyAuthors(sourceId, externalMediaId, view);
+            }
         }
-        catch (OperationCanceledException)
+        catch (ObjectDisposedException)
         {
-            _logger?.LogWarning("Превышено время ожидания списка авторов для {Source}", sourceId);
-            return [];
-        }
-        catch (Exception ex)
-        {
-            _logger?.LogWarning(ex, "Не удалось получить список авторов для {Source}", sourceId);
-            return [];
         }
     }
 
@@ -748,42 +964,45 @@ public partial class CommentsHtmlControl : UserControl
             var sourcesById = orcestrator.GetSources().ToDictionary(s => s.Id);
             var now = DateTime.UtcNow;
 
-            var sourceIds = records
-                .Select(r => r.SourceId)
-                .Distinct(StringComparer.Ordinal)
-                .Where(sid =>
+            var linkByKey = orcestrator.GetMedias()
+                .SelectMany(m => m.Sources)
+                .Where(l => !string.IsNullOrEmpty(l.SourceId) && !string.IsNullOrEmpty(l.ExternalId))
+                .GroupBy(l => (l.SourceId, l.ExternalId))
+                .ToDictionary(g => g.Key, g => g.First());
+
+            const int maxWarmPerCall = 20;
+
+            var keys = records
+                .Select(r => (r.SourceId, r.ExternalMediaId))
+                .Distinct()
+                .Where(key =>
                 {
-                    if (!sourcesById.TryGetValue(sid, out var src) || src.Type is not ISupportsCommentAuthors)
+                    if (!sourcesById.TryGetValue(key.SourceId, out var src) || src.Type is not ISupportsCommentAuthors)
                     {
                         return false;
                     }
 
-                    return !_authorsCache.TryGetValue(sid, out var cached)
+                    return !_authorsCache.TryGetValue(key, out var cached)
                            || now - cached.FetchedAt >= AuthorsCacheTtl;
                 })
+                .Take(maxWarmPerCall)
                 .ToList();
 
-            if (sourceIds.Count == 0)
+            if (keys.Count == 0)
             {
                 return;
             }
 
-            var sampleLinkBySource = orcestrator.GetMedias()
-                .SelectMany(m => m.Sources)
-                .Where(l => !string.IsNullOrEmpty(l.SourceId) && !string.IsNullOrEmpty(l.ExternalId))
-                .GroupBy(l => l.SourceId, StringComparer.Ordinal)
-                .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
-
-            foreach (var sourceId in sourceIds)
+            foreach (var key in keys)
             {
                 try
                 {
-                    if (!sourcesById.TryGetValue(sourceId, out var source))
+                    if (!sourcesById.TryGetValue(key.SourceId, out var source))
                     {
                         continue;
                     }
 
-                    if (!sampleLinkBySource.TryGetValue(sourceId, out var link))
+                    if (!linkByKey.TryGetValue((key.SourceId, key.ExternalMediaId), out var link))
                     {
                         continue;
                     }
@@ -794,14 +1013,14 @@ public partial class CommentsHtmlControl : UserControl
                         .Select(a => new CommentAuthorView(a.Id, a.Name, a.AvatarUrl, a.IsDefault))
                         .ToList();
 
-                    _authorsCache[sourceId] = (DateTime.UtcNow, view);
+                    _authorsCache[key] = (DateTime.UtcNow, view);
                 }
                 catch (OperationCanceledException)
                 {
                 }
                 catch (Exception ex)
                 {
-                    _logger?.LogDebug(ex, "Прогрев авторов не удался для {Source}", sourceId);
+                    _logger?.LogWarning(ex, "Прогрев авторов не удался для {Source}/{Media}", key.SourceId, key.ExternalMediaId);
                 }
             }
         });
@@ -841,20 +1060,28 @@ public partial class CommentsHtmlControl : UserControl
         uiFetchProgressBar.Visible = true;
         uiStatusLabel.Text = $"Загрузка комментариев: «{media.Title}»...";
 
+        IProgress<string> progress = new Progress<string>(text =>
+        {
+            uiStatusLabel.Text = text;
+            action.Status = text;
+        });
+
         try
         {
             await Task.Run(async () =>
             {
-                var count = await _commentsService.RefreshAsync(source, media, link, null, cts.Token);
+                var count = await _commentsService.RefreshAsync(source, media, link, progress, cts.Token);
                 action.Status = $"{source.TitleFull}: {count}";
             }, cts.Token);
         }
         catch (OperationCanceledException) when (cts.Token.IsCancellationRequested)
         {
+            uiStatusLabel.Text = "Загрузка отменена";
         }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Не удалось загрузить комментарии для «{Title}»", media.Title);
+            uiStatusLabel.Text = "Ошибка загрузки";
         }
         finally
         {
@@ -864,7 +1091,41 @@ public partial class CommentsHtmlControl : UserControl
             uiFetchProgressBar.Style = ProgressBarStyle.Blocks;
         }
 
-        ApplyFilters();
+        if (!TryApplyFetchedGroup(media, link))
+        {
+            ApplyFilters();
+        }
+    }
+
+    private bool TryApplyFetchedGroup(Media media, MediaSourceLink link)
+    {
+        if (_orcestrator == null || _commentsService == null)
+        {
+            return false;
+        }
+
+        try
+        {
+            var records = _commentsService.GetByMedia(link.SourceId, link.ExternalId);
+            BackfillOrphanParents(records, _commentsService, CancellationToken.None);
+
+            var groupKey = CommentsBrowserView.BuildGroupKey(media, link.SourceId, link.ExternalId);
+            var options = new CommentsRenderOptions
+            {
+                Search = uiSearchTextBox.Text.Trim(),
+                CommentSort = (uiCommentSortComboBox.SelectedItem as SortItem<CommentSort>)?.Value ?? CommentSort.ByDate,
+                InvertCommentSort = _invertCommentSort,
+                MediaSort = (uiMediaSortComboBox.SelectedItem as SortItem<MediaSort>)?.Value ?? MediaSort.ByTitle,
+                InvertMediaSort = _invertMediaSort,
+                MediaSearch = uiMediaSearchTextBox.Text.Trim(),
+            };
+
+            return uiBrowserView.TryApplyFetched(_orcestrator, records, groupKey, options);
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private async Task FetchAllForSourceAsync(Source source)
@@ -884,36 +1145,46 @@ public partial class CommentsHtmlControl : UserControl
             return;
         }
 
-        var since = uiFetchSinceCheckBox.Checked
-            ? DateTime.UtcNow.AddDays(-(double)uiFetchSinceDaysNumeric.Value)
-            : (DateTime?)null;
+        var sinceDays = (int)uiFetchSinceDaysNumeric.Value > 0 ? (int)uiFetchSinceDaysNumeric.Value : (int?)null;
+        var since = sinceDays != null ? DateTime.UtcNow.AddDays(-sinceDays.Value) : (DateTime?)null;
 
-        var takeRecent = uiFetchOnlyRecentCheckBox.Checked
-            ? (int)uiFetchOnlyRecentNumeric.Value
-            : (int?)null;
+        var takeRecent = (int)uiFetchOnlyRecentNumeric.Value > 0 ? (int)uiFetchOnlyRecentNumeric.Value : (int?)null;
 
-        var query = _orcestrator.GetMedias()
+        var staleDays = (int)uiFetchStaleNumeric.Value > 0 ? (int)uiFetchStaleNumeric.Value : (int?)null;
+        var staleThreshold = staleDays != null ? DateTime.UtcNow.AddDays(-staleDays.Value) : (DateTime?)null;
+
+        var allForSource = _orcestrator.GetMedias()
             .SelectMany(media => media.Sources
                 .Where(link => link.SourceId == source.Id && !string.IsNullOrEmpty(link.ExternalId))
-                .Select(link => (Media: media, Link: link)));
+                .Select(link => (Media: media, Link: link)))
+            .OrderByDescending(media => media.Link.SortNumber)
+            .ToList();
+
+        IEnumerable<(Media Media, MediaSourceLink Link)> filtered = allForSource;
 
         if (since != null)
         {
-            query = query.Where(t => TryGetCreationDate(t.Media) is { } d && d >= since.Value);
+            filtered = filtered.Where(t => TryGetCreationDate(t.Media) is { } d && d >= since.Value);
+        }
+
+        if (staleThreshold != null)
+        {
+            filtered = filtered.Where(t => t.Link.CommentsFetchedAt == null || t.Link.CommentsFetchedAt <= staleThreshold.Value);
         }
 
         if (takeRecent != null)
         {
-            query = query.OrderByDescending(t => t.Link.SortNumber).Take(takeRecent.Value);
+            filtered = filtered.OrderByDescending(t => t.Link.SortNumber).Take(takeRecent.Value);
         }
 
-        var targets = query.ToList();
+        var targets = filtered.ToList();
+        var hasFilters = since != null || takeRecent != null || staleThreshold != null;
+        var filterSummary = BuildFilterSummary(sinceDays, takeRecent, staleDays);
 
         if (targets.Count == 0)
         {
-            var hasFilters = since != null || takeRecent != null;
             MessageBox.Show(hasFilters
-                    ? $"В источнике «{source.TitleFull}» нет подходящих медиа с учётом настроек загрузки."
+                    ? $"В источнике «{source.TitleFull}» нет медиа, попадающих под фильтры ({filterSummary})."
                     : $"В источнике «{source.TitleFull}» нет медиа для загрузки.",
                 "Нечего загружать",
                 MessageBoxButtons.OK,
@@ -922,7 +1193,11 @@ public partial class CommentsHtmlControl : UserControl
             return;
         }
 
-        var confirm = MessageBox.Show($"Загрузить комментарии для всех медиа источника «{source.TitleFull}»? Будет обработано {targets.Count} медиа.",
+        var confirmMessage = hasFilters
+            ? $"Загрузить комментарии для {targets.Count} из {allForSource.Count} медиа источника «{source.TitleFull}»?{Environment.NewLine}Фильтр: {filterSummary}."
+            : $"Загрузить комментарии для {targets.Count} медиа источника «{source.TitleFull}»?";
+
+        var confirm = MessageBox.Show(confirmMessage,
             "Подтверждение",
             MessageBoxButtons.OKCancel,
             MessageBoxIcon.Question);
@@ -934,6 +1209,7 @@ public partial class CommentsHtmlControl : UserControl
 
         uiForceFetchAllButton.Enabled = false;
         var cts = new CancellationTokenSource();
+        var token = cts.Token;
         var action = _actionHolder.Register($"Загрузка комментариев из «{source.TitleFull}»",
             "Запущена",
             targets.Count,
@@ -958,43 +1234,65 @@ public partial class CommentsHtmlControl : UserControl
             uiFetchCounterLabel.Text = p.CounterText;
         });
 
+        var counterLock = new object();
+
         try
         {
-            await Task.Run(async () =>
+            var parallelOptions = new ParallelOptions
             {
-                foreach (var (media, link) in targets)
-                {
-                    if (cts.Token.IsCancellationRequested)
-                    {
-                        break;
-                    }
+                MaxDegreeOfParallelism = 3,
+                CancellationToken = token,
+            };
 
-                    var startStatus = $"[{processed + 1}/{targets.Count}] Загрузка: «{media.Title}»";
+            await Parallel.ForEachAsync(targets, parallelOptions, async (item, ct) =>
+            {
+                var (media, link) = item;
+
+                int currentIndex;
+                string startStatus;
+                lock (counterLock)
+                {
+                    currentIndex = processed + 1;
+                    startStatus = $"[{currentIndex}/{targets.Count}] Загрузка: «{media.Title}»";
                     var startCounter = failed > 0
                         ? $"✓ {ok}  ✗ {failed}  /  {targets.Count}"
                         : $"✓ {ok}  /  {targets.Count}";
 
                     reporter.Report(new(processed, startStatus, startCounter));
-                    action.Status = $"{media.Title}: загрузка...";
+                }
 
-                    try
+                action.Status = $"{media.Title}: загрузка...";
+
+                try
+                {
+                    var count = await _commentsService.RefreshAsync(source, media, link, null, ct);
+
+                    lock (counterLock)
                     {
-                        var count = await _commentsService.RefreshAsync(source, media, link, null, cts.Token);
                         ok++;
-                        action.Status = $"{media.Title}: {count}";
                     }
-                    catch (OperationCanceledException) when (cts.Token.IsCancellationRequested)
-                    {
-                        throw;
-                    }
-                    catch (Exception ex)
+
+                    action.Status = $"{media.Title}: {count}";
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    lock (counterLock)
                     {
                         failed++;
-                        _logger?.LogError(ex, "Не удалось загрузить комментарии для «{Title}» ({SourceId}/{ExternalId})",
-                            media.Title, link.SourceId, link.ExternalId);
                     }
 
-                    action.ProgressPlus();
+                    _logger?.LogError(ex, "Не удалось загрузить комментарии для «{Title}» ({SourceId}/{ExternalId})",
+                        media.Title, link.SourceId, link.ExternalId);
+                }
+
+                action.ProgressPlus();
+
+                lock (counterLock)
+                {
                     processed++;
                     var counter = failed > 0
                         ? $"✓ {ok}  ✗ {failed}  /  {targets.Count}"
@@ -1002,9 +1300,9 @@ public partial class CommentsHtmlControl : UserControl
 
                     reporter.Report(new(processed, startStatus, counter));
                 }
-            }, cts.Token);
+            });
         }
-        catch (OperationCanceledException) when (cts.Token.IsCancellationRequested)
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
             _logger?.LogInformation("Загрузка комментариев отменена для «{Source}»", source.TitleFull);
         }

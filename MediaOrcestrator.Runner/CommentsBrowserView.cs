@@ -16,17 +16,16 @@ public enum MediaSort
 
 public enum CommentSort
 {
-    OldestFirst = 0,
-    NewestFirst = 1,
-    MostLiked = 2,
-    MostReplied = 3,
-    NoAuthorReply = 4,
+    ByDate = 0,
+    ByLikes = 1,
+    ByReplies = 2,
+    WithoutAuthorReply = 3,
 }
 
 public sealed record CommentsRenderOptions
 {
     public string Search { get; init; } = "";
-    public CommentSort CommentSort { get; init; } = CommentSort.OldestFirst;
+    public CommentSort CommentSort { get; init; } = CommentSort.ByDate;
     public bool InvertCommentSort { get; init; }
     public MediaSort MediaSort { get; init; } = MediaSort.ByTitle;
     public bool InvertMediaSort { get; init; }
@@ -213,16 +212,13 @@ public sealed partial class CommentsBrowserView : UserControl
 
         IEnumerable<(GroupDto Group, int SortNumber)> sortedGroups = options.MediaSort switch
         {
-            MediaSort.BySortNumber => groupsRaw
-                .OrderBy(g => g.SortNumber)
-                .ThenBy(g => g.Group.MediaTitle, StringComparer.OrdinalIgnoreCase),
-            _ => groupsRaw.OrderBy(g => g.Group.MediaTitle, StringComparer.OrdinalIgnoreCase),
+            MediaSort.BySortNumber => options.InvertMediaSort
+                ? groupsRaw.OrderByDescending(g => g.SortNumber).ThenByDescending(g => g.Group.MediaTitle, StringComparer.OrdinalIgnoreCase)
+                : groupsRaw.OrderBy(g => g.SortNumber).ThenBy(g => g.Group.MediaTitle, StringComparer.OrdinalIgnoreCase),
+            _ => options.InvertMediaSort
+                ? groupsRaw.OrderByDescending(g => g.Group.MediaTitle, StringComparer.OrdinalIgnoreCase)
+                : groupsRaw.OrderBy(g => g.Group.MediaTitle, StringComparer.OrdinalIgnoreCase),
         };
-
-        if (options.InvertMediaSort)
-        {
-            sortedGroups = sortedGroups.Reverse();
-        }
 
         var groups = sortedGroups.Select(g => g.Group).ToList();
 
@@ -243,6 +239,45 @@ public sealed partial class CommentsBrowserView : UserControl
     public bool TryApplyLikeUpdate(string commentRecordId, bool likedByMe, int likeCount)
     {
         return InvokeApply("__applyLike", commentRecordId, likedByMe, likeCount);
+    }
+
+    public void NotifyAuthors(string sourceId, string externalMediaId, IReadOnlyList<CommentAuthorView> authors)
+    {
+        var json = JsonSerializer.Serialize(authors, JsonOptions);
+        InvokeApply("__setAuthors", sourceId, externalMediaId, json);
+    }
+
+    public bool TryApplyFetched(
+        Orcestrator orcestrator,
+        IReadOnlyList<CommentRecord> records,
+        string groupKey,
+        CommentsRenderOptions options)
+    {
+        try
+        {
+            var json = BuildRenderJson(orcestrator, records, options);
+            using var doc = JsonDocument.Parse(json);
+            if (!doc.RootElement.TryGetProperty("groups", out var groupsArray))
+            {
+                return false;
+            }
+
+            foreach (var group in groupsArray.EnumerateArray())
+            {
+                if (group.TryGetProperty("key", out var keyElement)
+                    && keyElement.GetString() == groupKey)
+                {
+                    var groupJson = group.GetRawText();
+                    return InvokeApply("__applyGroup", groupKey, groupJson);
+                }
+            }
+
+            return false;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     public bool TryApplyEdit(string commentRecordId, string newText)
@@ -407,7 +442,7 @@ public sealed partial class CommentsBrowserView : UserControl
         var byId = new Dictionary<string, CommentRecord>(list.Count);
         foreach (var r in list)
         {
-            byId[r.Id] = r;
+            byId.TryAdd(r.Id, r);
         }
 
         var childrenByParent = new Dictionary<string, List<CommentRecord>>();
@@ -449,23 +484,19 @@ public sealed partial class CommentsBrowserView : UserControl
 
         IEnumerable<CommentRecord> sortedRoots = sort switch
         {
-            CommentSort.NewestFirst => roots.OrderByDescending(r => r.PublishedAt),
-            CommentSort.MostLiked => roots
-                .OrderByDescending(r => r.LikeCount.GetValueOrDefault())
-                .ThenByDescending(r => r.PublishedAt),
-            CommentSort.MostReplied => roots
-                .OrderByDescending(r => stats[r.Id].DescendantCount)
-                .ThenByDescending(r => r.PublishedAt),
-            CommentSort.NoAuthorReply => roots
-                .OrderBy(r => stats[r.Id].HasAuthorReply ? 1 : 0)
-                .ThenBy(r => r.PublishedAt),
-            _ => roots.OrderBy(r => r.PublishedAt),
+            CommentSort.ByLikes => invert
+                ? roots.OrderBy(r => r.LikeCount.GetValueOrDefault()).ThenBy(r => r.PublishedAt)
+                : roots.OrderByDescending(r => r.LikeCount.GetValueOrDefault()).ThenByDescending(r => r.PublishedAt),
+            CommentSort.ByReplies => invert
+                ? roots.OrderBy(r => stats[r.Id].DescendantCount).ThenBy(r => r.PublishedAt)
+                : roots.OrderByDescending(r => stats[r.Id].DescendantCount).ThenByDescending(r => r.PublishedAt),
+            CommentSort.WithoutAuthorReply => invert
+                ? roots.OrderBy(r => stats[r.Id].HasAuthorReply ? 1 : 0).ThenByDescending(r => r.PublishedAt)
+                : roots.OrderBy(r => stats[r.Id].HasAuthorReply ? 1 : 0).ThenBy(r => r.PublishedAt),
+            _ => invert
+                ? roots.OrderBy(r => r.PublishedAt)
+                : roots.OrderByDescending(r => r.PublishedAt),
         };
-
-        if (invert)
-        {
-            sortedRoots = sortedRoots.Reverse();
-        }
 
         var result = new List<CommentRecord>(list.Count);
         foreach (var root in sortedRoots)

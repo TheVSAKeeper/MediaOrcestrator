@@ -64,17 +64,33 @@ public sealed class CommentsRepository
             query = query.Where(x => x.PublishedAt <= toValue);
         }
 
-        var ordered = query.OrderByDescending(x => x.PublishedAt).Limit(limit).ToList();
+        var ordered = query.OrderByDescending(x => x.PublishedAt);
 
         if (string.IsNullOrWhiteSpace(textContains))
         {
-            return ordered;
+            return ordered.Limit(limit).ToList();
         }
 
-        return ordered
-            .Where(x => x.Text != null && x.Text.Contains(textContains, StringComparison.OrdinalIgnoreCase)
-                        || x.AuthorName != null && x.AuthorName.Contains(textContains, StringComparison.OrdinalIgnoreCase))
-            .ToList();
+        var result = new List<CommentRecord>(Math.Min(limit, 256));
+        foreach (var record in ordered.ToEnumerable())
+        {
+            var matches = record.Text != null && record.Text.Contains(textContains, StringComparison.OrdinalIgnoreCase)
+                          || record.AuthorName != null && record.AuthorName.Contains(textContains, StringComparison.OrdinalIgnoreCase);
+
+            if (!matches)
+            {
+                continue;
+            }
+
+            result.Add(record);
+
+            if (result.Count >= limit)
+            {
+                break;
+            }
+        }
+
+        return result;
     }
 
     public int CountAll()
@@ -92,13 +108,33 @@ public sealed class CommentsRepository
         Collection.Upsert(record);
     }
 
-    public void ReplaceAll(string sourceId, string externalMediaId, IReadOnlyList<CommentRecord> records)
+    public void ReplaceAll(string sourceId, string externalMediaId, IReadOnlyList<CommentRecord> records, bool preserveLikedByMe = false)
     {
         _db.BeginTrans();
 
         try
         {
             var collection = Collection;
+
+            if (preserveLikedByMe && records.Count > 0)
+            {
+                var likedIds = collection
+                    .Find(x => x.SourceId == sourceId && x.ExternalMediaId == externalMediaId && x.LikedByMe)
+                    .Select(x => x.Id)
+                    .ToHashSet(StringComparer.Ordinal);
+
+                if (likedIds.Count > 0)
+                {
+                    foreach (var record in records)
+                    {
+                        if (!record.LikedByMe && likedIds.Contains(record.Id))
+                        {
+                            record.LikedByMe = true;
+                        }
+                    }
+                }
+            }
+
             collection.DeleteMany(x => x.SourceId == sourceId && x.ExternalMediaId == externalMediaId);
 
             if (records.Count > 0)
