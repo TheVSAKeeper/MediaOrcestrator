@@ -24,15 +24,6 @@ partial class CommentsHtmlControl
     private TableLayoutPanel uiFetchLayout;
     private Label uiSourceLabel;
     private ComboBox uiSourceComboBox;
-    private Label uiFetchSinceTitleLabel;
-    private NumericUpDown uiFetchSinceDaysNumeric;
-    private Label uiFetchSinceDaysLabel;
-    private Label uiFetchOnlyRecentTitleLabel;
-    private NumericUpDown uiFetchOnlyRecentNumeric;
-    private Label uiFetchOnlyRecentLabel;
-    private Label uiFetchStaleTitleLabel;
-    private NumericUpDown uiFetchStaleNumeric;
-    private Label uiFetchStaleLabel;
     private Button uiForceFetchAllButton;
     private GroupBox uiViewGroup;
     private TableLayoutPanel uiViewLayout;
@@ -55,15 +46,6 @@ partial class CommentsHtmlControl
         uiFetchLayout = new TableLayoutPanel();
         uiSourceLabel = new Label();
         uiSourceComboBox = new ComboBox();
-        uiFetchSinceTitleLabel = new Label();
-        uiFetchSinceDaysNumeric = new NumericUpDown();
-        uiFetchSinceDaysLabel = new Label();
-        uiFetchOnlyRecentTitleLabel = new Label();
-        uiFetchOnlyRecentNumeric = new NumericUpDown();
-        uiFetchOnlyRecentLabel = new Label();
-        uiFetchStaleTitleLabel = new Label();
-        uiFetchStaleNumeric = new NumericUpDown();
-        uiFetchStaleLabel = new Label();
         uiForceFetchAllButton = new Button();
         uiViewGroup = new GroupBox();
         uiViewLayout = new TableLayoutPanel();
@@ -80,9 +62,6 @@ partial class CommentsHtmlControl
         uiFiltersPanel.SuspendLayout();
         uiFetchGroup.SuspendLayout();
         uiFetchLayout.SuspendLayout();
-        ((System.ComponentModel.ISupportInitialize)uiFetchSinceDaysNumeric).BeginInit();
-        ((System.ComponentModel.ISupportInitialize)uiFetchOnlyRecentNumeric).BeginInit();
-        ((System.ComponentModel.ISupportInitialize)uiFetchStaleNumeric).BeginInit();
         uiViewGroup.SuspendLayout();
         uiViewLayout.SuspendLayout();
         ((System.ComponentModel.ISupportInitialize)uiLimitNumeric).BeginInit();
@@ -117,32 +96,16 @@ partial class CommentsHtmlControl
         //
         // uiFetchLayout
         //
-        uiFetchLayout.ColumnCount = 6;
-        uiFetchLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        uiFetchLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        uiFetchLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        uiFetchLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        uiFetchLayout.ColumnCount = 2;
         uiFetchLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         uiFetchLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
         uiFetchLayout.Controls.Add(uiSourceLabel, 0, 0);
         uiFetchLayout.Controls.Add(uiSourceComboBox, 1, 0);
-        uiFetchLayout.SetColumnSpan(uiSourceComboBox, 5);
-        uiFetchLayout.Controls.Add(uiFetchSinceTitleLabel, 0, 1);
-        uiFetchLayout.Controls.Add(uiFetchSinceDaysNumeric, 1, 1);
-        uiFetchLayout.Controls.Add(uiFetchSinceDaysLabel, 2, 1);
-        uiFetchLayout.Controls.Add(uiFetchOnlyRecentTitleLabel, 3, 1);
-        uiFetchLayout.Controls.Add(uiFetchOnlyRecentNumeric, 4, 1);
-        uiFetchLayout.Controls.Add(uiFetchOnlyRecentLabel, 5, 1);
-        uiFetchLayout.Controls.Add(uiFetchStaleTitleLabel, 0, 2);
-        uiFetchLayout.Controls.Add(uiFetchStaleNumeric, 1, 2);
-        uiFetchLayout.Controls.Add(uiFetchStaleLabel, 2, 2);
-        uiFetchLayout.Controls.Add(uiForceFetchAllButton, 0, 3);
-        uiFetchLayout.SetColumnSpan(uiForceFetchAllButton, 6);
+        uiFetchLayout.Controls.Add(uiForceFetchAllButton, 0, 1);
+        uiFetchLayout.SetColumnSpan(uiForceFetchAllButton, 2);
         uiFetchLayout.Dock = DockStyle.Fill;
         uiFetchLayout.Name = "uiFetchLayout";
-        uiFetchLayout.RowCount = 4;
-        uiFetchLayout.RowStyles.Add(new RowStyle());
-        uiFetchLayout.RowStyles.Add(new RowStyle());
+        uiFetchLayout.RowCount = 2;
         uiFetchLayout.RowStyles.Add(new RowStyle());
         uiFetchLayout.RowStyles.Add(new RowStyle());
         uiFetchLayout.TabIndex = 0;
@@ -165,99 +128,6 @@ partial class CommentsHtmlControl
         uiSourceComboBox.TabIndex = 1;
         uiSourceComboBox.SelectedIndexChanged += uiSourceComboBox_SelectedIndexChanged;
         //
-        // uiFetchSinceTitleLabel
-        //
-        uiFetchSinceTitleLabel.AutoSize = true;
-        uiFetchSinceTitleLabel.Margin = new Padding(0, 7, 6, 0);
-        uiFetchSinceTitleLabel.Name = "uiFetchSinceTitleLabel";
-        uiFetchSinceTitleLabel.TabIndex = 2;
-        uiFetchSinceTitleLabel.Text = "Медиа не старше";
-        //
-        // uiFetchSinceDaysNumeric
-        //
-        uiFetchSinceDaysNumeric.Margin = new Padding(0, 3, 6, 3);
-        uiFetchSinceDaysNumeric.Maximum = new decimal(new int[] { 3650, 0, 0, 0 });
-        uiFetchSinceDaysNumeric.Minimum = new decimal(new int[] { 0, 0, 0, 0 });
-        uiFetchSinceDaysNumeric.Name = "uiFetchSinceDaysNumeric";
-        uiFetchSinceDaysNumeric.Size = new Size(70, 23);
-        uiFetchSinceDaysNumeric.TabIndex = 3;
-        uiFetchSinceDaysNumeric.Value = new decimal(new int[] { 0, 0, 0, 0 });
-        uiFetchSinceDaysNumeric.ValueChanged += uiFetchSettingsValueChanged;
-        uiToolTip.SetToolTip(uiFetchSinceDaysNumeric,
-            "Загружать комментарии только для медиа, опубликованных не позже N дней назад. 0 = без фильтра."
-            + Environment.NewLine
-            + "Использует CreationDate из метаданных. Медиа без этого поля будут пропущены.");
-        //
-        // uiFetchSinceDaysLabel
-        //
-        uiFetchSinceDaysLabel.AutoSize = true;
-        uiFetchSinceDaysLabel.Margin = new Padding(0, 7, 0, 0);
-        uiFetchSinceDaysLabel.Name = "uiFetchSinceDaysLabel";
-        uiFetchSinceDaysLabel.TabIndex = 4;
-        uiFetchSinceDaysLabel.Text = "дн.";
-        //
-        // uiFetchOnlyRecentTitleLabel
-        //
-        uiFetchOnlyRecentTitleLabel.AutoSize = true;
-        uiFetchOnlyRecentTitleLabel.Margin = new Padding(16, 7, 6, 0);
-        uiFetchOnlyRecentTitleLabel.Name = "uiFetchOnlyRecentTitleLabel";
-        uiFetchOnlyRecentTitleLabel.TabIndex = 5;
-        uiFetchOnlyRecentTitleLabel.Text = "Только последние";
-        //
-        // uiFetchOnlyRecentNumeric
-        //
-        uiFetchOnlyRecentNumeric.Margin = new Padding(0, 3, 6, 3);
-        uiFetchOnlyRecentNumeric.Maximum = new decimal(new int[] { 100000, 0, 0, 0 });
-        uiFetchOnlyRecentNumeric.Minimum = new decimal(new int[] { 0, 0, 0, 0 });
-        uiFetchOnlyRecentNumeric.Name = "uiFetchOnlyRecentNumeric";
-        uiFetchOnlyRecentNumeric.Size = new Size(80, 23);
-        uiFetchOnlyRecentNumeric.TabIndex = 6;
-        uiFetchOnlyRecentNumeric.Value = new decimal(new int[] { 0, 0, 0, 0 });
-        uiFetchOnlyRecentNumeric.ValueChanged += uiFetchSettingsValueChanged;
-        uiToolTip.SetToolTip(uiFetchOnlyRecentNumeric,
-            "Брать только N самых новых медиа по порядку в источнике (SortNumber). 0 = без фильтра."
-            + Environment.NewLine
-            + "Применяется поверх фильтра «Медиа не старше».");
-        //
-        // uiFetchOnlyRecentLabel
-        //
-        uiFetchOnlyRecentLabel.AutoSize = true;
-        uiFetchOnlyRecentLabel.Margin = new Padding(0, 7, 0, 0);
-        uiFetchOnlyRecentLabel.Name = "uiFetchOnlyRecentLabel";
-        uiFetchOnlyRecentLabel.TabIndex = 7;
-        uiFetchOnlyRecentLabel.Text = "медиа";
-        //
-        // uiFetchStaleTitleLabel
-        //
-        uiFetchStaleTitleLabel.AutoSize = true;
-        uiFetchStaleTitleLabel.Margin = new Padding(0, 7, 6, 0);
-        uiFetchStaleTitleLabel.Name = "uiFetchStaleTitleLabel";
-        uiFetchStaleTitleLabel.TabIndex = 8;
-        uiFetchStaleTitleLabel.Text = "Не обновлялись более";
-        //
-        // uiFetchStaleNumeric
-        //
-        uiFetchStaleNumeric.Margin = new Padding(0, 3, 6, 3);
-        uiFetchStaleNumeric.Maximum = new decimal(new int[] { 3650, 0, 0, 0 });
-        uiFetchStaleNumeric.Minimum = new decimal(new int[] { 0, 0, 0, 0 });
-        uiFetchStaleNumeric.Name = "uiFetchStaleNumeric";
-        uiFetchStaleNumeric.Size = new Size(70, 23);
-        uiFetchStaleNumeric.TabIndex = 9;
-        uiFetchStaleNumeric.Value = new decimal(new int[] { 0, 0, 0, 0 });
-        uiFetchStaleNumeric.ValueChanged += uiFetchSettingsValueChanged;
-        uiToolTip.SetToolTip(uiFetchStaleNumeric,
-            "Загружать только те медиа, чьи комментарии не обновлялись дольше N дней. 0 = без фильтра."
-            + Environment.NewLine
-            + "Медиа без записи о времени последнего обновления тоже попадают в выборку.");
-        //
-        // uiFetchStaleLabel
-        //
-        uiFetchStaleLabel.AutoSize = true;
-        uiFetchStaleLabel.Margin = new Padding(0, 7, 0, 0);
-        uiFetchStaleLabel.Name = "uiFetchStaleLabel";
-        uiFetchStaleLabel.TabIndex = 10;
-        uiFetchStaleLabel.Text = "дн.";
-        //
         // uiForceFetchAllButton
         //
         uiForceFetchAllButton.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
@@ -265,12 +135,12 @@ partial class CommentsHtmlControl
         uiForceFetchAllButton.Margin = new Padding(0, 4, 0, 2);
         uiForceFetchAllButton.Name = "uiForceFetchAllButton";
         uiForceFetchAllButton.Size = new Size(190, 25);
-        uiForceFetchAllButton.TabIndex = 8;
-        uiForceFetchAllButton.Text = "Загрузить из источника";
+        uiForceFetchAllButton.TabIndex = 2;
+        uiForceFetchAllButton.Text = "Загрузить из источника...";
         uiForceFetchAllButton.UseVisualStyleBackColor = true;
         uiForceFetchAllButton.Click += uiForceFetchAllButton_Click;
         uiToolTip.SetToolTip(uiForceFetchAllButton,
-            "Загрузить комментарии для медиа выбранного источника, отфильтрованных настройками выше."
+            "Открыть параметры и загрузить комментарии для медиа выбранного источника."
             + Environment.NewLine
             + "Для каждого попавшего медиа всегда загружаются все его комментарии.");
         //
@@ -398,9 +268,6 @@ partial class CommentsHtmlControl
         uiFetchGroup.PerformLayout();
         uiFetchLayout.ResumeLayout(false);
         uiFetchLayout.PerformLayout();
-        ((System.ComponentModel.ISupportInitialize)uiFetchSinceDaysNumeric).EndInit();
-        ((System.ComponentModel.ISupportInitialize)uiFetchOnlyRecentNumeric).EndInit();
-        ((System.ComponentModel.ISupportInitialize)uiFetchStaleNumeric).EndInit();
         uiViewGroup.ResumeLayout(false);
         uiViewGroup.PerformLayout();
         uiViewLayout.ResumeLayout(false);

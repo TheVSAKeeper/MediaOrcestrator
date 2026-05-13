@@ -167,6 +167,17 @@ public partial class CommentsHtmlControl : UserControl
             return;
         }
 
+        using var dialog = new CommentsFetchOptionsDialog(_settings);
+        if (dialog.ShowDialog(this) != DialogResult.OK)
+        {
+            return;
+        }
+
+        _settings.FetchSinceDays = dialog.SinceDays;
+        _settings.FetchOnlyRecent = dialog.OnlyRecent;
+        _settings.FetchStaleDays = dialog.StaleDays;
+        _settings.Save();
+
         await FetchAllForSourceAsync(source);
     }
 
@@ -345,9 +356,6 @@ public partial class CommentsHtmlControl : UserControl
         {
             uiSearchTextBox.Text = _settings.Search;
             uiLimitNumeric.Value = Math.Clamp(_settings.Limit, (int)uiLimitNumeric.Minimum, (int)uiLimitNumeric.Maximum);
-            uiFetchSinceDaysNumeric.Value = Math.Clamp(_settings.FetchSinceDays, (int)uiFetchSinceDaysNumeric.Minimum, (int)uiFetchSinceDaysNumeric.Maximum);
-            uiFetchOnlyRecentNumeric.Value = Math.Clamp(_settings.FetchOnlyRecent, (int)uiFetchOnlyRecentNumeric.Minimum, (int)uiFetchOnlyRecentNumeric.Maximum);
-            uiFetchStaleNumeric.Value = Math.Clamp(_settings.FetchStaleDays, (int)uiFetchStaleNumeric.Minimum, (int)uiFetchStaleNumeric.Maximum);
 
             if (!string.IsNullOrEmpty(_settings.SelectedSourceId)
                 && uiSourceComboBox.DataSource is List<SourceComboItem> items
@@ -372,9 +380,6 @@ public partial class CommentsHtmlControl : UserControl
         _settings.SelectedSourceId = (uiSourceComboBox.SelectedItem as SourceComboItem)?.SourceId;
         _settings.Search = uiSearchTextBox.Text;
         _settings.Limit = (int)uiLimitNumeric.Value;
-        _settings.FetchSinceDays = (int)uiFetchSinceDaysNumeric.Value;
-        _settings.FetchOnlyRecent = (int)uiFetchOnlyRecentNumeric.Value;
-        _settings.FetchStaleDays = (int)uiFetchStaleNumeric.Value;
 
         _settings.Save();
     }
@@ -1069,12 +1074,12 @@ public partial class CommentsHtmlControl : UserControl
             return;
         }
 
-        var sinceDays = (int)uiFetchSinceDaysNumeric.Value > 0 ? (int)uiFetchSinceDaysNumeric.Value : (int?)null;
+        var sinceDays = _settings.FetchSinceDays > 0 ? (int?)_settings.FetchSinceDays : null;
         var since = sinceDays != null ? DateTime.UtcNow.AddDays(-sinceDays.Value) : (DateTime?)null;
 
-        var takeRecent = (int)uiFetchOnlyRecentNumeric.Value > 0 ? (int)uiFetchOnlyRecentNumeric.Value : (int?)null;
+        var takeRecent = _settings.FetchOnlyRecent > 0 ? (int?)_settings.FetchOnlyRecent : null;
 
-        var staleDays = (int)uiFetchStaleNumeric.Value > 0 ? (int)uiFetchStaleNumeric.Value : (int?)null;
+        var staleDays = _settings.FetchStaleDays > 0 ? (int?)_settings.FetchStaleDays : null;
         var staleThreshold = staleDays != null ? DateTime.UtcNow.AddDays(-staleDays.Value) : (DateTime?)null;
 
         var allForSource = _orcestrator.GetMedias()
@@ -1114,20 +1119,6 @@ public partial class CommentsHtmlControl : UserControl
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
 
-            return;
-        }
-
-        var confirmMessage = hasFilters
-            ? $"Загрузить комментарии для {targets.Count} из {allForSource.Count} медиа источника «{source.TitleFull}»?{Environment.NewLine}Фильтр: {filterSummary}."
-            : $"Загрузить комментарии для {targets.Count} медиа источника «{source.TitleFull}»?";
-
-        var confirm = MessageBox.Show(confirmMessage,
-            "Подтверждение",
-            MessageBoxButtons.OKCancel,
-            MessageBoxIcon.Question);
-
-        if (confirm != DialogResult.OK)
-        {
             return;
         }
 
@@ -1259,5 +1250,4 @@ public partial class CommentsHtmlControl : UserControl
             return Label;
         }
     }
-
 }
