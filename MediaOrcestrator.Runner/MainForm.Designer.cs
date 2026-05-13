@@ -48,7 +48,6 @@
             uiRelationsGraphTabPage = new TabPage();
             uiRelationsGraphControl = new RelationsGraphControl();
             uiAuditTabPage = new TabPage();
-            uiRunningActionsFlowLayoutPanel = new FlowLayoutPanel();
             uiAuditSyncHeaderLabel = new Label();
             uiAuditBulkPanel = new Panel();
             uiBulkSourcesLabel = new Label();
@@ -65,6 +64,8 @@
             uiForceScanButton = new Button();
             uiSyncTreeTabPage = new TabPage();
             uiSyncTreeControl = new SyncTreeControl();
+            uiTasksTabPage = new TabPage();
+            uiTasksControl = new TasksControl();
             uiLogsTabPage = new TabPage();
             uiLogsToolbarPanel = new Panel();
             uiReportIssueButton = new Button();
@@ -100,6 +101,7 @@
             uiAuditBulkPanel.SuspendLayout();
             uiAuditSourcesPanel.SuspendLayout();
             uiSyncTreeTabPage.SuspendLayout();
+            uiTasksTabPage.SuspendLayout();
             uiLogsTabPage.SuspendLayout();
             uiLogsToolbarPanel.SuspendLayout();
             uiCommentsTabPage.SuspendLayout();
@@ -216,6 +218,7 @@
             uiMainTabControl.Controls.Add(uiRelationsGraphTabPage);
             uiMainTabControl.Controls.Add(uiAuditTabPage);
             uiMainTabControl.Controls.Add(uiSyncTreeTabPage);
+            uiMainTabControl.Controls.Add(uiTasksTabPage);
             uiMainTabControl.Controls.Add(uiCommentsTabPage);
             uiMainTabControl.Controls.Add(uiCommentsHtmlTabPage);
             uiMainTabControl.Controls.Add(uiLogsTabPage);
@@ -294,8 +297,7 @@
             uiRelationsGraphControl.TabIndex = 0;
             // 
             // uiAuditTabPage
-            // 
-            uiAuditTabPage.Controls.Add(uiRunningActionsFlowLayoutPanel);
+            //
             uiAuditTabPage.Controls.Add(uiAuditSyncHeaderLabel);
             uiAuditTabPage.Controls.Add(uiAuditBulkPanel);
             uiAuditTabPage.Controls.Add(uiAuditSourcesPanel);
@@ -311,15 +313,6 @@
             uiAuditTabPage.Text = "Аудит";
             uiAuditTabPage.UseVisualStyleBackColor = true;
             //
-            // uiRunningActionsFlowLayoutPanel
-            //
-            uiRunningActionsFlowLayoutPanel.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
-            uiRunningActionsFlowLayoutPanel.AutoScroll = true;
-            uiRunningActionsFlowLayoutPanel.Location = new Point(3, 582);
-            uiRunningActionsFlowLayoutPanel.Name = "uiRunningActionsFlowLayoutPanel";
-            uiRunningActionsFlowLayoutPanel.Size = new Size(1199, 115);
-            uiRunningActionsFlowLayoutPanel.TabIndex = 8;
-            // 
             // uiAuditSyncHeaderLabel
             // 
             uiAuditSyncHeaderLabel.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
@@ -495,6 +488,25 @@
             uiSyncTreeControl.Name = "uiSyncTreeControl";
             uiSyncTreeControl.Size = new Size(1212, 757);
             uiSyncTreeControl.TabIndex = 0;
+            //
+            // uiTasksTabPage
+            //
+            uiTasksTabPage.Controls.Add(uiTasksControl);
+            uiTasksTabPage.Location = new Point(4, 24);
+            uiTasksTabPage.Name = "uiTasksTabPage";
+            uiTasksTabPage.Padding = new Padding(3);
+            uiTasksTabPage.Size = new Size(1212, 757);
+            uiTasksTabPage.TabIndex = 12;
+            uiTasksTabPage.Text = "Задачи";
+            uiTasksTabPage.UseVisualStyleBackColor = true;
+            //
+            // uiTasksControl
+            //
+            uiTasksControl.Dock = DockStyle.Fill;
+            uiTasksControl.Location = new Point(3, 3);
+            uiTasksControl.Name = "uiTasksControl";
+            uiTasksControl.Size = new Size(1206, 751);
+            uiTasksControl.TabIndex = 0;
             //
             // uiCommentsTabPage
             //
@@ -776,6 +788,7 @@
             uiAuditBulkPanel.PerformLayout();
             uiAuditSourcesPanel.ResumeLayout(false);
             uiSyncTreeTabPage.ResumeLayout(false);
+            uiTasksTabPage.ResumeLayout(false);
             uiCommentsTabPage.ResumeLayout(false);
             uiCommentsHtmlTabPage.ResumeLayout(false);
             uiLogsTabPage.ResumeLayout(false);
@@ -851,7 +864,8 @@
         private Button uiCheckUpdatesButton;
         private Button uiSyncNewButton;
         private ToolTip uiAuditToolTip;
-        private FlowLayoutPanel uiRunningActionsFlowLayoutPanel;
         private FlowLayoutPanel flowLayoutPanel1;
+        private TabPage uiTasksTabPage;
+        private TasksControl uiTasksControl;
     }
 }

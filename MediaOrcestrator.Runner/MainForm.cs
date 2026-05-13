@@ -25,9 +25,9 @@ public partial class MainForm : Form
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<MainForm> _logger;
     private readonly AppUpdateManager _updateManager;
-    private readonly ActionHolder _actionHolder;
     private readonly Dictionary<string, AuditSourceRow> _auditRows = new();
     private readonly PublishControl? _publishControl;
+    private readonly string _tasksTabBaseText;
     private LogViewContext? _logContext;
     private bool _isSyncRunning;
 
@@ -37,18 +37,16 @@ public partial class MainForm : Form
         _serviceProvider = serviceProvider;
         _logger = logger;
         _updateManager = updateManager;
-        _actionHolder = _serviceProvider.GetRequiredService<ActionHolder>();
 
         InitializeComponent();
+
+        _tasksTabBaseText = uiTasksTabPage.Text;
 
         // TODO: Сомнительно
         _publishControl = _serviceProvider.GetRequiredService<PublishControl>();
         _publishControl.Dock = DockStyle.Fill;
         _publishControl.MediaPublished += OnMediaPublished;
         uiPublishTabPage.Controls.Add(_publishControl);
-
-        _actionHolder.Changed += OnActionsChanged;
-        FormClosed += (_, _) => _actionHolder.Changed -= OnActionsChanged;
     }
 
     public Action? StartupCompleted { get; set; }
@@ -202,12 +200,20 @@ public partial class MainForm : Form
                 _serviceProvider.GetRequiredService<ILogger<SyncTreeControl>>());
         }
 
-        StartupCompleted?.Invoke();
+        uiTasksControl.RunningCountChanged += OnTasksRunningCountChanged;
+        uiTasksControl.Initialize(_serviceProvider.GetRequiredService<ActionHolder>());
 
-        RefreshActionsPanel();
+        StartupCompleted?.Invoke();
 
         CheckToolUpdatesInBackground();
         CheckAppUpdateInBackground();
+    }
+
+    private void OnTasksRunningCountChanged(object? sender, int count)
+    {
+        uiTasksTabPage.Text = count > 0
+            ? $"{_tasksTabBaseText} ({count})"
+            : _tasksTabBaseText;
     }
 
     private void OnMainTabSelected(object? sender, TabControlEventArgs e)
@@ -467,46 +473,6 @@ public partial class MainForm : Form
     private void OnMediaPublished(object? sender, EventArgs e)
     {
         uiMediaMatrixGridControl.RefreshData();
-    }
-
-    private void OnActionsChanged(object? sender, EventArgs e)
-    {
-        if (IsDisposed)
-        {
-            return;
-        }
-
-        if (InvokeRequired)
-        {
-            BeginInvoke(RefreshActionsPanel);
-            return;
-        }
-
-        RefreshActionsPanel();
-    }
-
-    private void RefreshActionsPanel()
-    {
-        foreach (Control c in uiRunningActionsFlowLayoutPanel.Controls)
-        {
-            c.Dispose();
-        }
-
-        uiRunningActionsFlowLayoutPanel.Controls.Clear();
-
-        var i = -1;
-        foreach (var action in _actionHolder.Snapshot())
-        {
-            i++;
-            var btn = new ActionUserControl();
-            btn.SetAction(action);
-
-            btn.AutoSize = false;
-            btn.Width = uiRunningActionsFlowLayoutPanel.Width - 10;
-            btn.Left = 5;
-            btn.Top = 5 + i * (btn.Height + 5);
-            uiRunningActionsFlowLayoutPanel.Controls.Add(btn);
-        }
     }
 
     private async Task RunSyncAsync(Source? filterSource, AuditSyncMode mode)
