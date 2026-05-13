@@ -25,8 +25,6 @@ public partial class CommentsHtmlControl : UserControl
     private ActionHolder? _actionHolder;
     private ILogger? _logger;
     private CommentsViewSettings _settings = new();
-    private bool _invertMediaSort;
-    private bool _invertCommentSort;
     private bool _loaded;
     private bool _suppressSettingsSave;
     private int _applyFiltersVersion;
@@ -94,11 +92,6 @@ public partial class CommentsHtmlControl : UserControl
 
         uiBrowserView.AuthorsResolver = ResolveCommentAuthors;
 
-        using (Splash.Current.StartSpan("Сортировки"))
-        {
-            PopulateSortCombos();
-        }
-
         using (Splash.Current.StartSpan("Список источников"))
         {
             ReloadSourcesCombo();
@@ -125,17 +118,6 @@ public partial class CommentsHtmlControl : UserControl
         ApplyFilters();
     }
 
-    private void uiSortChanged(object? sender, EventArgs e)
-    {
-        SaveSettings();
-        ApplyFilters();
-    }
-
-    private void uiRefreshButton_Click(object? sender, EventArgs e)
-    {
-        ApplyFilters();
-    }
-
     private void uiSourceComboBox_SelectedIndexChanged(object? sender, EventArgs e)
     {
         SaveSettings();
@@ -144,13 +126,6 @@ public partial class CommentsHtmlControl : UserControl
     }
 
     private void uiSearchTextBox_TextChanged(object? sender, EventArgs e)
-    {
-        SaveSettings();
-        _searchDebounce.Stop();
-        _searchDebounce.Start();
-    }
-
-    private void uiMediaSearchTextBox_TextChanged(object? sender, EventArgs e)
     {
         SaveSettings();
         _searchDebounce.Stop();
@@ -166,22 +141,6 @@ public partial class CommentsHtmlControl : UserControl
 
         e.SuppressKeyPress = true;
         _searchDebounce.Stop();
-        ApplyFilters();
-    }
-
-    private void uiMediaSortInvertButton_Click(object? sender, EventArgs e)
-    {
-        _invertMediaSort = !_invertMediaSort;
-        uiMediaSortInvertButton.Text = _invertMediaSort ? "↑" : "↓";
-        SaveSettings();
-        ApplyFilters();
-    }
-
-    private void uiCommentSortInvertButton_Click(object? sender, EventArgs e)
-    {
-        _invertCommentSort = !_invertCommentSort;
-        uiCommentSortInvertButton.Text = _invertCommentSort ? "↑" : "↓";
-        SaveSettings();
         ApplyFilters();
     }
 
@@ -211,18 +170,53 @@ public partial class CommentsHtmlControl : UserControl
         await FetchAllForSourceAsync(source);
     }
 
-    private static void SelectComboValue<T>(ComboBox combo, T value) where T : Enum
+    private static List<CommentRecord> LoadComments(
+        Orcestrator orcestrator,
+        CommentsService commentsService,
+        string? sourceId,
+        string search,
+        int limit,
+        CancellationToken ct)
     {
-        if (combo.DataSource is not List<SortItem<T>> items)
+        if (string.IsNullOrEmpty(search))
         {
-            return;
+            return commentsService.Query(sourceId, limit: limit);
         }
 
-        var match = items.FirstOrDefault(x => x.Value.Equals(value));
-        if (match != null)
+        var byText = commentsService.Query(sourceId, textContains: search, limit: limit);
+
+        ct.ThrowIfCancellationRequested();
+
+        var titleMatches = orcestrator.GetMedias()
+            .Where(m => !string.IsNullOrEmpty(m.Title) && m.Title.Contains(search, StringComparison.OrdinalIgnoreCase))
+            .SelectMany(m => m.Sources)
+            .Where(l => !string.IsNullOrEmpty(l.SourceId) && !string.IsNullOrEmpty(l.ExternalId))
+            .Where(l => sourceId == null || l.SourceId == sourceId)
+            .Select(l => (l.SourceId, l.ExternalId))
+            .Distinct()
+            .ToList();
+
+        if (titleMatches.Count == 0)
         {
-            combo.SelectedItem = match;
+            return byText;
         }
+
+        var seen = new HashSet<string>(byText.Select(r => r.Id), StringComparer.Ordinal);
+        var combined = new List<CommentRecord>(byText);
+
+        foreach (var (sId, externalId) in titleMatches)
+        {
+            ct.ThrowIfCancellationRequested();
+            foreach (var record in commentsService.GetByMedia(sId, externalId))
+            {
+                if (seen.Add(record.Id))
+                {
+                    combined.Add(record);
+                }
+            }
+        }
+
+        return combined;
     }
 
     private static void BackfillOrphanParents(List<CommentRecord> fetched, CommentsService commentsService, CancellationToken ct)
@@ -350,19 +344,10 @@ public partial class CommentsHtmlControl : UserControl
         try
         {
             uiSearchTextBox.Text = _settings.Search;
-            uiMediaSearchTextBox.Text = _settings.MediaSearch;
             uiLimitNumeric.Value = Math.Clamp(_settings.Limit, (int)uiLimitNumeric.Minimum, (int)uiLimitNumeric.Maximum);
             uiFetchSinceDaysNumeric.Value = Math.Clamp(_settings.FetchSinceDays, (int)uiFetchSinceDaysNumeric.Minimum, (int)uiFetchSinceDaysNumeric.Maximum);
             uiFetchOnlyRecentNumeric.Value = Math.Clamp(_settings.FetchOnlyRecent, (int)uiFetchOnlyRecentNumeric.Minimum, (int)uiFetchOnlyRecentNumeric.Maximum);
             uiFetchStaleNumeric.Value = Math.Clamp(_settings.FetchStaleDays, (int)uiFetchStaleNumeric.Minimum, (int)uiFetchStaleNumeric.Maximum);
-
-            _invertMediaSort = _settings.InvertMediaSort;
-            uiMediaSortInvertButton.Text = _invertMediaSort ? "↑" : "↓";
-            _invertCommentSort = _settings.InvertCommentSort;
-            uiCommentSortInvertButton.Text = _invertCommentSort ? "↑" : "↓";
-
-            SelectComboValue(uiMediaSortComboBox, _settings.MediaSort);
-            SelectComboValue(uiCommentSortComboBox, _settings.CommentSort);
 
             if (!string.IsNullOrEmpty(_settings.SelectedSourceId)
                 && uiSourceComboBox.DataSource is List<SourceComboItem> items
@@ -386,56 +371,12 @@ public partial class CommentsHtmlControl : UserControl
 
         _settings.SelectedSourceId = (uiSourceComboBox.SelectedItem as SourceComboItem)?.SourceId;
         _settings.Search = uiSearchTextBox.Text;
-        _settings.MediaSearch = uiMediaSearchTextBox.Text;
         _settings.Limit = (int)uiLimitNumeric.Value;
         _settings.FetchSinceDays = (int)uiFetchSinceDaysNumeric.Value;
         _settings.FetchOnlyRecent = (int)uiFetchOnlyRecentNumeric.Value;
         _settings.FetchStaleDays = (int)uiFetchStaleNumeric.Value;
-        _settings.InvertMediaSort = _invertMediaSort;
-        _settings.InvertCommentSort = _invertCommentSort;
-        _settings.MediaSort = (uiMediaSortComboBox.SelectedItem as SortItem<MediaSort>)?.Value ?? MediaSort.ByTitle;
-        _settings.CommentSort = (uiCommentSortComboBox.SelectedItem as SortItem<CommentSort>)?.Value ?? CommentSort.ByDate;
 
         _settings.Save();
-    }
-
-    private void PopulateSortCombos()
-    {
-        uiMediaSortComboBox.BeginUpdate();
-        try
-        {
-            uiMediaSortComboBox.DataSource = new List<SortItem<MediaSort>>
-            {
-                new(MediaSort.ByTitle, "По названию"),
-                new(MediaSort.BySortNumber, "По порядку в источнике"),
-            };
-
-            uiMediaSortComboBox.DisplayMember = nameof(SortItem<MediaSort>.Label);
-            uiMediaSortComboBox.SelectedIndex = 0;
-        }
-        finally
-        {
-            uiMediaSortComboBox.EndUpdate();
-        }
-
-        uiCommentSortComboBox.BeginUpdate();
-        try
-        {
-            uiCommentSortComboBox.DataSource = new List<SortItem<CommentSort>>
-            {
-                new(CommentSort.ByDate, "По дате"),
-                new(CommentSort.ByLikes, "По лайкам"),
-                new(CommentSort.ByReplies, "По числу ответов"),
-                new(CommentSort.WithoutAuthorReply, "Без ответа автора"),
-            };
-
-            uiCommentSortComboBox.DisplayMember = nameof(SortItem<CommentSort>.Label);
-            uiCommentSortComboBox.SelectedIndex = 0;
-        }
-        finally
-        {
-            uiCommentSortComboBox.EndUpdate();
-        }
     }
 
     private void ReloadSourcesCombo()
@@ -498,12 +439,7 @@ public partial class CommentsHtmlControl : UserControl
         var commentsService = _commentsService;
         var sourceId = (uiSourceComboBox.SelectedItem as SourceComboItem)?.SourceId;
         var search = uiSearchTextBox.Text.Trim();
-        var mediaSearch = uiMediaSearchTextBox.Text.Trim();
         var limit = (int)uiLimitNumeric.Value;
-        var mediaSort = (uiMediaSortComboBox.SelectedItem as SortItem<MediaSort>)?.Value ?? MediaSort.ByTitle;
-        var commentSort = (uiCommentSortComboBox.SelectedItem as SortItem<CommentSort>)?.Value ?? CommentSort.ByDate;
-        var invertMediaSort = _invertMediaSort;
-        var invertCommentSort = _invertCommentSort;
 
         uiStatusLabel.Text = "Загрузка...";
 
@@ -513,9 +449,7 @@ public partial class CommentsHtmlControl : UserControl
             {
                 ct.ThrowIfCancellationRequested();
 
-                var fetched = commentsService.Query(sourceId,
-                    textContains: string.IsNullOrEmpty(search) ? null : search,
-                    limit: limit + 1);
+                var fetched = LoadComments(orcestrator, commentsService, sourceId, search, limit + 1, ct);
 
                 ct.ThrowIfCancellationRequested();
 
@@ -530,11 +464,6 @@ public partial class CommentsHtmlControl : UserControl
                 var renderJson = CommentsBrowserView.BuildRenderJson(orcestrator, fetched, new()
                 {
                     Search = search,
-                    CommentSort = commentSort,
-                    InvertCommentSort = invertCommentSort,
-                    MediaSort = mediaSort,
-                    InvertMediaSort = invertMediaSort,
-                    MediaSearch = mediaSearch,
                 });
 
                 return (Records: fetched, Json: renderJson, Truncated: isTruncated);
@@ -1113,11 +1042,6 @@ public partial class CommentsHtmlControl : UserControl
             var options = new CommentsRenderOptions
             {
                 Search = uiSearchTextBox.Text.Trim(),
-                CommentSort = (uiCommentSortComboBox.SelectedItem as SortItem<CommentSort>)?.Value ?? CommentSort.ByDate,
-                InvertCommentSort = _invertCommentSort,
-                MediaSort = (uiMediaSortComboBox.SelectedItem as SortItem<MediaSort>)?.Value ?? MediaSort.ByTitle,
-                InvertMediaSort = _invertMediaSort,
-                MediaSearch = uiMediaSearchTextBox.Text.Trim(),
             };
 
             return uiBrowserView.TryApplyFetched(_orcestrator, records, groupKey, options);
@@ -1336,14 +1260,4 @@ public partial class CommentsHtmlControl : UserControl
         }
     }
 
-    private sealed class SortItem<T>(T value, string label) where T : Enum
-    {
-        public T Value { get; } = value;
-        public string Label { get; } = label;
-
-        public override string ToString()
-        {
-            return Label;
-        }
-    }
 }

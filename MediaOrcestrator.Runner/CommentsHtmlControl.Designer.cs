@@ -38,20 +38,8 @@ partial class CommentsHtmlControl
     private TableLayoutPanel uiViewLayout;
     private Label uiSearchLabel;
     private TextBox uiSearchTextBox;
-    private Label uiMediaSearchLabel;
-    private TextBox uiMediaSearchTextBox;
     private Label uiLimitLabel;
-    private FlowLayoutPanel uiLimitInline;
     private NumericUpDown uiLimitNumeric;
-    private Button uiRefreshButton;
-    private GroupBox uiSortGroup;
-    private TableLayoutPanel uiSortLayout;
-    private Label uiMediaSortLabel;
-    private ComboBox uiMediaSortComboBox;
-    private Button uiMediaSortInvertButton;
-    private Label uiCommentSortLabel;
-    private ComboBox uiCommentSortComboBox;
-    private Button uiCommentSortInvertButton;
     private CommentsBrowserView uiBrowserView;
     private StatusStrip uiStatusStrip;
     private ToolStripStatusLabel uiStatusLabel;
@@ -81,20 +69,8 @@ partial class CommentsHtmlControl
         uiViewLayout = new TableLayoutPanel();
         uiSearchLabel = new Label();
         uiSearchTextBox = new TextBox();
-        uiMediaSearchLabel = new Label();
-        uiMediaSearchTextBox = new TextBox();
         uiLimitLabel = new Label();
-        uiLimitInline = new FlowLayoutPanel();
         uiLimitNumeric = new NumericUpDown();
-        uiRefreshButton = new Button();
-        uiSortGroup = new GroupBox();
-        uiSortLayout = new TableLayoutPanel();
-        uiMediaSortLabel = new Label();
-        uiMediaSortComboBox = new ComboBox();
-        uiMediaSortInvertButton = new Button();
-        uiCommentSortLabel = new Label();
-        uiCommentSortComboBox = new ComboBox();
-        uiCommentSortInvertButton = new Button();
         uiBrowserView = new CommentsBrowserView();
         uiStatusStrip = new StatusStrip();
         uiStatusLabel = new ToolStripStatusLabel();
@@ -109,22 +85,17 @@ partial class CommentsHtmlControl
         ((System.ComponentModel.ISupportInitialize)uiFetchStaleNumeric).BeginInit();
         uiViewGroup.SuspendLayout();
         uiViewLayout.SuspendLayout();
-        uiLimitInline.SuspendLayout();
         ((System.ComponentModel.ISupportInitialize)uiLimitNumeric).BeginInit();
-        uiSortGroup.SuspendLayout();
-        uiSortLayout.SuspendLayout();
         uiStatusStrip.SuspendLayout();
         SuspendLayout();
         //
         // uiFiltersPanel
         //
-        uiFiltersPanel.ColumnCount = 3;
-        uiFiltersPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40F));
-        uiFiltersPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30F));
-        uiFiltersPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30F));
+        uiFiltersPanel.ColumnCount = 2;
+        uiFiltersPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+        uiFiltersPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
         uiFiltersPanel.Controls.Add(uiFetchGroup, 0, 0);
         uiFiltersPanel.Controls.Add(uiViewGroup, 1, 0);
-        uiFiltersPanel.Controls.Add(uiSortGroup, 2, 0);
         uiFiltersPanel.Dock = DockStyle.Top;
         uiFiltersPanel.Location = new Point(0, 0);
         uiFiltersPanel.Name = "uiFiltersPanel";
@@ -307,7 +278,7 @@ partial class CommentsHtmlControl
         //
         uiViewGroup.Controls.Add(uiViewLayout);
         uiViewGroup.Dock = DockStyle.Fill;
-        uiViewGroup.Margin = new Padding(0, 0, 4, 0);
+        uiViewGroup.Margin = new Padding(0);
         uiViewGroup.Name = "uiViewGroup";
         uiViewGroup.TabIndex = 1;
         uiViewGroup.TabStop = false;
@@ -320,14 +291,11 @@ partial class CommentsHtmlControl
         uiViewLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
         uiViewLayout.Controls.Add(uiSearchLabel, 0, 0);
         uiViewLayout.Controls.Add(uiSearchTextBox, 1, 0);
-        uiViewLayout.Controls.Add(uiMediaSearchLabel, 0, 1);
-        uiViewLayout.Controls.Add(uiMediaSearchTextBox, 1, 1);
-        uiViewLayout.Controls.Add(uiLimitLabel, 0, 2);
-        uiViewLayout.Controls.Add(uiLimitInline, 1, 2);
+        uiViewLayout.Controls.Add(uiLimitLabel, 0, 1);
+        uiViewLayout.Controls.Add(uiLimitNumeric, 1, 1);
         uiViewLayout.Dock = DockStyle.Fill;
         uiViewLayout.Name = "uiViewLayout";
-        uiViewLayout.RowCount = 3;
-        uiViewLayout.RowStyles.Add(new RowStyle());
+        uiViewLayout.RowCount = 2;
         uiViewLayout.RowStyles.Add(new RowStyle());
         uiViewLayout.RowStyles.Add(new RowStyle());
         uiViewLayout.TabIndex = 0;
@@ -345,168 +313,36 @@ partial class CommentsHtmlControl
         uiSearchTextBox.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
         uiSearchTextBox.Margin = new Padding(0, 3, 0, 3);
         uiSearchTextBox.Name = "uiSearchTextBox";
-        uiSearchTextBox.PlaceholderText = "текст или автор";
+        uiSearchTextBox.PlaceholderText = "текст, автор или название медиа";
         uiSearchTextBox.Size = new Size(200, 23);
         uiSearchTextBox.TabIndex = 1;
         uiSearchTextBox.TextChanged += uiSearchTextBox_TextChanged;
         uiSearchTextBox.KeyDown += uiSearchTextBox_KeyDown;
-        //
-        // uiMediaSearchLabel
-        //
-        uiMediaSearchLabel.AutoSize = true;
-        uiMediaSearchLabel.Margin = new Padding(0, 7, 6, 0);
-        uiMediaSearchLabel.Name = "uiMediaSearchLabel";
-        uiMediaSearchLabel.TabIndex = 2;
-        uiMediaSearchLabel.Text = "Медиа:";
-        //
-        // uiMediaSearchTextBox
-        //
-        uiMediaSearchTextBox.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-        uiMediaSearchTextBox.Margin = new Padding(0, 3, 0, 3);
-        uiMediaSearchTextBox.Name = "uiMediaSearchTextBox";
-        uiMediaSearchTextBox.PlaceholderText = "название медиа";
-        uiMediaSearchTextBox.Size = new Size(200, 23);
-        uiMediaSearchTextBox.TabIndex = 3;
-        uiMediaSearchTextBox.TextChanged += uiMediaSearchTextBox_TextChanged;
-        uiMediaSearchTextBox.KeyDown += uiSearchTextBox_KeyDown;
         //
         // uiLimitLabel
         //
         uiLimitLabel.AutoSize = true;
         uiLimitLabel.Margin = new Padding(0, 7, 6, 0);
         uiLimitLabel.Name = "uiLimitLabel";
-        uiLimitLabel.TabIndex = 4;
+        uiLimitLabel.TabIndex = 2;
         uiLimitLabel.Text = "Показывать:";
-        //
-        // uiLimitInline
-        //
-        uiLimitInline.AutoSize = true;
-        uiLimitInline.AutoSizeMode = AutoSizeMode.GrowAndShrink;
-        uiLimitInline.Controls.Add(uiLimitNumeric);
-        uiLimitInline.Controls.Add(uiRefreshButton);
-        uiLimitInline.Dock = DockStyle.Fill;
-        uiLimitInline.FlowDirection = FlowDirection.LeftToRight;
-        uiLimitInline.Margin = new Padding(0);
-        uiLimitInline.Name = "uiLimitInline";
-        uiLimitInline.TabIndex = 5;
-        uiLimitInline.WrapContents = false;
         //
         // uiLimitNumeric
         //
+        uiLimitNumeric.Anchor = AnchorStyles.Top | AnchorStyles.Left;
         uiLimitNumeric.Increment = 100;
-        uiLimitNumeric.Margin = new Padding(0, 3, 6, 3);
+        uiLimitNumeric.Margin = new Padding(0, 3, 0, 3);
         uiLimitNumeric.Maximum = new decimal(new int[] { 100000, 0, 0, 0 });
         uiLimitNumeric.Minimum = new decimal(new int[] { 50, 0, 0, 0 });
         uiLimitNumeric.Name = "uiLimitNumeric";
         uiLimitNumeric.Size = new Size(80, 23);
-        uiLimitNumeric.TabIndex = 0;
+        uiLimitNumeric.TabIndex = 3;
         uiLimitNumeric.Value = new decimal(new int[] { 1000, 0, 0, 0 });
         uiLimitNumeric.ValueChanged += uiFetchSettingsValueChanged;
         uiToolTip.SetToolTip(uiLimitNumeric,
             "Сколько комментариев показывать в списке."
             + Environment.NewLine
             + "Загрузка из источника всегда тянет все комментарии медиа целиком.");
-        //
-        // uiRefreshButton
-        //
-        uiRefreshButton.AutoSize = true;
-        uiRefreshButton.Margin = new Padding(0, 2, 0, 2);
-        uiRefreshButton.Name = "uiRefreshButton";
-        uiRefreshButton.Size = new Size(110, 25);
-        uiRefreshButton.TabIndex = 1;
-        uiRefreshButton.Text = "Обновить";
-        uiRefreshButton.UseVisualStyleBackColor = true;
-        uiRefreshButton.Click += uiRefreshButton_Click;
-        //
-        // uiSortGroup
-        //
-        uiSortGroup.Controls.Add(uiSortLayout);
-        uiSortGroup.Dock = DockStyle.Fill;
-        uiSortGroup.Margin = new Padding(0);
-        uiSortGroup.Name = "uiSortGroup";
-        uiSortGroup.TabIndex = 2;
-        uiSortGroup.TabStop = false;
-        uiSortGroup.Text = "Сортировка";
-        //
-        // uiSortLayout
-        //
-        uiSortLayout.ColumnCount = 3;
-        uiSortLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        uiSortLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        uiSortLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        uiSortLayout.Controls.Add(uiMediaSortLabel, 0, 0);
-        uiSortLayout.Controls.Add(uiMediaSortComboBox, 1, 0);
-        uiSortLayout.Controls.Add(uiMediaSortInvertButton, 2, 0);
-        uiSortLayout.Controls.Add(uiCommentSortLabel, 0, 1);
-        uiSortLayout.Controls.Add(uiCommentSortComboBox, 1, 1);
-        uiSortLayout.Controls.Add(uiCommentSortInvertButton, 2, 1);
-        uiSortLayout.Dock = DockStyle.Fill;
-        uiSortLayout.Name = "uiSortLayout";
-        uiSortLayout.RowCount = 2;
-        uiSortLayout.RowStyles.Add(new RowStyle());
-        uiSortLayout.RowStyles.Add(new RowStyle());
-        uiSortLayout.TabIndex = 0;
-        //
-        // uiMediaSortLabel
-        //
-        uiMediaSortLabel.AutoSize = true;
-        uiMediaSortLabel.Margin = new Padding(0, 7, 6, 0);
-        uiMediaSortLabel.Name = "uiMediaSortLabel";
-        uiMediaSortLabel.TabIndex = 0;
-        uiMediaSortLabel.Text = "По медиа:";
-        //
-        // uiMediaSortComboBox
-        //
-        uiMediaSortComboBox.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-        uiMediaSortComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
-        uiMediaSortComboBox.Margin = new Padding(0, 3, 0, 3);
-        uiMediaSortComboBox.Name = "uiMediaSortComboBox";
-        uiMediaSortComboBox.Size = new Size(170, 23);
-        uiMediaSortComboBox.TabIndex = 1;
-        uiMediaSortComboBox.SelectedIndexChanged += uiSortChanged;
-        //
-        // uiMediaSortInvertButton
-        //
-        uiMediaSortInvertButton.Margin = new Padding(3, 2, 0, 2);
-        uiMediaSortInvertButton.Name = "uiMediaSortInvertButton";
-        uiMediaSortInvertButton.Size = new Size(28, 25);
-        uiMediaSortInvertButton.TabIndex = 2;
-        uiMediaSortInvertButton.Text = "↓";
-        uiMediaSortInvertButton.UseVisualStyleBackColor = true;
-        uiMediaSortInvertButton.Click += uiMediaSortInvertButton_Click;
-        uiToolTip.SetToolTip(uiMediaSortInvertButton, "Обратный порядок сортировки медиа.");
-        //
-        // uiCommentSortLabel
-        //
-        uiCommentSortLabel.AutoSize = true;
-        uiCommentSortLabel.Margin = new Padding(0, 7, 6, 0);
-        uiCommentSortLabel.Name = "uiCommentSortLabel";
-        uiCommentSortLabel.TabIndex = 3;
-        uiCommentSortLabel.Text = "По комментариям:";
-        //
-        // uiCommentSortComboBox
-        //
-        uiCommentSortComboBox.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-        uiCommentSortComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
-        uiCommentSortComboBox.Margin = new Padding(0, 3, 0, 3);
-        uiCommentSortComboBox.Name = "uiCommentSortComboBox";
-        uiCommentSortComboBox.Size = new Size(180, 23);
-        uiCommentSortComboBox.TabIndex = 4;
-        uiCommentSortComboBox.SelectedIndexChanged += uiSortChanged;
-        //
-        // uiCommentSortInvertButton
-        //
-        uiCommentSortInvertButton.Margin = new Padding(3, 2, 0, 2);
-        uiCommentSortInvertButton.Name = "uiCommentSortInvertButton";
-        uiCommentSortInvertButton.Size = new Size(28, 25);
-        uiCommentSortInvertButton.TabIndex = 5;
-        uiCommentSortInvertButton.Text = "↓";
-        uiCommentSortInvertButton.UseVisualStyleBackColor = true;
-        uiCommentSortInvertButton.Click += uiCommentSortInvertButton_Click;
-        uiToolTip.SetToolTip(uiCommentSortInvertButton,
-            "Обратный порядок корневых комментариев."
-            + Environment.NewLine
-            + "Ответы внутри ветки всегда идут хронологически.");
         //
         // uiBrowserView
         //
@@ -569,13 +405,7 @@ partial class CommentsHtmlControl
         uiViewGroup.PerformLayout();
         uiViewLayout.ResumeLayout(false);
         uiViewLayout.PerformLayout();
-        uiLimitInline.ResumeLayout(false);
-        uiLimitInline.PerformLayout();
         ((System.ComponentModel.ISupportInitialize)uiLimitNumeric).EndInit();
-        uiSortGroup.ResumeLayout(false);
-        uiSortGroup.PerformLayout();
-        uiSortLayout.ResumeLayout(false);
-        uiSortLayout.PerformLayout();
         uiStatusStrip.ResumeLayout(false);
         uiStatusStrip.PerformLayout();
         ResumeLayout(false);

@@ -10,13 +10,8 @@ public sealed class CommentsViewSettings
     };
 
     public string? SelectedSourceId { get; set; }
-    public CommentSort CommentSort { get; set; } = CommentSort.ByDate;
-    public MediaSort MediaSort { get; set; } = MediaSort.ByTitle;
-    public bool InvertCommentSort { get; set; }
-    public bool InvertMediaSort { get; set; }
     public int Limit { get; set; } = 1000;
     public string Search { get; set; } = "";
-    public string MediaSearch { get; set; } = "";
     public int FetchSinceDays { get; set; }
     public int FetchOnlyRecent { get; set; }
     public int FetchStaleDays { get; set; }
