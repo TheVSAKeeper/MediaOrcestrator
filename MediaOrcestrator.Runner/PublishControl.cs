@@ -180,7 +180,7 @@ public partial class PublishControl : UserControl
         SetCover(null);
     }
 
-    private void uiVideoDropPanel_Click(object? sender, EventArgs e)
+    private void uiVideoPathTextBox_Click(object? sender, EventArgs e)
     {
         if (_isPublishing)
         {
@@ -190,7 +190,7 @@ public partial class PublishControl : UserControl
         uiBrowseVideoButton.PerformClick();
     }
 
-    private void uiCoverDropPanel_Click(object? sender, EventArgs e)
+    private void uiCoverPathTextBox_Click(object? sender, EventArgs e)
     {
         if (_isPublishing)
         {
@@ -248,6 +248,7 @@ public partial class PublishControl : UserControl
         }
 
         FilterTitleSuggestions();
+        TryAutoFillDescriptionFromTitle(uiTitleComboBox.Text);
     }
 
     private void uiTitleComboBox_DropDown(object? sender, EventArgs e)
@@ -297,13 +298,7 @@ public partial class PublishControl : UserControl
         }
 
         _autoFilledTitle = null;
-
-        if (!string.IsNullOrEmpty(selected)
-            && string.IsNullOrWhiteSpace(uiDescriptionTextBox.Text)
-            && _titleToDescription.TryGetValue(selected, out var description))
-        {
-            uiDescriptionTextBox.Text = description;
-        }
+        TryAutoFillDescriptionFromTitle(selected);
     }
 
     private void uiDescriptionTextBox_TextChanged(object? sender, EventArgs e)
@@ -441,6 +436,18 @@ public partial class PublishControl : UserControl
         }
 
         return $"{size:F1} {units[unitIndex]}";
+    }
+
+    private void TryAutoFillDescriptionFromTitle(string? title)
+    {
+        if (string.IsNullOrEmpty(title)
+            || !string.IsNullOrWhiteSpace(uiDescriptionTextBox.Text)
+            || !_titleToDescription.TryGetValue(title, out var description))
+        {
+            return;
+        }
+
+        uiDescriptionTextBox.Text = description;
     }
 
     private async Task RunPostPublishChainAsync(Media media, Source publishedSource, CancellationToken cancellationToken)
@@ -596,6 +603,7 @@ public partial class PublishControl : UserControl
             var fromFile = Path.GetFileNameWithoutExtension(path);
             uiTitleComboBox.Text = fromFile;
             _autoFilledTitle = fromFile;
+            TryAutoFillDescriptionFromTitle(fromFile);
         }
 
         UpdateVideoDescriptionSuggestion(path);
@@ -719,14 +727,14 @@ public partial class PublishControl : UserControl
     {
         if (string.IsNullOrEmpty(_videoPath))
         {
-            uiVideoDropLabel.Text = "Перетащите видеофайл сюда или нажмите для выбора";
+            uiVideoPathTextBox.Text = string.Empty;
             uiClearVideoButton.Enabled = false;
             return;
         }
 
         var fileName = Path.GetFileName(_videoPath);
         var sizeText = TryFormatFileSize(_videoPath);
-        uiVideoDropLabel.Text = sizeText != null ? $"{fileName}\r\n{sizeText}" : fileName;
+        uiVideoPathTextBox.Text = sizeText != null ? $"{fileName} · {sizeText}" : fileName;
         uiClearVideoButton.Enabled = !_isPublishing;
     }
 
@@ -734,12 +742,12 @@ public partial class PublishControl : UserControl
     {
         if (string.IsNullOrEmpty(_coverPath))
         {
-            uiCoverDropLabel.Text = "Перетащите изображение сюда или нажмите для выбора";
+            uiCoverPathTextBox.Text = string.Empty;
             uiClearCoverButton.Enabled = false;
             return;
         }
 
-        uiCoverDropLabel.Text = Path.GetFileName(_coverPath);
+        uiCoverPathTextBox.Text = Path.GetFileName(_coverPath);
         uiClearCoverButton.Enabled = !_isPublishing;
     }
 
@@ -774,12 +782,10 @@ public partial class PublishControl : UserControl
         uiClearVideoButton.Enabled = !busy && !string.IsNullOrEmpty(_videoPath);
         uiClearCoverButton.Enabled = !busy && !string.IsNullOrEmpty(_coverPath);
 
-        var dropCursor = busy ? Cursors.Default : Cursors.Hand;
-        uiVideoDropPanel.Cursor = dropCursor;
-        uiVideoDropLabel.Cursor = dropCursor;
-        uiCoverDropPanel.Cursor = dropCursor;
-        uiCoverDropLabel.Cursor = dropCursor;
-        uiCoverPreviewPictureBox.Cursor = dropCursor;
+        var pickerCursor = busy ? Cursors.Default : Cursors.Hand;
+        uiVideoPathTextBox.Cursor = pickerCursor;
+        uiCoverPathTextBox.Cursor = pickerCursor;
+        uiCoverPreviewPictureBox.Cursor = pickerCursor;
 
         uiPublishProgressBar.Visible = busy;
 
