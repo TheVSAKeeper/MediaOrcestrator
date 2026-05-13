@@ -1,21 +1,18 @@
-﻿using LiteDB;
-using MediaOrcestrator.Modules;
+﻿using MediaOrcestrator.Modules;
 using Microsoft.Extensions.Logging;
-using System.Diagnostics;
-using System.Globalization;
 using System.Runtime.CompilerServices;
-using System.Text.Json;
 
 namespace MediaOrcestrator.HardDiskDrive;
 
-// TODO: Костыль Connection=shared
-// TODO: Что-то класс совсем разросся
 // todo разделить ответственность между ISourceDefinition and ISourceManager (а у SourceManager внутри будет Definition св-во)
-public class HardDiskDriveChannel(
+public sealed class HardDiskDriveChannel(
     ILogger<HardDiskDriveChannel> logger,
-    IToolPathProvider toolPathProvider,
-    VideoTranscoder videoTranscoder) : ISourceType, IToolConsumer
+    FfprobeMetadataReader metadataReader,
+    HardDiskDriveCodecConverter codecConverter,
+    IHttpClientFactory httpClientFactory) : ISourceType, IToolConsumer
 {
+    public const string ThumbnailClientName = "HardDiskDrive.Thumbnail";
+
     public SyncDirection ChannelType => SyncDirection.Full;
 
     public string Name => "HardDiskDrive";
@@ -53,7 +50,9 @@ public class HardDiskDriveChannel(
         WellKnownTools.FFmpegWithProbeDescriptor,
     ];
 
-    public Uri? GetExternalUri(string externalId, Dictionary<string, string> settings)
+    public Uri? GetExternalUri(
+        string externalId,
+        Dictionary<string, string> settings)
     {
         if (!settings.TryGetValue("path", out var basePath))
         {
@@ -64,61 +63,50 @@ public class HardDiskDriveChannel(
         return new(folderPath);
     }
 
-    public async IAsyncEnumerable<MediaDto> GetMedia(Dictionary<string, string> settings, bool isFull, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    public async IAsyncEnumerable<MediaDto> GetMedia(
+        Dictionary<string, string> settings,
+        bool isFull,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        var basePath = settings["path"];
-        var dbFileName = settings.GetValueOrDefault("dbFileName", "data.db");
-        logger.LogInformation("Получение списка медиа с жёсткого диска. Путь: {BasePath}", basePath);
+        var (basePath, dbPath) = HardDiskDriveStore.ResolveDbPath(settings);
+        logger.ListingMedia(basePath);
 
         if (!Directory.Exists(basePath))
         {
-            logger.LogWarning("Директория не существует: {BasePath}", basePath);
+            logger.DirectoryNotFound(basePath);
             yield break;
         }
-
-        var dbPath = Path.Combine(basePath, dbFileName);
 
         if (!File.Exists(dbPath))
         {
-            logger.LogWarning("База данных не найдена: {DbPath}", dbPath);
+            logger.DatabaseNotFoundWarning(dbPath);
             yield break;
         }
 
-        logger.LogDebug("Открытие базы данных: {DbPath}", dbPath);
+        logger.OpeningDatabase(dbPath);
 
-        using var db = new LiteDatabase($"Filename={dbPath};Connection=shared");
+        using var db = HardDiskDriveStore.OpenDatabase(dbPath);
         var files = db.GetCollection<DriveMedia>("files").FindAll().ToList();
 
-        logger.LogInformation("Найдено файлов в базе данных: {Count}", files.Count);
+        logger.FilesFound(files.Count);
 
         foreach (var file in files)
         {
-            logger.LogDebug("Обработка файла: ID={FileId}, Название='{Title}'", file.Id, file.Title);
+            logger.ProcessingFile(file.Id, file.Title);
             yield return await CreateMediaDtoAsync(file, basePath, cancellationToken);
         }
 
-        logger.LogInformation("Завершено получение медиа с жёсткого диска");
+        logger.MediaListingCompleted();
     }
 
-    public async Task<MediaDto?> GetMediaByIdAsync(string externalId, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
+    public async Task<MediaDto?> GetMediaByIdAsync(
+        string externalId,
+        Dictionary<string, string> settings,
+        CancellationToken cancellationToken = default)
     {
-        var basePath = settings["path"];
-        var dbFileName = settings.GetValueOrDefault("dbFileName", "data.db");
+        using var db = HardDiskDriveStore.TryOpen(settings, out var basePath);
 
-        if (!Directory.Exists(basePath))
-        {
-            return null;
-        }
-
-        var dbPath = Path.Combine(basePath, dbFileName);
-
-        if (!File.Exists(dbPath))
-        {
-            return null;
-        }
-
-        using var db = new LiteDatabase($"Filename={dbPath};Connection=shared");
-        var file = db.GetCollection<DriveMedia>("files").FindById(externalId);
+        var file = db?.GetCollection<DriveMedia>("files").FindById(externalId);
 
         if (file == null)
         {
@@ -128,28 +116,19 @@ public class HardDiskDriveChannel(
         return await CreateMediaDtoAsync(file, basePath, cancellationToken);
     }
 
-    public Task<MediaDto> DownloadAsync(string videoId, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
+    public Task<MediaDto> DownloadAsync(
+        string videoId,
+        Dictionary<string, string> settings,
+        CancellationToken cancellationToken = default)
     {
-        logger.LogInformation("Получение информации о файле с жёсткого диска. ID: {VideoId}", videoId);
+        logger.RequestingFileInfo(videoId);
 
-        var basePath = settings["path"];
-        var dbFileName = settings.GetValueOrDefault("dbFileName", "data.db");
-        var dbPath = Path.Combine(basePath, dbFileName);
-
-        if (!File.Exists(dbPath))
-        {
-            logger.LogError("База данных не найдена: {DbPath}", dbPath);
-            throw new FileNotFoundException("База данных не найдена", dbPath);
-        }
-
-        logger.LogDebug("Открытие базы данных: {DbPath}", dbPath);
-
-        using var db = new LiteDatabase($"Filename={dbPath};Connection=shared");
+        using var db = HardDiskDriveStore.OpenOrThrow(settings, out var basePath);
         var file = db.GetCollection<DriveMedia>("files").FindById(videoId);
 
         if (file == null)
         {
-            logger.LogError("Файл не найден в базе данных. ID: {VideoId}", videoId);
+            logger.FileNotFoundInDatabase(videoId);
             throw new InvalidOperationException($"Файл с ID '{videoId}' не найден в базе данных");
         }
 
@@ -157,7 +136,7 @@ public class HardDiskDriveChannel(
 
         if (!File.Exists(fullPath))
         {
-            logger.LogError("Физический файл не найден: {FilePath}", fullPath);
+            logger.PhysicalFileNotFound(fullPath);
             throw new FileNotFoundException("Физический файл не найден", fullPath);
         }
 
@@ -167,8 +146,7 @@ public class HardDiskDriveChannel(
 
         var thumbnailExists = thumbnailFullPath != null && File.Exists(thumbnailFullPath);
 
-        logger.LogInformation("Файл найден. ID: {VideoId}, Путь: {FilePath}, Превью: {HasThumbnail}",
-            videoId, fullPath, thumbnailExists);
+        logger.FileFound(videoId, fullPath, thumbnailExists);
 
         return Task.FromResult(new MediaDto
         {
@@ -180,18 +158,20 @@ public class HardDiskDriveChannel(
         });
     }
 
-    public async Task<UploadResult> UploadAsync(MediaDto media, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
+    public async Task<UploadResult> UploadAsync(
+        MediaDto media,
+        Dictionary<string, string> settings,
+        CancellationToken cancellationToken = default)
     {
-        logger.LogInformation("Начало сохранения файла на жёсткий диск. Название: '{Title}'", media.Title);
+        logger.UploadStarting(media.Title);
 
         var hddId = media.Id;
-        var basePath = settings["path"];
-        var dbFileName = settings.GetValueOrDefault("dbFileName", "data.db");
+        var (basePath, dbPath) = HardDiskDriveStore.ResolveDbPath(settings);
         var mainFileName = settings.GetValueOrDefault("mainFileName", "main.mp4");
 
         if (!Directory.Exists(basePath))
         {
-            logger.LogInformation("Создание базовой директории: {BasePath}", basePath);
+            logger.CreatingBaseDirectory(basePath);
             Directory.CreateDirectory(basePath);
         }
 
@@ -199,7 +179,7 @@ public class HardDiskDriveChannel(
 
         if (!Directory.Exists(path))
         {
-            logger.LogDebug("Создание директории для файла: {Path}", path);
+            logger.CreatingFileDirectory(path);
             Directory.CreateDirectory(path);
         }
 
@@ -207,41 +187,37 @@ public class HardDiskDriveChannel(
 
         if (!File.Exists(media.TempDataPath))
         {
-            logger.LogError("Временный файл не найден: {TempPath}", media.TempDataPath);
+            logger.TempFileNotFound(media.TempDataPath);
             throw new FileNotFoundException("Временный файл не найден", media.TempDataPath);
         }
 
-        logger.LogDebug("Перемещение файла. Из: {Source}, В: {Destination}", media.TempDataPath, mainFilePath);
+        logger.MovingFile(media.TempDataPath, mainFilePath);
 
         try
         {
             // todo идеалогически move не верный, но пока безразлично
             File.Move(media.TempDataPath, mainFilePath, true);
-            logger.LogDebug("Файл успешно перемещён: {FilePath}", mainFilePath);
+            logger.FileMoved(mainFilePath);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Ошибка при перемещении файла. Из: {Source}, В: {Destination}",
-                media.TempDataPath, mainFilePath);
-
+            logger.FileMoveFailed(media.TempDataPath, mainFilePath, ex);
             throw;
         }
 
         var thumbnailFileName = await SaveThumbnailAsync(media, path, cancellationToken);
 
-        // todo дублирование
-        var dbPath = Path.Combine(basePath, dbFileName);
-        logger.LogDebug("Сохранение информации в базу данных: {DbPath}", dbPath);
+        logger.SavingToDatabase(dbPath);
 
         try
         {
-            using var db = new LiteDatabase($"Filename={dbPath};Connection=shared");
+            using var db = HardDiskDriveStore.OpenDatabase(dbPath);
             var collection = db.GetCollection<DriveMedia>("files");
 
             var existingFile = collection.FindById(hddId);
             if (existingFile != null)
             {
-                logger.LogWarning("Файл с ID '{HddId}' уже существует в базе данных. Обновление записи", hddId);
+                logger.FileExistsUpdating(hddId);
                 collection.Update(new DriveMedia
                 {
                     Id = hddId,
@@ -263,12 +239,11 @@ public class HardDiskDriveChannel(
                 });
             }
 
-            logger.LogInformation("Файл успешно сохранён на жёсткий диск. ID: {HddId}, Название: '{Title}'",
-                hddId, media.Title);
+            logger.UploadCompleted(hddId, media.Title);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Ошибка при сохранении в базу данных. ID: {HddId}", hddId);
+            logger.DatabaseSaveFailed(hddId, ex);
             throw;
         }
 
@@ -279,34 +254,30 @@ public class HardDiskDriveChannel(
         };
     }
 
-    public Task<UploadResult> UpdateAsync(string externalId, MediaDto tempMedia, Dictionary<string, string> settings, CancellationToken cancellationToken)
+    public Task<UploadResult> UpdateAsync(
+        string externalId,
+        MediaDto tempMedia,
+        Dictionary<string, string> settings,
+        CancellationToken cancellationToken)
     {
         throw new NotImplementedException();
     }
 
-    public Task DeleteAsync(string externalId, Dictionary<string, string> settings, CancellationToken cancellationToken = default)
+    public Task DeleteAsync(
+        string externalId,
+        Dictionary<string, string> settings,
+        CancellationToken cancellationToken = default)
     {
-        logger.LogInformation("Удаление медиа из HDD. ID: {ExternalId}", externalId);
+        logger.DeletingMedia(externalId);
 
-        // TODO: Дублирование
-        var basePath = settings["path"];
-        var dbFileName = settings.GetValueOrDefault("dbFileName", "data.db");
-        var dbPath = Path.Combine(basePath, dbFileName);
-
-        if (!File.Exists(dbPath))
-        {
-            logger.LogError("База данных не найдена: {DbPath}", dbPath);
-            throw new FileNotFoundException("База данных не найдена", dbPath);
-        }
-
-        using var db = new LiteDatabase($"Filename={dbPath};Connection=shared");
+        using var db = HardDiskDriveStore.OpenOrThrow(settings, out var basePath);
         var collection = db.GetCollection<DriveMedia>("files");
         var file = collection.FindById(externalId);
 
         if (file == null)
         {
             // TODO: Возможно не верный мув, но позволяет громоздить логику принудительного удаления
-            logger.LogWarning("Медиа {ExternalId} не найдено в базе данных, считаем уже удаленным", externalId);
+            logger.MediaAlreadyDeleted(externalId);
             return Task.CompletedTask;
         }
 
@@ -316,26 +287,26 @@ public class HardDiskDriveChannel(
             try
             {
                 Directory.Delete(mediaFolder, true);
-                logger.LogInformation("Удалена папка медиа: {FolderPath}", mediaFolder);
+                logger.MediaFolderDeleted(mediaFolder);
             }
             catch (UnauthorizedAccessException ex)
             {
-                logger.LogError(ex, "Отказано в доступе при удалении папки: {FolderPath}", mediaFolder);
+                logger.FolderDeleteAccessDenied(mediaFolder, ex);
                 throw new UnauthorizedAccessException($"Нет прав для удаления папки: {mediaFolder}", ex);
             }
             catch (IOException ex)
             {
-                logger.LogError(ex, "Ошибка ввода-вывода при удалении папки: {FolderPath}", mediaFolder);
+                logger.FolderDeleteIoError(mediaFolder, ex);
                 throw new IOException($"Ошибка при удалении папки: {mediaFolder}", ex);
             }
         }
         else
         {
-            logger.LogWarning("Папка медиа {FolderPath} не существует, пропускаем удаление файлов", mediaFolder);
+            logger.MediaFolderMissing(mediaFolder);
         }
 
         collection.Delete(externalId);
-        logger.LogInformation("Медиа {ExternalId} удалено из базы данных HDD", externalId);
+        logger.MediaDeletedFromDatabase(externalId);
 
         return Task.CompletedTask;
     }
@@ -357,7 +328,9 @@ public class HardDiskDriveChannel(
         ];
     }
 
-    public ConvertAvailability CheckConvertAvailability(int typeId, MediaDto media)
+    public ConvertAvailability CheckConvertAvailability(
+        int typeId,
+        MediaDto media)
     {
         var codec = media.Metadata?.FirstOrDefault(x => x.Key == "VideoCodec")?.Value;
 
@@ -387,29 +360,23 @@ public class HardDiskDriveChannel(
     {
         return typeId switch
         {
-            1 or 2 => ConvertVideoCodec(externalId, settings, typeId, progress, cancellationToken),
+            1 or 2 => RunConversion(typeId, externalId, settings, progress, cancellationToken),
             _ => throw new NotImplementedException("type not implemented " + typeId),
         };
     }
 
-    private static bool TryParseFraction(string value, out double result)
+    private static TimeSpan TryParseDuration(MediaDto media)
     {
-        result = 0;
-        var parts = value.Split('/');
-
-        if (parts.Length == 2
-            && double.TryParse(parts[0], CultureInfo.InvariantCulture, out var numerator)
-            && double.TryParse(parts[1], CultureInfo.InvariantCulture, out var denominator)
-            && denominator != 0)
-        {
-            result = numerator / denominator;
-            return true;
-        }
-
-        return double.TryParse(value, CultureInfo.InvariantCulture, out result);
+        var durationStr = media.Metadata?.FirstOrDefault(x => x.Key == "Duration")?.Value;
+        return durationStr != null && TimeSpan.TryParse(durationStr, out var parsed)
+            ? parsed
+            : TimeSpan.Zero;
     }
 
-    private async Task<MediaDto> CreateMediaDtoAsync(DriveMedia file, string basePath, CancellationToken cancellationToken)
+    private async Task<MediaDto> CreateMediaDtoAsync(
+        DriveMedia file,
+        string basePath,
+        CancellationToken cancellationToken)
     {
         var fullPath = Path.Combine(basePath, file.Id, file.Path);
         var fileInfo = new FileInfo(fullPath);
@@ -444,7 +411,7 @@ public class HardDiskDriveChannel(
 
         if (fileExists)
         {
-            var videoInfo = await GetVideoInfoAsync(fullPath, cancellationToken);
+            var videoInfo = await metadataReader.ReadAsync(fullPath, cancellationToken);
 
             if (videoInfo is not null)
             {
@@ -462,176 +429,10 @@ public class HardDiskDriveChannel(
         };
     }
 
-    private async Task<List<MetadataItem>?> GetVideoInfoAsync(string filePath, CancellationToken cancellationToken)
-    {
-        var ffprobePath = toolPathProvider.GetCompanionPath(WellKnownTools.FFmpeg, "ffprobe");
-
-        if (ffprobePath is null)
-        {
-            return null;
-        }
-
-        try
-        {
-            var psi = new ProcessStartInfo
-            {
-                FileName = ffprobePath,
-                Arguments = $"-v quiet -print_format json -show_format -show_streams \"{filePath}\"",
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
-
-            using var process = Process.Start(psi);
-
-            if (process is null)
-            {
-                return null;
-            }
-
-            var output = await process.StandardOutput.ReadToEndAsync(cancellationToken);
-            await process.WaitForExitAsync(cancellationToken);
-
-            if (process.ExitCode == 0)
-            {
-                return ParseFfprobeOutput(output);
-            }
-
-            logger.LogWarning("ffprobe завершился с кодом {ExitCode} для файла: {FilePath}", process.ExitCode, filePath);
-            return null;
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Не удалось получить информацию о видео через ffprobe: {FilePath}", filePath);
-            return null;
-        }
-    }
-
-    private List<MetadataItem>? ParseFfprobeOutput(string json)
-    {
-        using var doc = JsonDocument.Parse(json);
-        var root = doc.RootElement;
-
-        var result = new List<MetadataItem>();
-
-        if (root.TryGetProperty("format", out var format))
-        {
-            if (format.TryGetProperty("duration", out var duration)
-                && double.TryParse(duration.GetString(), CultureInfo.InvariantCulture, out var seconds))
-            {
-                result.Add(new()
-                {
-                    Key = "Duration",
-                    DisplayName = "Длительность",
-                    Value = TimeSpan.FromSeconds(seconds).ToString(@"hh\:mm\:ss"),
-                    DisplayType = "System.TimeSpan",
-                });
-            }
-
-            if (format.TryGetProperty("bit_rate", out var bitRate))
-            {
-                result.Add(new()
-                {
-                    Key = "Bitrate",
-                    DisplayName = "Битрейт",
-                    Value = bitRate.GetString() ?? "",
-                    DisplayType = "Bitrate",
-                });
-            }
-        }
-
-        if (!root.TryGetProperty("streams", out var streams))
-        {
-            return result.Count > 0 ? result : null;
-        }
-
-        foreach (var stream in streams.EnumerateArray())
-        {
-            var codecType = stream.TryGetProperty("codec_type", out var ct) ? ct.GetString() : null;
-
-            if (codecType != "video")
-            {
-                continue;
-            }
-
-            if (stream.TryGetProperty("width", out var w) && stream.TryGetProperty("height", out var h))
-            {
-                result.Add(new()
-                {
-                    Key = "Resolution",
-                    DisplayName = "Разрешение",
-                    Value = $"{w.GetInt32()}x{h.GetInt32()}",
-                });
-            }
-
-            if (stream.TryGetProperty("codec_name", out var videoCodec))
-            {
-                result.Add(new()
-                {
-                    Key = "VideoCodec",
-                    DisplayName = "Видеокодек",
-                    Value = videoCodec.GetString() ?? "",
-                });
-            }
-
-            if (stream.TryGetProperty("r_frame_rate", out var frameRate))
-            {
-                var fpsStr = frameRate.GetString();
-                if (fpsStr is not null && TryParseFraction(fpsStr, out var fps))
-                {
-                    result.Add(new()
-                    {
-                        Key = "FrameRate",
-                        DisplayName = "Частота кадров",
-                        Value = fps.ToString("F2", CultureInfo.InvariantCulture),
-                        DisplayType = "FPS",
-                    });
-                }
-            }
-
-            break;
-        }
-
-        foreach (var stream in streams.EnumerateArray())
-        {
-            var codecType = stream.TryGetProperty("codec_type", out var ct) ? ct.GetString() : null;
-
-            if (codecType == "audio")
-            {
-                if (stream.TryGetProperty("codec_name", out var audioCodec))
-                {
-                    result.Add(new()
-                    {
-                        Key = "AudioCodec",
-                        DisplayName = "Аудиокодек",
-                        Value = audioCodec.GetString() ?? "",
-                    });
-                }
-
-                if (stream.TryGetProperty("sample_rate", out var sampleRate))
-                {
-                    result.Add(new()
-                    {
-                        Key = "SampleRate",
-                        DisplayName = "Частота дискретизации",
-                        Value = sampleRate.GetString() ?? "",
-                        DisplayType = "Hz",
-                    });
-                }
-
-                break;
-            }
-        }
-
-        return result.Count > 0 ? result : null;
-    }
-
-    private async Task<string?> SaveThumbnailAsync(MediaDto media, string mediaFolder, CancellationToken cancellationToken)
+    private async Task<string?> SaveThumbnailAsync(
+        MediaDto media,
+        string mediaFolder,
+        CancellationToken cancellationToken)
     {
         if (!string.IsNullOrEmpty(media.TempPreviewPath) && File.Exists(media.TempPreviewPath))
         {
@@ -639,7 +440,7 @@ public class HardDiskDriveChannel(
             var thumbnailFileName = $"thumbnail{(string.IsNullOrEmpty(ext) ? ".jpg" : ext)}";
             var destPath = Path.Combine(mediaFolder, thumbnailFileName);
             File.Copy(media.TempPreviewPath, destPath, true);
-            logger.LogDebug("Превью скопировано из временного файла: {DestPath}", destPath);
+            logger.ThumbnailCopiedFromTemp(destPath);
             return thumbnailFileName;
         }
 
@@ -651,10 +452,16 @@ public class HardDiskDriveChannel(
                 var thumbnailFileName = $"thumbnail{(string.IsNullOrEmpty(ext) ? ".jpg" : ext)}";
                 var destPath = Path.Combine(mediaFolder, thumbnailFileName);
 
-                using var httpClient = new HttpClient();
-                var thumbnailBytes = await httpClient.GetByteArrayAsync(thumbnailUri, cancellationToken);
-                await File.WriteAllBytesAsync(destPath, thumbnailBytes, cancellationToken);
-                logger.LogDebug("Превью загружено из URL: {ThumbnailUrl}, сохранено: {DestPath}", media.PreviewPath, destPath);
+                var httpClient = httpClientFactory.CreateClient(ThumbnailClientName);
+                using var request = new HttpRequestMessage(HttpMethod.Get, thumbnailUri);
+                using var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+                response.EnsureSuccessStatusCode();
+
+                await using var responseStream = await response.Content.ReadAsStreamAsync(cancellationToken);
+                await using var fileStream = File.Create(destPath);
+                await responseStream.CopyToAsync(fileStream, cancellationToken);
+
+                logger.ThumbnailDownloaded(media.PreviewPath, destPath);
                 return thumbnailFileName;
             }
             catch (OperationCanceledException)
@@ -663,153 +470,37 @@ public class HardDiskDriveChannel(
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "Не удалось загрузить превью из URL: {ThumbnailUrl}", media.PreviewPath);
+                logger.ThumbnailDownloadFailed(media.PreviewPath, ex);
             }
         }
 
-        logger.LogDebug("Превью для медиа '{Title}' не найдено, сохраняем без превью", media.Title);
+        logger.NoThumbnailFound(media.Title);
         return null;
     }
 
-    private async Task ConvertVideoCodec(
+    private async Task RunConversion(
+        int typeId,
         string externalId,
         Dictionary<string, string> settings,
-        int typeId,
-        IProgress<ConvertProgress>? progress = null,
-        CancellationToken cancellationToken = default)
+        IProgress<ConvertProgress>? progress,
+        CancellationToken cancellationToken)
     {
-        var label = typeId == 1 ? "VP9→H264" : "H264→VP9";
-        logger.LogInformation("Конвертация {Label}. ID: {ExternalId}", label, externalId);
-
-        var m = await GetMediaByIdAsync(externalId, settings, cancellationToken);
-        if (m == null)
+        var media = await GetMediaByIdAsync(externalId, settings, cancellationToken);
+        if (media == null)
         {
-            logger.LogWarning("Медиа {ExternalId} не найдено, пропускаем конвертацию", externalId);
+            logger.MediaNotFoundSkippingConversion(externalId);
             return;
         }
 
-        var availability = CheckConvertAvailability(typeId, m);
+        var availability = CheckConvertAvailability(typeId, media);
         if (!availability.IsAvailable)
         {
             throw new InvalidOperationException(availability.Reason ?? "Конвертация недоступна");
         }
 
-        var durationStr = m.Metadata?.FirstOrDefault(x => x.Key == "Duration")?.Value;
-        var totalDuration = TimeSpan.Zero;
-        if (durationStr != null && TimeSpan.TryParse(durationStr, out var parsed))
-        {
-            totalDuration = parsed;
-        }
+        var totalDuration = TryParseDuration(media);
+        var srcFilePath = HardDiskDriveStore.ResolveSourceFilePath(externalId, settings);
 
-        // TODO: Дублирование
-        var basePath = settings["path"];
-        var dbFileName = settings.GetValueOrDefault("dbFileName", "data.db");
-        var dbPath = Path.Combine(basePath, dbFileName);
-
-        if (!File.Exists(dbPath))
-        {
-            throw new FileNotFoundException("База данных не найдена", dbPath);
-        }
-
-        string fullPath;
-        using (var db = new LiteDatabase($"Filename={dbPath};Connection=shared"))
-        {
-            var collection = db.GetCollection<DriveMedia>("files");
-            var file = collection.FindById(externalId);
-
-            if (file == null)
-            {
-                throw new InvalidOperationException($"Медиа {externalId} не найдено в базе данных");
-            }
-
-            fullPath = Path.Combine(basePath, file.Id, file.Path);
-        }
-
-        if (!File.Exists(fullPath))
-        {
-            throw new FileNotFoundException("Исходный файл не найден", fullPath);
-        }
-
-        var outputExt = typeId == 2 ? ".webm" : ".mp4";
-        var convertPath = fullPath + "_convert" + outputExt;
-        var backupPath = fullPath + ".bak";
-        var conversionSucceeded = false;
-
-        try
-        {
-            var fileName = Path.GetFileName(fullPath);
-            IProgress<double>? wrappedProgress = progress == null
-                ? null
-                : new Progress<double>(p => progress.Report(new(p, fileName)));
-
-            var success = typeId == 1
-                ? await videoTranscoder.TranscodeVp9ToH264Async(fullPath, convertPath, totalDuration, wrappedProgress, cancellationToken)
-                : await videoTranscoder.TranscodeH264ToVp9Async(fullPath, convertPath, totalDuration, wrappedProgress, cancellationToken);
-
-            if (!success)
-            {
-                logger.LogWarning("Конвертация не удалась для {ExternalId}", externalId);
-                return;
-            }
-
-            var convertedFileInfo = new FileInfo(convertPath);
-            if (!convertedFileInfo.Exists || convertedFileInfo.Length == 0)
-            {
-                logger.LogWarning("Сконвертированный файл пуст или не существует: {Path}", convertPath);
-                return;
-            }
-
-            File.Move(fullPath, backupPath, true);
-
-            try
-            {
-                File.Move(convertPath, fullPath, true);
-            }
-            catch
-            {
-                File.Move(backupPath, fullPath, true);
-                throw;
-            }
-
-            File.Delete(backupPath);
-            conversionSucceeded = true;
-
-            logger.LogInformation("Конвертация завершена, файл заменён: {ExternalId}", externalId);
-        }
-        finally
-        {
-            if (!conversionSucceeded && File.Exists(convertPath))
-            {
-                try
-                {
-                    File.Delete(convertPath);
-                }
-                catch (Exception ex)
-                {
-                    logger.LogWarning(ex, "Не удалось удалить временный файл: {Path}", convertPath);
-                }
-            }
-
-            if (File.Exists(backupPath) && File.Exists(fullPath))
-            {
-                try
-                {
-                    File.Delete(backupPath);
-                }
-                catch (Exception ex)
-                {
-                    logger.LogWarning(ex, "Не удалось удалить файл резервной копии: {Path}", backupPath);
-                }
-            }
-        }
+        await codecConverter.ConvertAsync(typeId, externalId, srcFilePath, totalDuration, progress, cancellationToken);
     }
-}
-
-public class DriveMedia
-{
-    public string Id { get; set; } = string.Empty;
-    public string Title { get; set; } = string.Empty;
-    public string Description { get; set; } = string.Empty;
-    public string Path { get; set; } = string.Empty;
-    public string PreviewPath { get; set; } = string.Empty;
 }

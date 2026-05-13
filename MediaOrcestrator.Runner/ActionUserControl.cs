@@ -2,53 +2,120 @@
 
 namespace MediaOrcestrator.Runner;
 
-public partial class ActionUserControl : UserControl
+public sealed partial class ActionUserControl : UserControl
 {
-    private ActionHolder.RunningAction _act;
+    private static readonly Color CanceledBackColor = Color.Gainsboro;
+    private static readonly Color CanceledForeColor = Color.DimGray;
+
+    private readonly Color _defaultBackColor;
+    private readonly Color _defaultNameForeColor;
+    private readonly Color _defaultStatusForeColor;
+
+    private ActionHolder.RunningAction? _action;
     private bool _isCanceled;
 
     public ActionUserControl()
     {
         InitializeComponent();
+
+        _defaultBackColor = BackColor;
+        _defaultNameForeColor = uiNameLabel.ForeColor;
+        _defaultStatusForeColor = uiStatusLabel.ForeColor;
+
+        Disposed += OnDisposed;
     }
 
-    public void SetAction(ActionHolder.RunningAction act)
+    public void SetAction(ActionHolder.RunningAction action)
     {
-        _act = act;
+        if (_action != null)
+        {
+            _action.Changed -= OnActionChanged;
+        }
+
+        _action = action;
+        _action.Changed += OnActionChanged;
         UpdateStatus();
     }
 
-    public void UpdateStatus()
+    private void OnActionChanged(object? sender, EventArgs e)
     {
-        label1.Text = _act.Name + " " + _act.Status;
-        if (_isCanceled)
+        if (IsDisposed)
         {
-            BackColor = Color.DarkGray;
-            button1.Visible = false;
             return;
         }
 
-        if (_act.ProgressMax > 0)
+        if (InvokeRequired)
         {
-            progressBar1.Visible = true;
-            progressBar1.Maximum = _act.ProgressMax;
-            progressBar1.Value = Math.Clamp(_act.ProgressValue, 0, _act.ProgressMax);
-            label2.Visible = true;
-            label2.Text = _act.ProgressValue + " / " + _act.ProgressMax;
+            BeginInvoke(UpdateStatus);
+            return;
+        }
+
+        UpdateStatus();
+    }
+
+    private void OnDisposed(object? sender, EventArgs e)
+    {
+        if (_action == null)
+        {
+            return;
+        }
+
+        _action.Changed -= OnActionChanged;
+        _action = null;
+    }
+
+    private void uiCancelButton_Click(object sender, EventArgs e)
+    {
+        if (_action == null)
+        {
+            return;
+        }
+
+        _isCanceled = true;
+        uiCancelButton.Enabled = false;
+        UpdateStatus();
+        _action.Cancel();
+    }
+
+    private void UpdateStatus()
+    {
+        if (_action == null)
+        {
+            return;
+        }
+
+        uiNameLabel.Text = _action.Name;
+        uiStatusLabel.Text = _action.Status;
+
+        if (_isCanceled)
+        {
+            BackColor = CanceledBackColor;
+            uiNameLabel.ForeColor = CanceledForeColor;
+            uiStatusLabel.ForeColor = CanceledForeColor;
+            uiProgressBar.Visible = false;
+            uiProgressLabel.Visible = false;
+            uiCancelButton.Visible = false;
+            return;
+        }
+
+        BackColor = _defaultBackColor;
+        uiNameLabel.ForeColor = _defaultNameForeColor;
+        uiStatusLabel.ForeColor = _defaultStatusForeColor;
+
+        var progressMax = _action.ProgressMax;
+        if (progressMax > 0)
+        {
+            var progressValue = Math.Clamp(_action.ProgressValue, 0, progressMax);
+            uiProgressBar.Visible = true;
+            uiProgressBar.Maximum = progressMax;
+            uiProgressBar.Value = progressValue;
+            uiProgressLabel.Visible = true;
+            uiProgressLabel.Text = $"{progressValue} / {progressMax}";
         }
         else
         {
-            progressBar1.Visible = false;
-            label2.Visible = false;
+            uiProgressBar.Visible = false;
+            uiProgressLabel.Visible = false;
         }
-    }
-
-    private void button1_Click(object sender, EventArgs e)
-    {
-        _act.Status = "Отменено";
-        _act.ProgressMax = 0;
-        _isCanceled = true;
-        UpdateStatus();
-        _act.Cancel();
     }
 }

@@ -515,7 +515,8 @@ public partial class MediaDetailForm : Form
 
             if (source?.Type != null && !string.IsNullOrEmpty(sourceLink.ExternalId))
             {
-                var uri = source.Type.GetExternalUri(sourceLink.ExternalId, source.Settings);
+                var linkMetadata = media.Metadata.ForSource(source.Id);
+                var uri = source.Type.GetExternalUri(sourceLink.ExternalId, source.Settings, linkMetadata);
                 if (uri != null)
                 {
                     var linkLabel = new LinkLabel

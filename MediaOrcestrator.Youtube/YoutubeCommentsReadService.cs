@@ -6,7 +6,7 @@ using System.Runtime.CompilerServices;
 
 namespace MediaOrcestrator.Youtube;
 
-public sealed class YoutubeCommentsReadService(ILogger logger, YoutubeAuthService authService)
+internal sealed class YoutubeCommentsReadService(ILogger<YoutubeCommentsReadService> logger)
 {
     private const string ThreadParts = "snippet,replies";
     private const string CommentParts = "snippet";
@@ -14,17 +14,10 @@ public sealed class YoutubeCommentsReadService(ILogger logger, YoutubeAuthServic
     private const long PageSize = 100L;
 
     public async IAsyncEnumerable<CommentDto> GetCommentsAsync(
+        YouTubeService service,
         string videoId,
-        Dictionary<string, string> settings,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        if (!YoutubeAuthService.IsConfigured(settings))
-        {
-            throw new InvalidOperationException("Для получения комментариев YouTube необходимо настроить OAuth (client_id и client_secret)");
-        }
-
-        using var service = await authService.CreateServiceAsync(settings, cancellationToken);
-
         var ownerChannelId = await GetVideoOwnerChannelIdAsync(service, videoId, cancellationToken);
 
         string? pageToken = null;
@@ -86,8 +79,7 @@ public sealed class YoutubeCommentsReadService(ILogger logger, YoutubeAuthServic
             pageToken = response.NextPageToken;
         } while (pageToken is not null);
 
-        logger.LogInformation("YouTube комментарии: видео {VideoId}, верхних {Threads}, ответов {Replies}",
-            videoId, totalThreads, totalReplies);
+        logger.CommentsCompleted(videoId, totalThreads, totalReplies);
     }
 
     private static async IAsyncEnumerable<CommentDto> FetchAllRepliesAsync(
@@ -120,7 +112,10 @@ public sealed class YoutubeCommentsReadService(ILogger logger, YoutubeAuthServic
         } while (pageToken is not null);
     }
 
-    private static CommentDto MapComment(Comment comment, string? parentExternalId, string? ownerChannelId)
+    private static CommentDto MapComment(
+        Comment comment,
+        string? parentExternalId,
+        string? ownerChannelId)
     {
         var snippet = comment.Snippet;
         var authorChannelId = ExtractAuthorChannelId(snippet);
@@ -163,9 +158,13 @@ public sealed class YoutubeCommentsReadService(ILogger logger, YoutubeAuthServic
             var response = await request.ExecuteAsync(cancellationToken);
             return response.Items?.FirstOrDefault()?.Snippet?.ChannelId;
         }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Не удалось определить владельца видео {VideoId} для разметки авторских комментариев", videoId);
+            logger.OwnerLookupFailed(videoId, ex);
             return null;
         }
     }

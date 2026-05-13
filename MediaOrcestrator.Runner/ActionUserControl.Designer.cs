@@ -2,94 +2,152 @@
 
 partial class ActionUserControl
 {
-    /// <summary> 
+    /// <summary>
     /// Required designer variable.
     /// </summary>
     private System.ComponentModel.IContainer components = null;
 
-    /// <summary> 
+    /// <summary>
     /// Clean up any resources being used.
     /// </summary>
     /// <param name="disposing">true if managed resources should be disposed; otherwise, false.</param>
     protected override void Dispose(bool disposing)
     {
-        if (disposing && (components != null))
+        if (disposing)
         {
-            components.Dispose();
+            if (_action != null)
+            {
+                _action.Changed -= OnActionChanged;
+                _action = null;
+            }
+
+            components?.Dispose();
         }
+
         base.Dispose(disposing);
     }
 
     #region Component Designer generated code
 
-    /// <summary> 
-    /// Required method for Designer support - do not modify 
+    /// <summary>
+    /// Required method for Designer support - do not modify
     /// the contents of this method with the code editor.
     /// </summary>
     private void InitializeComponent()
     {
-        label1 = new Label();
-        button1 = new Button();
-        progressBar1 = new ProgressBar();
-        label2 = new Label();
+        components = new System.ComponentModel.Container();
+        uiLayout = new TableLayoutPanel();
+        uiNameLabel = new Label();
+        uiStatusLabel = new Label();
+        uiProgressBar = new ProgressBar();
+        uiProgressLabel = new Label();
+        uiCancelButton = new Button();
+        uiActionToolTip = new ToolTip(components);
+        uiLayout.SuspendLayout();
         SuspendLayout();
-        // 
-        // label1
-        // 
-        label1.AutoSize = true;
-        label1.Location = new Point(6, 7);
-        label1.Name = "label1";
-        label1.Size = new Size(38, 15);
-        label1.TabIndex = 0;
-        label1.Text = "label1";
-        // 
-        // button1
-        // 
-        button1.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        button1.Location = new Point(585, 3);
-        button1.Name = "button1";
-        button1.Size = new Size(75, 23);
-        button1.TabIndex = 1;
-        button1.Text = "отмена";
-        button1.UseVisualStyleBackColor = true;
-        button1.Click += button1_Click;
-        // 
-        // progressBar1
-        // 
-        progressBar1.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        progressBar1.Location = new Point(448, 3);
-        progressBar1.Name = "progressBar1";
-        progressBar1.Size = new Size(131, 23);
-        progressBar1.TabIndex = 2;
-        // 
-        // label2
-        // 
-        label2.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        label2.AutoSize = true;
-        label2.Location = new Point(483, 7);
-        label2.Name = "label2";
-        label2.Size = new Size(66, 15);
-        label2.TabIndex = 3;
-        label2.Text = "100999/999";
-        // 
+        //
+        // uiLayout
+        //
+        uiLayout.ColumnCount = 5;
+        uiLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        uiLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        uiLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 200F));
+        uiLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        uiLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        uiLayout.Controls.Add(uiNameLabel, 0, 0);
+        uiLayout.Controls.Add(uiStatusLabel, 1, 0);
+        uiLayout.Controls.Add(uiProgressBar, 2, 0);
+        uiLayout.Controls.Add(uiProgressLabel, 3, 0);
+        uiLayout.Controls.Add(uiCancelButton, 4, 0);
+        uiLayout.Dock = DockStyle.Fill;
+        uiLayout.Location = new Point(0, 0);
+        uiLayout.Name = "uiLayout";
+        uiLayout.Padding = new Padding(8, 6, 8, 6);
+        uiLayout.RowCount = 1;
+        uiLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+        uiLayout.Size = new Size(663, 34);
+        uiLayout.TabIndex = 0;
+        //
+        // uiNameLabel
+        //
+        uiNameLabel.Anchor = AnchorStyles.Left;
+        uiNameLabel.AutoSize = true;
+        uiNameLabel.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
+        uiNameLabel.Margin = new Padding(0, 0, 8, 0);
+        uiNameLabel.Name = "uiNameLabel";
+        uiNameLabel.Size = new Size(80, 15);
+        uiNameLabel.TabIndex = 0;
+        uiNameLabel.Text = "Имя задачи";
+        //
+        // uiStatusLabel
+        //
+        uiStatusLabel.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        uiStatusLabel.AutoEllipsis = true;
+        uiStatusLabel.ForeColor = SystemColors.GrayText;
+        uiStatusLabel.Margin = new Padding(0, 0, 8, 0);
+        uiStatusLabel.Name = "uiStatusLabel";
+        uiStatusLabel.Size = new Size(100, 26);
+        uiStatusLabel.TabIndex = 1;
+        uiStatusLabel.Text = "Статус";
+        uiStatusLabel.TextAlign = ContentAlignment.MiddleLeft;
+        //
+        // uiProgressBar
+        //
+        uiProgressBar.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        uiProgressBar.Margin = new Padding(0, 0, 8, 0);
+        uiProgressBar.Name = "uiProgressBar";
+        uiProgressBar.Size = new Size(192, 18);
+        uiProgressBar.TabIndex = 2;
+        //
+        // uiProgressLabel
+        //
+        uiProgressLabel.Anchor = AnchorStyles.Left;
+        uiProgressLabel.AutoSize = true;
+        uiProgressLabel.ForeColor = SystemColors.GrayText;
+        uiProgressLabel.Margin = new Padding(0, 0, 8, 0);
+        uiProgressLabel.Name = "uiProgressLabel";
+        uiProgressLabel.Size = new Size(66, 15);
+        uiProgressLabel.TabIndex = 3;
+        uiProgressLabel.Text = "0 / 0";
+        uiProgressLabel.TextAlign = ContentAlignment.MiddleLeft;
+        //
+        // uiCancelButton
+        //
+        uiCancelButton.Anchor = AnchorStyles.Right;
+        uiCancelButton.AutoSize = true;
+        uiCancelButton.Margin = new Padding(0);
+        uiCancelButton.Name = "uiCancelButton";
+        uiCancelButton.Padding = new Padding(10, 4, 10, 4);
+        uiCancelButton.Size = new Size(82, 30);
+        uiCancelButton.TabIndex = 4;
+        uiCancelButton.Text = "Отмена";
+        uiActionToolTip.SetToolTip(uiCancelButton, "Отменить задачу");
+        uiCancelButton.UseVisualStyleBackColor = true;
+        uiCancelButton.Click += uiCancelButton_Click;
+        //
         // ActionUserControl
-        // 
+        //
         AutoScaleDimensions = new SizeF(7F, 15F);
         AutoScaleMode = AutoScaleMode.Font;
-        Controls.Add(label2);
-        Controls.Add(progressBar1);
-        Controls.Add(button1);
-        Controls.Add(label1);
+        BackColor = SystemColors.Window;
+        BorderStyle = BorderStyle.FixedSingle;
+        Controls.Add(uiLayout);
+        Margin = new Padding(0, 0, 0, 6);
+        MinimumSize = new Size(0, 42);
         Name = "ActionUserControl";
-        Size = new Size(663, 30);
+        Size = new Size(663, 42);
+        uiLayout.ResumeLayout(false);
+        uiLayout.PerformLayout();
         ResumeLayout(false);
-        PerformLayout();
     }
 
     #endregion
 
-    private Label label1;
-    private Button button1;
-    private ProgressBar progressBar1;
-    private Label label2;
+    private TableLayoutPanel uiLayout;
+    private Label uiNameLabel;
+    private Label uiStatusLabel;
+    private ProgressBar uiProgressBar;
+    private Label uiProgressLabel;
+    private Button uiCancelButton;
+    private ToolTip uiActionToolTip;
 }

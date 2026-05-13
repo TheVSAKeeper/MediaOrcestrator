@@ -338,6 +338,181 @@
             margin-top: 6px;
         }
 
+        .author-select {
+            font-size: 12px;
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            margin-bottom: 6px;
+            vertical-align: top;
+            -ms-flex-align: center;
+        }
+
+        .author-select-label {
+            font-size: 12px;
+            margin-right: 6px;
+            color: #666;
+        }
+
+        .author-select-trigger {
+            font-family: inherit;
+            font-size: 12px;
+            line-height: 1;
+            display: inline-flex;
+            align-items: center;
+            min-width: 180px;
+            max-width: 320px;
+            min-height: 26px;
+            padding: 3px 26px 3px 4px;
+            cursor: pointer;
+            -ms-user-select: none;
+            user-select: none;
+            text-align: left;
+            white-space: nowrap;
+            color: #2b2b2b;
+            border: 1px solid #cfd6df;
+            border-radius: 4px;
+            background: #fff;
+            -ms-flex-align: center;
+        }
+
+        .author-select-trigger:hover {
+            border-color: #1a4f9b;
+        }
+
+        .author-select.open .author-select-trigger {
+            border-color: #1a4f9b;
+            box-shadow: 0 0 0 2px rgba(26, 79, 155, 0.12);
+        }
+
+        .author-select-trigger .arrow {
+            font-size: 9px;
+            position: absolute;
+            top: 50%;
+            right: 8px;
+            margin-top: -5px;
+            color: #6a7888;
+        }
+
+        .author-select-row {
+            display: inline-flex;
+            overflow: hidden;
+            align-items: center;
+            max-width: 280px;
+            white-space: nowrap;
+            -ms-flex-align: center;
+        }
+
+        .author-select-avatar {
+            font-size: 11px;
+            font-weight: 600;
+            line-height: 24px;
+            display: inline-block;
+            overflow: hidden;
+            -ms-flex: 0 0 auto;
+            flex: 0 0 auto;
+            width: 24px;
+            height: 24px;
+            margin-right: 6px;
+            text-align: center;
+            text-transform: uppercase;
+            color: #fff;
+            border-radius: 50%;
+            background: #d8e0ea;
+        }
+
+        .author-select-avatar img {
+            display: block;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .author-select-avatar.placeholder-1 {
+            background: #6aa3d1;
+        }
+
+        .author-select-avatar.placeholder-2 {
+            background: #8c7bc6;
+        }
+
+        .author-select-avatar.placeholder-3 {
+            background: #c97a7a;
+        }
+
+        .author-select-avatar.placeholder-4 {
+            background: #6fa37a;
+        }
+
+        .author-select-avatar.placeholder-5 {
+            background: #c79b58;
+        }
+
+        .author-select-avatar.placeholder-6 {
+            background: #5fa9a3;
+        }
+
+        .author-select-name {
+            display: inline-block;
+            overflow: hidden;
+            -ms-flex: 1 1 auto;
+            flex: 1 1 auto;
+            min-width: 0;
+            max-width: 220px;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+        }
+
+        .author-select-menu {
+            position: absolute;
+            z-index: 50;
+            top: 100%;
+            left: 0;
+            display: none;
+            overflow-y: auto;
+            min-width: 100%;
+            max-width: 360px;
+            max-height: 240px;
+            margin-top: 3px;
+            padding: 4px 0;
+            border: 1px solid #cfd6df;
+            border-radius: 4px;
+            background: #fff;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+        }
+
+        .author-select.open .author-select-menu {
+            display: block;
+        }
+
+        .author-select-option {
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            padding: 4px 10px;
+            cursor: pointer;
+            white-space: nowrap;
+            color: #2b2b2b;
+            -ms-flex-align: center;
+        }
+
+        .author-select-option:hover {
+            background: #eef3fb;
+        }
+
+        .author-select-option.active {
+            color: #1a4f9b;
+            background: #e7eef7;
+        }
+
+        .author-select-option .author-select-name {
+            max-width: 280px;
+        }
+
+        .author-select-host {
+            margin-bottom: 4px;
+        }
+
         mark {
             padding: 0 1px;
             background: #fff3a3;
@@ -487,18 +662,220 @@
                 return h % 6 + 1;
             }
 
-            function notify(kind, sourceId, externalMediaId, externalCommentId, parentExternalCommentId, payload) {
+            function notify(kind, sourceId, externalMediaId, externalCommentId, parentExternalCommentId, payload, authorId) {
                 try {
-                    window.external.OnAction(
-                        kind,
-                        sourceId || "",
-                        externalMediaId || "",
-                        externalCommentId || "",
-                        parentExternalCommentId || "",
-                        payload || "");
+                    if (authorId) {
+                        window.external.OnActionAs(
+                            kind,
+                            sourceId || "",
+                            externalMediaId || "",
+                            externalCommentId || "",
+                            parentExternalCommentId || "",
+                            payload || "",
+                            authorId);
+                    } else {
+                        window.external.OnAction(
+                            kind,
+                            sourceId || "",
+                            externalMediaId || "",
+                            externalCommentId || "",
+                            parentExternalCommentId || "",
+                            payload || "");
+                    }
                 } catch (err) {
                     alert("Не удалось отправить запрос: " + err);
                 }
+            }
+
+            function loadAuthors(sourceId, externalMediaId) {
+                try {
+                    if (!window.external) return [];
+                    var raw = window.external.GetAuthors(sourceId || "", externalMediaId || "");
+                    if (!raw) return [];
+                    var parsed = JSON.parse(String(raw));
+                    return Array.isArray(parsed) ? parsed : [];
+                } catch (err) {
+                    return [];
+                }
+            }
+
+            function buildAuthorAvatar(author, baseClass) {
+                var name = author && author.name ? author.name : "";
+                var avatar = el("span", baseClass + " placeholder-" + paletteIndex(name));
+                avatar.appendChild(text(initialOf(name)));
+                if (author && author.avatar) {
+                    var img = document.createElement("img");
+                    img.setAttribute("alt", "");
+                    img.onload = function () {
+                        while (avatar.firstChild) avatar.removeChild(avatar.firstChild);
+                        avatar.appendChild(img);
+                    };
+                    img.onerror = function () {
+                    };
+                    img.setAttribute("src", author.avatar);
+                }
+                return avatar;
+            }
+
+            function buildAuthorRow(author, baseClass) {
+                var row = el("span", "author-select-row");
+                row.appendChild(buildAuthorAvatar(author, baseClass));
+                var name = el("span", "author-select-name");
+                name.appendChild(text(author && author.name || author && author.id || ""));
+                row.appendChild(name);
+                return row;
+            }
+
+            var __activeAuthorSelect = null;
+            var __authorSelectGlobalBound = false;
+
+            function closeActiveAuthorSelect() {
+                if (!__activeAuthorSelect) return;
+                var cls = __activeAuthorSelect.className || "";
+                __activeAuthorSelect.className = cls.replace(/\s*\bopen\b/g, "");
+                __activeAuthorSelect = null;
+            }
+
+            function isInsideNode(target, node) {
+                var n = target;
+                while (n) {
+                    if (n === node) return true;
+                    n = n.parentNode;
+                }
+                return false;
+            }
+
+            function ensureAuthorSelectGlobalHandlers() {
+                if (__authorSelectGlobalBound) return;
+                __authorSelectGlobalBound = true;
+                if (document.addEventListener) {
+                    document.addEventListener("mousedown", function (ev) {
+                        if (!__activeAuthorSelect) return;
+                        var target = ev.target || ev.srcElement;
+                        if (!isInsideNode(target, __activeAuthorSelect)) {
+                            closeActiveAuthorSelect();
+                        }
+                    }, true);
+                    document.addEventListener("keydown", function (ev) {
+                        if (!__activeAuthorSelect) return;
+                        if (ev.keyCode === 27) {
+                            closeActiveAuthorSelect();
+                        }
+                    }, true);
+                }
+            }
+
+            function buildAuthorSelect(sourceId, externalMediaId) {
+                var authors = loadAuthors(sourceId, externalMediaId);
+                if (!authors || authors.length < 2) return null;
+
+                ensureAuthorSelectGlobalHandlers();
+
+                var wrap = el("div", "author-select");
+
+                var label = el("span", "author-select-label");
+                label.appendChild(text("От имени:"));
+                wrap.appendChild(label);
+
+                var trigger = el("span", "author-select-trigger");
+                trigger.setAttribute("tabindex", "0");
+                trigger.setAttribute("role", "button");
+                trigger.setAttribute("aria-haspopup", "listbox");
+
+                var triggerRowHost = el("span", "author-select-trigger-host");
+                triggerRowHost.style.display = "inline-flex";
+                triggerRowHost.style.alignItems = "center";
+                triggerRowHost.style.minWidth = "0";
+                triggerRowHost.style.flex = "1 1 auto";
+                trigger.appendChild(triggerRowHost);
+
+                var arrow = el("span", "arrow");
+                arrow.appendChild(text("▾"));
+                trigger.appendChild(arrow);
+
+                wrap.appendChild(trigger);
+
+                var menu = el("div", "author-select-menu");
+                wrap.appendChild(menu);
+
+                var selectedId = "";
+                var byId = {};
+                var defaultId = "";
+
+                for (var i = 0; i < authors.length; i++) {
+                    var a = authors[i];
+                    if (!a) continue;
+                    byId[a.id] = a;
+                    if (a.isDefault && !defaultId) defaultId = a.id;
+                }
+                if (!defaultId && authors.length > 0) defaultId = authors[0].id;
+                selectedId = defaultId;
+
+                function renderTrigger() {
+                    while (triggerRowHost.firstChild) triggerRowHost.removeChild(triggerRowHost.firstChild);
+                    var current = byId[selectedId] || authors[0];
+                    triggerRowHost.appendChild(buildAuthorRow(current, "author-select-avatar"));
+                }
+
+                function renderMenu() {
+                    while (menu.firstChild) menu.removeChild(menu.firstChild);
+                    for (var k = 0; k < authors.length; k++) {
+                        (function (author) {
+                            var opt = el("div", "author-select-option" + (author.id === selectedId ? " active" : ""));
+                            opt.setAttribute("role", "option");
+                            opt.appendChild(buildAuthorRow(author, "author-select-avatar"));
+                            opt.onclick = function (ev) {
+                                if (ev && ev.stopPropagation) ev.stopPropagation();
+                                selectedId = author.id;
+                                renderTrigger();
+                                renderMenu();
+                                closeActiveAuthorSelect();
+                            };
+                            menu.appendChild(opt);
+                        })(authors[k]);
+                    }
+                }
+
+                function openMenu() {
+                    if (__activeAuthorSelect && __activeAuthorSelect !== wrap) {
+                        closeActiveAuthorSelect();
+                    }
+                    if (wrap.className.indexOf("open") < 0) {
+                        wrap.className = "author-select open";
+                    }
+                    __activeAuthorSelect = wrap;
+                }
+
+                function toggleMenu() {
+                    if (__activeAuthorSelect === wrap) {
+                        closeActiveAuthorSelect();
+                    } else {
+                        openMenu();
+                    }
+                }
+
+                trigger.onclick = function (ev) {
+                    if (ev && ev.stopPropagation) ev.stopPropagation();
+                    toggleMenu();
+                };
+
+                trigger.onkeydown = function (ev) {
+                    var key = ev.keyCode;
+                    if (key === 13 || key === 32 || key === 40) {
+                        if (ev.preventDefault) ev.preventDefault();
+                        openMenu();
+                    } else if (key === 27) {
+                        closeActiveAuthorSelect();
+                    }
+                };
+
+                renderTrigger();
+                renderMenu();
+
+                wrap.__getAuthorId = function () {
+                    return selectedId || "";
+                };
+                return wrap;
             }
 
             function buildForm(initialText, placeholder, submitLabel, onSubmit, onCancel) {
@@ -585,13 +962,16 @@
                     replyBtn.appendChild(text("Ответить"));
                     replyBtn.onclick = function () {
                         while (formHost.firstChild) formHost.removeChild(formHost.firstChild);
+                        var authorSelect = c.hasAuthors ? buildAuthorSelect(c.sourceId, c.externalMediaId) : null;
                         var form = buildForm(replyPrefix(c.author), "Ответ для " + (c.author || ""), "Отправить",
                             function (value) {
-                                notify("Create", c.sourceId, c.externalMediaId, "", c.externalCommentId, value);
+                                var authorId = authorSelect && authorSelect.__getAuthorId ? authorSelect.__getAuthorId() : "";
+                                notify("Create", c.sourceId, c.externalMediaId, "", c.externalCommentId, value, authorId);
                             },
                             function () {
                                 while (formHost.firstChild) formHost.removeChild(formHost.firstChild);
                             });
+                        if (authorSelect) form.insertBefore(authorSelect, form.firstChild);
                         formHost.appendChild(form);
                     };
                     bar.appendChild(replyBtn);
@@ -678,6 +1058,37 @@
                         actions.appendChild(sourceSelect);
                     }
 
+                    function pickedSource() {
+                        if (!sourceSelect) return mutating[0];
+                        var parts = sourceSelect.value.split("|");
+                        for (var k = 0; k < mutating.length; k++) {
+                            if (mutating[k].sourceId === parts[0] && mutating[k].externalId === parts[1]) {
+                                return mutating[k];
+                            }
+                        }
+                        return mutating[0];
+                    }
+
+                    var authorWrap = el("div", "author-select-host");
+                    formHost.insertBefore(authorWrap, area);
+
+                    var currentAuthorSelect = null;
+
+                    function refreshAuthorSelect() {
+                        while (authorWrap.firstChild) authorWrap.removeChild(authorWrap.firstChild);
+                        currentAuthorSelect = null;
+                        var picked = pickedSource();
+                        if (!picked || !picked.hasAuthors) return;
+                        var sel = buildAuthorSelect(picked.sourceId, picked.externalId);
+                        if (sel) {
+                            authorWrap.appendChild(sel);
+                            currentAuthorSelect = sel;
+                        }
+                    }
+
+                    refreshAuthorSelect();
+                    if (sourceSelect) sourceSelect.onchange = refreshAuthorSelect;
+
                     var submitBtn = el("button");
                     submitBtn.appendChild(text("Отправить"));
                     actions.appendChild(submitBtn);
@@ -695,20 +1106,12 @@
                             return;
                         }
 
-                        var picked = mutating[0];
-                        if (sourceSelect) {
-                            var parts = sourceSelect.value.split("|");
-                            for (var k = 0; k < mutating.length; k++) {
-                                if (mutating[k].sourceId === parts[0] && mutating[k].externalId === parts[1]) {
-                                    picked = mutating[k];
-                                    break;
-                                }
-                            }
-                        }
+                        var picked = pickedSource();
+                        var authorId = currentAuthorSelect && currentAuthorSelect.__getAuthorId ? currentAuthorSelect.__getAuthorId() : "";
 
                         submitBtn.setAttribute("disabled", "disabled");
                         cancelBtn.setAttribute("disabled", "disabled");
-                        notify("Create", picked.sourceId, picked.externalId, "", "", value);
+                        notify("Create", picked.sourceId, picked.externalId, "", "", value, authorId);
                     };
 
                     cancelBtn.onclick = function () {
@@ -1060,6 +1463,18 @@
                         }
                     }
 
+                    return true;
+                } catch (e) {
+                    return false;
+                }
+            };
+
+            window.__applyAll = function (json) {
+                try {
+                    var parsed = json ? JSON.parse(json) : null;
+                    data.search = parsed && parsed.search ? parsed.search : "";
+                    data.groups = parsed && parsed.groups ? parsed.groups : [];
+                    render();
                     return true;
                 } catch (e) {
                     return false;

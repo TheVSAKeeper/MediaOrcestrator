@@ -37,23 +37,20 @@
             uiDescriptionCounterLabel = new Label();
             uiDescriptionTemplateComboBox = new ComboBox();
             uiDescriptionTextBox = new TextBox();
-            uiVideoSectionLabel = new Label();
-            uiVideoDropPanel = new Panel();
-            uiVideoDropLabel = new Label();
+            uiVideoLabel = new Label();
+            uiVideoPathTextBox = new TextBox();
             uiBrowseVideoButton = new Button();
             uiClearVideoButton = new Button();
-            uiCoverSectionLabel = new Label();
-            uiCoverDropPanel = new Panel();
-            uiCoverPreviewPictureBox = new PictureBox();
-            uiCoverDropLabel = new Label();
+            uiCoverLabel = new Label();
+            uiCoverPathTextBox = new TextBox();
             uiBrowseCoverButton = new Button();
             uiClearCoverButton = new Button();
+            uiCoverPreviewPictureBox = new PictureBox();
+            uiRunChainCheckBox = new CheckBox();
             uiPublishButton = new Button();
             uiPublishProgressBar = new ProgressBar();
             uiStatusLabel = new Label();
             uiToolTip = new ToolTip(components);
-            uiVideoDropPanel.SuspendLayout();
-            uiCoverDropPanel.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)uiCoverPreviewPictureBox).BeginInit();
             SuspendLayout();
             //
@@ -127,12 +124,12 @@
             //
             uiDescriptionTemplateComboBox.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             uiDescriptionTemplateComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
+            uiDescriptionTemplateComboBox.Enabled = false;
             uiDescriptionTemplateComboBox.FormattingEnabled = true;
             uiDescriptionTemplateComboBox.Location = new Point(110, 76);
             uiDescriptionTemplateComboBox.Name = "uiDescriptionTemplateComboBox";
             uiDescriptionTemplateComboBox.Size = new Size(700, 23);
             uiDescriptionTemplateComboBox.TabIndex = 6;
-            uiDescriptionTemplateComboBox.Enabled = false;
             uiToolTip.SetToolTip(uiDescriptionTemplateComboBox, "Подставить описание из последних публикаций в этот источник");
             uiDescriptionTemplateComboBox.SelectionChangeCommitted += uiDescriptionTemplateComboBox_SelectionChangeCommitted;
             //
@@ -143,55 +140,40 @@
             uiDescriptionTextBox.Multiline = true;
             uiDescriptionTextBox.Name = "uiDescriptionTextBox";
             uiDescriptionTextBox.ScrollBars = ScrollBars.Vertical;
-            uiDescriptionTextBox.Size = new Size(766, 100);
+            uiDescriptionTextBox.Size = new Size(766, 130);
             uiDescriptionTextBox.TabIndex = 7;
             uiDescriptionTextBox.TextChanged += uiDescriptionTextBox_TextChanged;
             //
-            // uiVideoSectionLabel
+            // uiVideoLabel
             //
-            uiVideoSectionLabel.AutoSize = true;
-            uiVideoSectionLabel.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
-            uiVideoSectionLabel.Location = new Point(12, 220);
-            uiVideoSectionLabel.Name = "uiVideoSectionLabel";
-            uiVideoSectionLabel.Size = new Size(44, 15);
-            uiVideoSectionLabel.TabIndex = 8;
-            uiVideoSectionLabel.Text = "Видео";
+            uiVideoLabel.AutoSize = true;
+            uiVideoLabel.Location = new Point(12, 250);
+            uiVideoLabel.Name = "uiVideoLabel";
+            uiVideoLabel.Size = new Size(44, 15);
+            uiVideoLabel.TabIndex = 8;
+            uiVideoLabel.Text = "Видео:";
             //
-            // uiVideoDropPanel
+            // uiVideoPathTextBox
             //
-            uiVideoDropPanel.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            uiVideoDropPanel.BackColor = Color.WhiteSmoke;
-            uiVideoDropPanel.BorderStyle = BorderStyle.FixedSingle;
-            uiVideoDropPanel.Controls.Add(uiVideoDropLabel);
-            uiVideoDropPanel.Cursor = Cursors.Hand;
-            uiVideoDropPanel.Location = new Point(12, 239);
-            uiVideoDropPanel.Name = "uiVideoDropPanel";
-            uiVideoDropPanel.Size = new Size(756, 70);
-            uiVideoDropPanel.TabIndex = 9;
-            uiToolTip.SetToolTip(uiVideoDropPanel, "Нажмите для выбора видеофайла");
-            uiVideoDropPanel.Click += uiVideoDropPanel_Click;
-            //
-            // uiVideoDropLabel
-            //
-            uiVideoDropLabel.Cursor = Cursors.Hand;
-            uiVideoDropLabel.Dock = DockStyle.Fill;
-            uiVideoDropLabel.ForeColor = Color.DimGray;
-            uiVideoDropLabel.Location = new Point(0, 0);
-            uiVideoDropLabel.Name = "uiVideoDropLabel";
-            uiVideoDropLabel.Size = new Size(754, 68);
-            uiVideoDropLabel.TabIndex = 0;
-            uiVideoDropLabel.Text = "Нажмите для выбора видеофайла";
-            uiVideoDropLabel.TextAlign = ContentAlignment.MiddleCenter;
-            uiVideoDropLabel.Click += uiVideoDropPanel_Click;
+            uiVideoPathTextBox.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            uiVideoPathTextBox.Cursor = Cursors.Hand;
+            uiVideoPathTextBox.Location = new Point(110, 247);
+            uiVideoPathTextBox.Name = "uiVideoPathTextBox";
+            uiVideoPathTextBox.PlaceholderText = "Нажмите, чтобы выбрать видеофайл";
+            uiVideoPathTextBox.ReadOnly = true;
+            uiVideoPathTextBox.Size = new Size(695, 23);
+            uiVideoPathTextBox.TabIndex = 9;
+            uiToolTip.SetToolTip(uiVideoPathTextBox, "Нажмите, чтобы выбрать видеофайл");
+            uiVideoPathTextBox.Click += uiVideoPathTextBox_Click;
             //
             // uiBrowseVideoButton
             //
             uiBrowseVideoButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            uiBrowseVideoButton.Location = new Point(774, 248);
+            uiBrowseVideoButton.Location = new Point(811, 246);
             uiBrowseVideoButton.Name = "uiBrowseVideoButton";
-            uiBrowseVideoButton.Size = new Size(102, 26);
+            uiBrowseVideoButton.Size = new Size(34, 25);
             uiBrowseVideoButton.TabIndex = 10;
-            uiBrowseVideoButton.Text = "Обзор...";
+            uiBrowseVideoButton.Text = "⋯";
             uiBrowseVideoButton.UseVisualStyleBackColor = true;
             uiToolTip.SetToolTip(uiBrowseVideoButton, "Выбрать видеофайл");
             uiBrowseVideoButton.Click += uiBrowseVideoButton_Click;
@@ -199,73 +181,45 @@
             // uiClearVideoButton
             //
             uiClearVideoButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            uiClearVideoButton.Location = new Point(774, 280);
+            uiClearVideoButton.Location = new Point(849, 246);
             uiClearVideoButton.Name = "uiClearVideoButton";
-            uiClearVideoButton.Size = new Size(102, 26);
+            uiClearVideoButton.Size = new Size(28, 25);
             uiClearVideoButton.TabIndex = 11;
-            uiClearVideoButton.Text = "Очистить";
+            uiClearVideoButton.Text = "×";
             uiClearVideoButton.UseVisualStyleBackColor = true;
             uiToolTip.SetToolTip(uiClearVideoButton, "Убрать выбранный видеофайл");
             uiClearVideoButton.Click += uiClearVideoButton_Click;
             //
-            // uiCoverSectionLabel
+            // uiCoverLabel
             //
-            uiCoverSectionLabel.AutoSize = true;
-            uiCoverSectionLabel.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
-            uiCoverSectionLabel.Location = new Point(12, 324);
-            uiCoverSectionLabel.Name = "uiCoverSectionLabel";
-            uiCoverSectionLabel.Size = new Size(60, 15);
-            uiCoverSectionLabel.TabIndex = 12;
-            uiCoverSectionLabel.Text = "Обложка";
+            uiCoverLabel.AutoSize = true;
+            uiCoverLabel.Location = new Point(12, 282);
+            uiCoverLabel.Name = "uiCoverLabel";
+            uiCoverLabel.Size = new Size(60, 15);
+            uiCoverLabel.TabIndex = 12;
+            uiCoverLabel.Text = "Обложка:";
             //
-            // uiCoverDropPanel
+            // uiCoverPathTextBox
             //
-            uiCoverDropPanel.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            uiCoverDropPanel.BackColor = Color.WhiteSmoke;
-            uiCoverDropPanel.BorderStyle = BorderStyle.FixedSingle;
-            uiCoverDropPanel.Controls.Add(uiCoverPreviewPictureBox);
-            uiCoverDropPanel.Controls.Add(uiCoverDropLabel);
-            uiCoverDropPanel.Cursor = Cursors.Hand;
-            uiCoverDropPanel.Location = new Point(12, 343);
-            uiCoverDropPanel.Name = "uiCoverDropPanel";
-            uiCoverDropPanel.Size = new Size(756, 140);
-            uiCoverDropPanel.TabIndex = 13;
-            uiToolTip.SetToolTip(uiCoverDropPanel, "Нажмите для выбора изображения");
-            uiCoverDropPanel.Click += uiCoverDropPanel_Click;
-            //
-            // uiCoverPreviewPictureBox
-            //
-            uiCoverPreviewPictureBox.Cursor = Cursors.Hand;
-            uiCoverPreviewPictureBox.Dock = DockStyle.Left;
-            uiCoverPreviewPictureBox.Location = new Point(0, 0);
-            uiCoverPreviewPictureBox.Name = "uiCoverPreviewPictureBox";
-            uiCoverPreviewPictureBox.Size = new Size(220, 138);
-            uiCoverPreviewPictureBox.SizeMode = PictureBoxSizeMode.Zoom;
-            uiCoverPreviewPictureBox.TabIndex = 0;
-            uiCoverPreviewPictureBox.TabStop = false;
-            uiCoverPreviewPictureBox.Click += uiCoverDropPanel_Click;
-            //
-            // uiCoverDropLabel
-            //
-            uiCoverDropLabel.Cursor = Cursors.Hand;
-            uiCoverDropLabel.Dock = DockStyle.Fill;
-            uiCoverDropLabel.ForeColor = Color.DimGray;
-            uiCoverDropLabel.Location = new Point(220, 0);
-            uiCoverDropLabel.Name = "uiCoverDropLabel";
-            uiCoverDropLabel.Size = new Size(534, 138);
-            uiCoverDropLabel.TabIndex = 1;
-            uiCoverDropLabel.Text = "Нажмите для выбора изображения";
-            uiCoverDropLabel.TextAlign = ContentAlignment.MiddleCenter;
-            uiCoverDropLabel.Click += uiCoverDropPanel_Click;
+            uiCoverPathTextBox.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            uiCoverPathTextBox.Cursor = Cursors.Hand;
+            uiCoverPathTextBox.Location = new Point(110, 279);
+            uiCoverPathTextBox.Name = "uiCoverPathTextBox";
+            uiCoverPathTextBox.PlaceholderText = "Нажмите, чтобы выбрать обложку";
+            uiCoverPathTextBox.ReadOnly = true;
+            uiCoverPathTextBox.Size = new Size(695, 23);
+            uiCoverPathTextBox.TabIndex = 13;
+            uiToolTip.SetToolTip(uiCoverPathTextBox, "Нажмите, чтобы выбрать обложку");
+            uiCoverPathTextBox.Click += uiCoverPathTextBox_Click;
             //
             // uiBrowseCoverButton
             //
             uiBrowseCoverButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            uiBrowseCoverButton.Location = new Point(774, 343);
+            uiBrowseCoverButton.Location = new Point(811, 278);
             uiBrowseCoverButton.Name = "uiBrowseCoverButton";
-            uiBrowseCoverButton.Size = new Size(102, 26);
+            uiBrowseCoverButton.Size = new Size(34, 25);
             uiBrowseCoverButton.TabIndex = 14;
-            uiBrowseCoverButton.Text = "Обзор...";
+            uiBrowseCoverButton.Text = "⋯";
             uiBrowseCoverButton.UseVisualStyleBackColor = true;
             uiToolTip.SetToolTip(uiBrowseCoverButton, "Выбрать обложку");
             uiBrowseCoverButton.Click += uiBrowseCoverButton_Click;
@@ -273,22 +227,48 @@
             // uiClearCoverButton
             //
             uiClearCoverButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            uiClearCoverButton.Location = new Point(774, 375);
+            uiClearCoverButton.Location = new Point(849, 278);
             uiClearCoverButton.Name = "uiClearCoverButton";
-            uiClearCoverButton.Size = new Size(102, 26);
+            uiClearCoverButton.Size = new Size(28, 25);
             uiClearCoverButton.TabIndex = 15;
-            uiClearCoverButton.Text = "Очистить";
+            uiClearCoverButton.Text = "×";
             uiClearCoverButton.UseVisualStyleBackColor = true;
             uiToolTip.SetToolTip(uiClearCoverButton, "Убрать выбранную обложку");
             uiClearCoverButton.Click += uiClearCoverButton_Click;
             //
+            // uiCoverPreviewPictureBox
+            //
+            uiCoverPreviewPictureBox.BorderStyle = BorderStyle.FixedSingle;
+            uiCoverPreviewPictureBox.Cursor = Cursors.Hand;
+            uiCoverPreviewPictureBox.Location = new Point(110, 310);
+            uiCoverPreviewPictureBox.Name = "uiCoverPreviewPictureBox";
+            uiCoverPreviewPictureBox.Size = new Size(160, 90);
+            uiCoverPreviewPictureBox.SizeMode = PictureBoxSizeMode.Zoom;
+            uiCoverPreviewPictureBox.TabIndex = 16;
+            uiCoverPreviewPictureBox.TabStop = false;
+            uiToolTip.SetToolTip(uiCoverPreviewPictureBox, "Нажмите, чтобы выбрать обложку");
+            uiCoverPreviewPictureBox.Click += uiCoverPathTextBox_Click;
+            //
+            // uiRunChainCheckBox
+            //
+            uiRunChainCheckBox.AutoSize = true;
+            uiRunChainCheckBox.Checked = true;
+            uiRunChainCheckBox.CheckState = CheckState.Checked;
+            uiRunChainCheckBox.Location = new Point(12, 413);
+            uiRunChainCheckBox.Name = "uiRunChainCheckBox";
+            uiRunChainCheckBox.Size = new Size(290, 19);
+            uiRunChainCheckBox.TabIndex = 17;
+            uiRunChainCheckBox.Text = "Запустить цепочку синхронизации после публикации";
+            uiRunChainCheckBox.UseVisualStyleBackColor = true;
+            uiToolTip.SetToolTip(uiRunChainCheckBox, "После публикации обойти исходящие связи источника и синхронизировать новое медиа по цепочке");
+            //
             // uiPublishButton
             //
             uiPublishButton.Font = new Font("Segoe UI", 9.75F, FontStyle.Bold);
-            uiPublishButton.Location = new Point(12, 504);
+            uiPublishButton.Location = new Point(12, 440);
             uiPublishButton.Name = "uiPublishButton";
             uiPublishButton.Size = new Size(180, 34);
-            uiPublishButton.TabIndex = 16;
+            uiPublishButton.TabIndex = 18;
             uiPublishButton.Text = "Опубликовать";
             uiPublishButton.UseVisualStyleBackColor = true;
             uiToolTip.SetToolTip(uiPublishButton, "Опубликовать (Ctrl+Enter)");
@@ -297,12 +277,12 @@
             // uiPublishProgressBar
             //
             uiPublishProgressBar.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            uiPublishProgressBar.Location = new Point(198, 507);
+            uiPublishProgressBar.Location = new Point(198, 443);
             uiPublishProgressBar.MarqueeAnimationSpeed = 30;
             uiPublishProgressBar.Name = "uiPublishProgressBar";
             uiPublishProgressBar.Size = new Size(678, 6);
             uiPublishProgressBar.Style = ProgressBarStyle.Marquee;
-            uiPublishProgressBar.TabIndex = 17;
+            uiPublishProgressBar.TabIndex = 19;
             uiPublishProgressBar.Visible = false;
             //
             // uiStatusLabel
@@ -310,10 +290,10 @@
             uiStatusLabel.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             uiStatusLabel.AutoEllipsis = true;
             uiStatusLabel.ForeColor = Color.DimGray;
-            uiStatusLabel.Location = new Point(198, 517);
+            uiStatusLabel.Location = new Point(198, 453);
             uiStatusLabel.Name = "uiStatusLabel";
             uiStatusLabel.Size = new Size(678, 21);
-            uiStatusLabel.TabIndex = 18;
+            uiStatusLabel.TabIndex = 20;
             uiStatusLabel.Text = "—";
             uiStatusLabel.TextAlign = ContentAlignment.MiddleLeft;
             //
@@ -321,17 +301,19 @@
             //
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
-            Controls.Add(uiPublishProgressBar);
             Controls.Add(uiStatusLabel);
+            Controls.Add(uiPublishProgressBar);
             Controls.Add(uiPublishButton);
+            Controls.Add(uiRunChainCheckBox);
+            Controls.Add(uiCoverPreviewPictureBox);
             Controls.Add(uiClearCoverButton);
             Controls.Add(uiBrowseCoverButton);
-            Controls.Add(uiCoverDropPanel);
-            Controls.Add(uiCoverSectionLabel);
+            Controls.Add(uiCoverPathTextBox);
+            Controls.Add(uiCoverLabel);
             Controls.Add(uiClearVideoButton);
             Controls.Add(uiBrowseVideoButton);
-            Controls.Add(uiVideoDropPanel);
-            Controls.Add(uiVideoSectionLabel);
+            Controls.Add(uiVideoPathTextBox);
+            Controls.Add(uiVideoLabel);
             Controls.Add(uiDescriptionTextBox);
             Controls.Add(uiDescriptionTemplateComboBox);
             Controls.Add(uiDescriptionCounterLabel);
@@ -341,9 +323,7 @@
             Controls.Add(uiSourceComboBox);
             Controls.Add(uiSourceLabel);
             Name = "PublishControl";
-            Size = new Size(891, 557);
-            uiVideoDropPanel.ResumeLayout(false);
-            uiCoverDropPanel.ResumeLayout(false);
+            Size = new Size(891, 486);
             ((System.ComponentModel.ISupportInitialize)uiCoverPreviewPictureBox).EndInit();
             ResumeLayout(false);
             PerformLayout();
@@ -359,17 +339,16 @@
         private Label uiDescriptionCounterLabel;
         private ComboBox uiDescriptionTemplateComboBox;
         private TextBox uiDescriptionTextBox;
-        private Label uiVideoSectionLabel;
-        private Panel uiVideoDropPanel;
-        private Label uiVideoDropLabel;
+        private Label uiVideoLabel;
+        private TextBox uiVideoPathTextBox;
         private Button uiBrowseVideoButton;
         private Button uiClearVideoButton;
-        private Label uiCoverSectionLabel;
-        private Panel uiCoverDropPanel;
-        private PictureBox uiCoverPreviewPictureBox;
-        private Label uiCoverDropLabel;
+        private Label uiCoverLabel;
+        private TextBox uiCoverPathTextBox;
         private Button uiBrowseCoverButton;
         private Button uiClearCoverButton;
+        private PictureBox uiCoverPreviewPictureBox;
+        private CheckBox uiRunChainCheckBox;
         private Button uiPublishButton;
         private ProgressBar uiPublishProgressBar;
         private Label uiStatusLabel;

@@ -17,204 +17,401 @@ partial class CommentsHtmlControl
 
     #region Component Designer generated code
 
-    private Panel uiFiltersPanel;
+    private TableLayoutPanel uiFiltersPanel;
+    private GroupBox uiFetchGroup;
+    private TableLayoutPanel uiFetchLayout;
     private Label uiSourceLabel;
     private ComboBox uiSourceComboBox;
+    private CheckBox uiFetchSinceCheckBox;
+    private NumericUpDown uiFetchSinceDaysNumeric;
+    private Label uiFetchSinceDaysLabel;
+    private CheckBox uiFetchOnlyRecentCheckBox;
+    private NumericUpDown uiFetchOnlyRecentNumeric;
+    private Label uiFetchOnlyRecentLabel;
+    private Button uiForceFetchAllButton;
+    private GroupBox uiViewGroup;
+    private TableLayoutPanel uiViewLayout;
     private Label uiSearchLabel;
     private TextBox uiSearchTextBox;
-    private Label uiLimitLabel;
-    private NumericUpDown uiLimitNumeric;
-    private Button uiRefreshButton;
-    private Button uiForceFetchAllButton;
     private Label uiMediaSearchLabel;
     private TextBox uiMediaSearchTextBox;
+    private Label uiLimitLabel;
+    private FlowLayoutPanel uiLimitInline;
+    private NumericUpDown uiLimitNumeric;
+    private Button uiRefreshButton;
+    private GroupBox uiSortGroup;
+    private TableLayoutPanel uiSortLayout;
     private Label uiMediaSortLabel;
     private ComboBox uiMediaSortComboBox;
     private Button uiMediaSortInvertButton;
     private Label uiCommentSortLabel;
     private ComboBox uiCommentSortComboBox;
     private Button uiCommentSortInvertButton;
-    private Label uiCountLabel;
     private CommentsBrowserView uiBrowserView;
     private StatusStrip uiStatusStrip;
     private ToolStripStatusLabel uiStatusLabel;
+    private ToolStripProgressBar uiFetchProgressBar;
+    private ToolStripStatusLabel uiFetchCounterLabel;
 
     private void InitializeComponent()
     {
         components = new System.ComponentModel.Container();
-        uiFiltersPanel = new Panel();
+        uiFiltersPanel = new TableLayoutPanel();
+        uiFetchGroup = new GroupBox();
+        uiFetchLayout = new TableLayoutPanel();
         uiSourceLabel = new Label();
         uiSourceComboBox = new ComboBox();
+        uiFetchSinceCheckBox = new CheckBox();
+        uiFetchSinceDaysNumeric = new NumericUpDown();
+        uiFetchSinceDaysLabel = new Label();
+        uiFetchOnlyRecentCheckBox = new CheckBox();
+        uiFetchOnlyRecentNumeric = new NumericUpDown();
+        uiFetchOnlyRecentLabel = new Label();
+        uiForceFetchAllButton = new Button();
+        uiViewGroup = new GroupBox();
+        uiViewLayout = new TableLayoutPanel();
         uiSearchLabel = new Label();
         uiSearchTextBox = new TextBox();
-        uiLimitLabel = new Label();
-        uiLimitNumeric = new NumericUpDown();
-        uiRefreshButton = new Button();
-        uiForceFetchAllButton = new Button();
         uiMediaSearchLabel = new Label();
         uiMediaSearchTextBox = new TextBox();
+        uiLimitLabel = new Label();
+        uiLimitInline = new FlowLayoutPanel();
+        uiLimitNumeric = new NumericUpDown();
+        uiRefreshButton = new Button();
+        uiSortGroup = new GroupBox();
+        uiSortLayout = new TableLayoutPanel();
         uiMediaSortLabel = new Label();
         uiMediaSortComboBox = new ComboBox();
         uiMediaSortInvertButton = new Button();
         uiCommentSortLabel = new Label();
         uiCommentSortComboBox = new ComboBox();
         uiCommentSortInvertButton = new Button();
-        uiCountLabel = new Label();
         uiBrowserView = new CommentsBrowserView();
         uiStatusStrip = new StatusStrip();
         uiStatusLabel = new ToolStripStatusLabel();
+        uiFetchProgressBar = new ToolStripProgressBar();
+        uiFetchCounterLabel = new ToolStripStatusLabel();
         uiFiltersPanel.SuspendLayout();
+        uiFetchGroup.SuspendLayout();
+        uiFetchLayout.SuspendLayout();
+        ((System.ComponentModel.ISupportInitialize)uiFetchSinceDaysNumeric).BeginInit();
+        ((System.ComponentModel.ISupportInitialize)uiFetchOnlyRecentNumeric).BeginInit();
+        uiViewGroup.SuspendLayout();
+        uiViewLayout.SuspendLayout();
+        uiLimitInline.SuspendLayout();
         ((System.ComponentModel.ISupportInitialize)uiLimitNumeric).BeginInit();
+        uiSortGroup.SuspendLayout();
+        uiSortLayout.SuspendLayout();
         uiStatusStrip.SuspendLayout();
         SuspendLayout();
         //
         // uiFiltersPanel
         //
-        uiFiltersPanel.Controls.Add(uiCountLabel);
-        uiFiltersPanel.Controls.Add(uiCommentSortInvertButton);
-        uiFiltersPanel.Controls.Add(uiCommentSortComboBox);
-        uiFiltersPanel.Controls.Add(uiCommentSortLabel);
-        uiFiltersPanel.Controls.Add(uiMediaSortInvertButton);
-        uiFiltersPanel.Controls.Add(uiMediaSortComboBox);
-        uiFiltersPanel.Controls.Add(uiMediaSortLabel);
-        uiFiltersPanel.Controls.Add(uiMediaSearchTextBox);
-        uiFiltersPanel.Controls.Add(uiMediaSearchLabel);
-        uiFiltersPanel.Controls.Add(uiForceFetchAllButton);
-        uiFiltersPanel.Controls.Add(uiRefreshButton);
-        uiFiltersPanel.Controls.Add(uiLimitNumeric);
-        uiFiltersPanel.Controls.Add(uiLimitLabel);
-        uiFiltersPanel.Controls.Add(uiSearchTextBox);
-        uiFiltersPanel.Controls.Add(uiSearchLabel);
-        uiFiltersPanel.Controls.Add(uiSourceComboBox);
-        uiFiltersPanel.Controls.Add(uiSourceLabel);
+        uiFiltersPanel.ColumnCount = 3;
+        uiFiltersPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40F));
+        uiFiltersPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30F));
+        uiFiltersPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30F));
+        uiFiltersPanel.Controls.Add(uiFetchGroup, 0, 0);
+        uiFiltersPanel.Controls.Add(uiViewGroup, 1, 0);
+        uiFiltersPanel.Controls.Add(uiSortGroup, 2, 0);
         uiFiltersPanel.Dock = DockStyle.Top;
         uiFiltersPanel.Location = new Point(0, 0);
         uiFiltersPanel.Name = "uiFiltersPanel";
-        uiFiltersPanel.Padding = new Padding(8);
-        uiFiltersPanel.Size = new Size(1100, 76);
+        uiFiltersPanel.Padding = new Padding(4, 0, 4, 0);
+        uiFiltersPanel.RowCount = 1;
+        uiFiltersPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 120F));
+        uiFiltersPanel.Size = new Size(1100, 120);
         uiFiltersPanel.TabIndex = 0;
+        //
+        // uiFetchGroup
+        //
+        uiFetchGroup.Controls.Add(uiFetchLayout);
+        uiFetchGroup.Dock = DockStyle.Fill;
+        uiFetchGroup.Margin = new Padding(0, 0, 4, 0);
+        uiFetchGroup.Name = "uiFetchGroup";
+        uiFetchGroup.TabIndex = 0;
+        uiFetchGroup.TabStop = false;
+        uiFetchGroup.Text = "Загрузка с сервера";
+        //
+        // uiFetchLayout
+        //
+        uiFetchLayout.ColumnCount = 6;
+        uiFetchLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        uiFetchLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        uiFetchLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        uiFetchLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        uiFetchLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        uiFetchLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        uiFetchLayout.Controls.Add(uiSourceLabel, 0, 0);
+        uiFetchLayout.Controls.Add(uiSourceComboBox, 1, 0);
+        uiFetchLayout.SetColumnSpan(uiSourceComboBox, 5);
+        uiFetchLayout.Controls.Add(uiFetchSinceCheckBox, 0, 1);
+        uiFetchLayout.Controls.Add(uiFetchSinceDaysNumeric, 1, 1);
+        uiFetchLayout.Controls.Add(uiFetchSinceDaysLabel, 2, 1);
+        uiFetchLayout.Controls.Add(uiFetchOnlyRecentCheckBox, 3, 1);
+        uiFetchLayout.Controls.Add(uiFetchOnlyRecentNumeric, 4, 1);
+        uiFetchLayout.Controls.Add(uiFetchOnlyRecentLabel, 5, 1);
+        uiFetchLayout.Controls.Add(uiForceFetchAllButton, 0, 2);
+        uiFetchLayout.SetColumnSpan(uiForceFetchAllButton, 6);
+        uiFetchLayout.Dock = DockStyle.Fill;
+        uiFetchLayout.Name = "uiFetchLayout";
+        uiFetchLayout.RowCount = 3;
+        uiFetchLayout.RowStyles.Add(new RowStyle());
+        uiFetchLayout.RowStyles.Add(new RowStyle());
+        uiFetchLayout.RowStyles.Add(new RowStyle());
+        uiFetchLayout.TabIndex = 0;
         //
         // uiSourceLabel
         //
         uiSourceLabel.AutoSize = true;
-        uiSourceLabel.Location = new Point(8, 14);
+        uiSourceLabel.Margin = new Padding(0, 7, 6, 0);
         uiSourceLabel.Name = "uiSourceLabel";
-        uiSourceLabel.Size = new Size(60, 15);
         uiSourceLabel.TabIndex = 0;
         uiSourceLabel.Text = "Источник:";
         //
         // uiSourceComboBox
         //
+        uiSourceComboBox.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
         uiSourceComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
-        uiSourceComboBox.Location = new Point(80, 11);
+        uiSourceComboBox.Margin = new Padding(0, 3, 0, 3);
         uiSourceComboBox.Name = "uiSourceComboBox";
-        uiSourceComboBox.Size = new Size(220, 23);
+        uiSourceComboBox.Size = new Size(200, 23);
         uiSourceComboBox.TabIndex = 1;
         uiSourceComboBox.SelectedIndexChanged += uiSourceComboBox_SelectedIndexChanged;
         //
-        // uiSearchLabel
+        // uiFetchSinceCheckBox
         //
-        uiSearchLabel.AutoSize = true;
-        uiSearchLabel.Location = new Point(316, 14);
-        uiSearchLabel.Name = "uiSearchLabel";
-        uiSearchLabel.Size = new Size(45, 15);
-        uiSearchLabel.TabIndex = 2;
-        uiSearchLabel.Text = "Поиск:";
+        uiFetchSinceCheckBox.AutoSize = true;
+        uiFetchSinceCheckBox.Margin = new Padding(0, 6, 6, 0);
+        uiFetchSinceCheckBox.Name = "uiFetchSinceCheckBox";
+        uiFetchSinceCheckBox.TabIndex = 2;
+        uiFetchSinceCheckBox.Text = "Не старше";
+        uiFetchSinceCheckBox.UseVisualStyleBackColor = true;
+        uiFetchSinceCheckBox.CheckedChanged += uiFetchSinceCheckBox_CheckedChanged;
         //
-        // uiSearchTextBox
+        // uiFetchSinceDaysNumeric
         //
-        uiSearchTextBox.Location = new Point(370, 11);
-        uiSearchTextBox.Name = "uiSearchTextBox";
-        uiSearchTextBox.PlaceholderText = "текст или автор";
-        uiSearchTextBox.Size = new Size(260, 23);
-        uiSearchTextBox.TabIndex = 3;
-        uiSearchTextBox.TextChanged += uiSearchTextBox_TextChanged;
-        uiSearchTextBox.KeyDown += uiSearchTextBox_KeyDown;
+        uiFetchSinceDaysNumeric.Enabled = false;
+        uiFetchSinceDaysNumeric.Margin = new Padding(0, 3, 6, 3);
+        uiFetchSinceDaysNumeric.Maximum = new decimal(new int[] { 3650, 0, 0, 0 });
+        uiFetchSinceDaysNumeric.Minimum = new decimal(new int[] { 1, 0, 0, 0 });
+        uiFetchSinceDaysNumeric.Name = "uiFetchSinceDaysNumeric";
+        uiFetchSinceDaysNumeric.Size = new Size(70, 23);
+        uiFetchSinceDaysNumeric.TabIndex = 3;
+        uiFetchSinceDaysNumeric.Value = new decimal(new int[] { 30, 0, 0, 0 });
         //
-        // uiLimitLabel
+        // uiFetchSinceDaysLabel
         //
-        uiLimitLabel.AutoSize = true;
-        uiLimitLabel.Location = new Point(646, 14);
-        uiLimitLabel.Name = "uiLimitLabel";
-        uiLimitLabel.Size = new Size(50, 15);
-        uiLimitLabel.TabIndex = 4;
-        uiLimitLabel.Text = "Лимит:";
+        uiFetchSinceDaysLabel.AutoSize = true;
+        uiFetchSinceDaysLabel.Margin = new Padding(0, 7, 0, 0);
+        uiFetchSinceDaysLabel.Name = "uiFetchSinceDaysLabel";
+        uiFetchSinceDaysLabel.TabIndex = 4;
+        uiFetchSinceDaysLabel.Text = "дн.";
         //
-        // uiLimitNumeric
+        // uiFetchOnlyRecentCheckBox
         //
-        uiLimitNumeric.Increment = 100;
-        uiLimitNumeric.Location = new Point(700, 11);
-        uiLimitNumeric.Maximum = new decimal(new int[] { 100000, 0, 0, 0 });
-        uiLimitNumeric.Minimum = new decimal(new int[] { 50, 0, 0, 0 });
-        uiLimitNumeric.Name = "uiLimitNumeric";
-        uiLimitNumeric.Size = new Size(80, 23);
-        uiLimitNumeric.TabIndex = 5;
-        uiLimitNumeric.Value = new decimal(new int[] { 1000, 0, 0, 0 });
+        uiFetchOnlyRecentCheckBox.AutoSize = true;
+        uiFetchOnlyRecentCheckBox.Margin = new Padding(16, 6, 6, 0);
+        uiFetchOnlyRecentCheckBox.Name = "uiFetchOnlyRecentCheckBox";
+        uiFetchOnlyRecentCheckBox.TabIndex = 5;
+        uiFetchOnlyRecentCheckBox.Text = "Только последние";
+        uiFetchOnlyRecentCheckBox.UseVisualStyleBackColor = true;
+        uiFetchOnlyRecentCheckBox.CheckedChanged += uiFetchOnlyRecentCheckBox_CheckedChanged;
         //
-        // uiRefreshButton
+        // uiFetchOnlyRecentNumeric
         //
-        uiRefreshButton.Location = new Point(792, 10);
-        uiRefreshButton.Name = "uiRefreshButton";
-        uiRefreshButton.Size = new Size(110, 25);
-        uiRefreshButton.TabIndex = 6;
-        uiRefreshButton.Text = "Обновить";
-        uiRefreshButton.UseVisualStyleBackColor = true;
-        uiRefreshButton.Click += uiRefreshButton_Click;
+        uiFetchOnlyRecentNumeric.Enabled = false;
+        uiFetchOnlyRecentNumeric.Margin = new Padding(0, 3, 6, 3);
+        uiFetchOnlyRecentNumeric.Maximum = new decimal(new int[] { 100000, 0, 0, 0 });
+        uiFetchOnlyRecentNumeric.Minimum = new decimal(new int[] { 1, 0, 0, 0 });
+        uiFetchOnlyRecentNumeric.Name = "uiFetchOnlyRecentNumeric";
+        uiFetchOnlyRecentNumeric.Size = new Size(80, 23);
+        uiFetchOnlyRecentNumeric.TabIndex = 6;
+        uiFetchOnlyRecentNumeric.Value = new decimal(new int[] { 50, 0, 0, 0 });
+        //
+        // uiFetchOnlyRecentLabel
+        //
+        uiFetchOnlyRecentLabel.AutoSize = true;
+        uiFetchOnlyRecentLabel.Margin = new Padding(0, 7, 0, 0);
+        uiFetchOnlyRecentLabel.Name = "uiFetchOnlyRecentLabel";
+        uiFetchOnlyRecentLabel.TabIndex = 7;
+        uiFetchOnlyRecentLabel.Text = "медиа";
         //
         // uiForceFetchAllButton
         //
+        uiForceFetchAllButton.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
         uiForceFetchAllButton.Enabled = false;
-        uiForceFetchAllButton.Location = new Point(908, 10);
+        uiForceFetchAllButton.Margin = new Padding(0, 4, 0, 2);
         uiForceFetchAllButton.Name = "uiForceFetchAllButton";
         uiForceFetchAllButton.Size = new Size(190, 25);
-        uiForceFetchAllButton.TabIndex = 7;
+        uiForceFetchAllButton.TabIndex = 8;
         uiForceFetchAllButton.Text = "Загрузить все из источника";
         uiForceFetchAllButton.UseVisualStyleBackColor = true;
         uiForceFetchAllButton.Click += uiForceFetchAllButton_Click;
         //
+        // uiViewGroup
+        //
+        uiViewGroup.Controls.Add(uiViewLayout);
+        uiViewGroup.Dock = DockStyle.Fill;
+        uiViewGroup.Margin = new Padding(0, 0, 4, 0);
+        uiViewGroup.Name = "uiViewGroup";
+        uiViewGroup.TabIndex = 1;
+        uiViewGroup.TabStop = false;
+        uiViewGroup.Text = "Просмотр";
+        //
+        // uiViewLayout
+        //
+        uiViewLayout.ColumnCount = 2;
+        uiViewLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        uiViewLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        uiViewLayout.Controls.Add(uiSearchLabel, 0, 0);
+        uiViewLayout.Controls.Add(uiSearchTextBox, 1, 0);
+        uiViewLayout.Controls.Add(uiMediaSearchLabel, 0, 1);
+        uiViewLayout.Controls.Add(uiMediaSearchTextBox, 1, 1);
+        uiViewLayout.Controls.Add(uiLimitLabel, 0, 2);
+        uiViewLayout.Controls.Add(uiLimitInline, 1, 2);
+        uiViewLayout.Dock = DockStyle.Fill;
+        uiViewLayout.Name = "uiViewLayout";
+        uiViewLayout.RowCount = 3;
+        uiViewLayout.RowStyles.Add(new RowStyle());
+        uiViewLayout.RowStyles.Add(new RowStyle());
+        uiViewLayout.RowStyles.Add(new RowStyle());
+        uiViewLayout.TabIndex = 0;
+        //
+        // uiSearchLabel
+        //
+        uiSearchLabel.AutoSize = true;
+        uiSearchLabel.Margin = new Padding(0, 7, 6, 0);
+        uiSearchLabel.Name = "uiSearchLabel";
+        uiSearchLabel.TabIndex = 0;
+        uiSearchLabel.Text = "Поиск:";
+        //
+        // uiSearchTextBox
+        //
+        uiSearchTextBox.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+        uiSearchTextBox.Margin = new Padding(0, 3, 0, 3);
+        uiSearchTextBox.Name = "uiSearchTextBox";
+        uiSearchTextBox.PlaceholderText = "текст или автор";
+        uiSearchTextBox.Size = new Size(200, 23);
+        uiSearchTextBox.TabIndex = 1;
+        uiSearchTextBox.TextChanged += uiSearchTextBox_TextChanged;
+        uiSearchTextBox.KeyDown += uiSearchTextBox_KeyDown;
+        //
         // uiMediaSearchLabel
         //
         uiMediaSearchLabel.AutoSize = true;
-        uiMediaSearchLabel.Location = new Point(8, 47);
+        uiMediaSearchLabel.Margin = new Padding(0, 7, 6, 0);
         uiMediaSearchLabel.Name = "uiMediaSearchLabel";
-        uiMediaSearchLabel.Size = new Size(45, 15);
-        uiMediaSearchLabel.TabIndex = 8;
+        uiMediaSearchLabel.TabIndex = 2;
         uiMediaSearchLabel.Text = "Медиа:";
         //
         // uiMediaSearchTextBox
         //
-        uiMediaSearchTextBox.Location = new Point(60, 44);
+        uiMediaSearchTextBox.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+        uiMediaSearchTextBox.Margin = new Padding(0, 3, 0, 3);
         uiMediaSearchTextBox.Name = "uiMediaSearchTextBox";
         uiMediaSearchTextBox.PlaceholderText = "название медиа";
-        uiMediaSearchTextBox.Size = new Size(180, 23);
-        uiMediaSearchTextBox.TabIndex = 9;
+        uiMediaSearchTextBox.Size = new Size(200, 23);
+        uiMediaSearchTextBox.TabIndex = 3;
         uiMediaSearchTextBox.TextChanged += uiMediaSearchTextBox_TextChanged;
         uiMediaSearchTextBox.KeyDown += uiSearchTextBox_KeyDown;
+        //
+        // uiLimitLabel
+        //
+        uiLimitLabel.AutoSize = true;
+        uiLimitLabel.Margin = new Padding(0, 7, 6, 0);
+        uiLimitLabel.Name = "uiLimitLabel";
+        uiLimitLabel.TabIndex = 4;
+        uiLimitLabel.Text = "Лимит:";
+        //
+        // uiLimitInline
+        //
+        uiLimitInline.AutoSize = true;
+        uiLimitInline.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        uiLimitInline.Controls.Add(uiLimitNumeric);
+        uiLimitInline.Controls.Add(uiRefreshButton);
+        uiLimitInline.Dock = DockStyle.Fill;
+        uiLimitInline.FlowDirection = FlowDirection.LeftToRight;
+        uiLimitInline.Margin = new Padding(0);
+        uiLimitInline.Name = "uiLimitInline";
+        uiLimitInline.TabIndex = 5;
+        uiLimitInline.WrapContents = false;
+        //
+        // uiLimitNumeric
+        //
+        uiLimitNumeric.Increment = 100;
+        uiLimitNumeric.Margin = new Padding(0, 3, 6, 3);
+        uiLimitNumeric.Maximum = new decimal(new int[] { 100000, 0, 0, 0 });
+        uiLimitNumeric.Minimum = new decimal(new int[] { 50, 0, 0, 0 });
+        uiLimitNumeric.Name = "uiLimitNumeric";
+        uiLimitNumeric.Size = new Size(80, 23);
+        uiLimitNumeric.TabIndex = 0;
+        uiLimitNumeric.Value = new decimal(new int[] { 1000, 0, 0, 0 });
+        //
+        // uiRefreshButton
+        //
+        uiRefreshButton.AutoSize = true;
+        uiRefreshButton.Margin = new Padding(0, 2, 0, 2);
+        uiRefreshButton.Name = "uiRefreshButton";
+        uiRefreshButton.Size = new Size(110, 25);
+        uiRefreshButton.TabIndex = 1;
+        uiRefreshButton.Text = "Обновить";
+        uiRefreshButton.UseVisualStyleBackColor = true;
+        uiRefreshButton.Click += uiRefreshButton_Click;
+        //
+        // uiSortGroup
+        //
+        uiSortGroup.Controls.Add(uiSortLayout);
+        uiSortGroup.Dock = DockStyle.Fill;
+        uiSortGroup.Margin = new Padding(0);
+        uiSortGroup.Name = "uiSortGroup";
+        uiSortGroup.TabIndex = 2;
+        uiSortGroup.TabStop = false;
+        uiSortGroup.Text = "Сортировка";
+        //
+        // uiSortLayout
+        //
+        uiSortLayout.ColumnCount = 3;
+        uiSortLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        uiSortLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        uiSortLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        uiSortLayout.Controls.Add(uiMediaSortLabel, 0, 0);
+        uiSortLayout.Controls.Add(uiMediaSortComboBox, 1, 0);
+        uiSortLayout.Controls.Add(uiMediaSortInvertButton, 2, 0);
+        uiSortLayout.Controls.Add(uiCommentSortLabel, 0, 1);
+        uiSortLayout.Controls.Add(uiCommentSortComboBox, 1, 1);
+        uiSortLayout.Controls.Add(uiCommentSortInvertButton, 2, 1);
+        uiSortLayout.Dock = DockStyle.Fill;
+        uiSortLayout.Name = "uiSortLayout";
+        uiSortLayout.RowCount = 2;
+        uiSortLayout.RowStyles.Add(new RowStyle());
+        uiSortLayout.RowStyles.Add(new RowStyle());
+        uiSortLayout.TabIndex = 0;
         //
         // uiMediaSortLabel
         //
         uiMediaSortLabel.AutoSize = true;
-        uiMediaSortLabel.Location = new Point(250, 47);
+        uiMediaSortLabel.Margin = new Padding(0, 7, 6, 0);
         uiMediaSortLabel.Name = "uiMediaSortLabel";
-        uiMediaSortLabel.Size = new Size(75, 15);
-        uiMediaSortLabel.TabIndex = 10;
-        uiMediaSortLabel.Text = "Сорт. медиа:";
+        uiMediaSortLabel.TabIndex = 0;
+        uiMediaSortLabel.Text = "По медиа:";
         //
         // uiMediaSortComboBox
         //
+        uiMediaSortComboBox.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
         uiMediaSortComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
-        uiMediaSortComboBox.Location = new Point(335, 44);
+        uiMediaSortComboBox.Margin = new Padding(0, 3, 0, 3);
         uiMediaSortComboBox.Name = "uiMediaSortComboBox";
-        uiMediaSortComboBox.Size = new Size(150, 23);
-        uiMediaSortComboBox.TabIndex = 11;
+        uiMediaSortComboBox.Size = new Size(170, 23);
+        uiMediaSortComboBox.TabIndex = 1;
         uiMediaSortComboBox.SelectedIndexChanged += uiSortChanged;
         //
         // uiMediaSortInvertButton
         //
-        uiMediaSortInvertButton.Location = new Point(488, 43);
+        uiMediaSortInvertButton.Margin = new Padding(3, 2, 0, 2);
         uiMediaSortInvertButton.Name = "uiMediaSortInvertButton";
         uiMediaSortInvertButton.Size = new Size(28, 25);
-        uiMediaSortInvertButton.TabIndex = 12;
+        uiMediaSortInvertButton.TabIndex = 2;
         uiMediaSortInvertButton.Text = "↓";
         uiMediaSortInvertButton.UseVisualStyleBackColor = true;
         uiMediaSortInvertButton.Click += uiMediaSortInvertButton_Click;
@@ -222,53 +419,42 @@ partial class CommentsHtmlControl
         // uiCommentSortLabel
         //
         uiCommentSortLabel.AutoSize = true;
-        uiCommentSortLabel.Location = new Point(525, 47);
+        uiCommentSortLabel.Margin = new Padding(0, 7, 6, 0);
         uiCommentSortLabel.Name = "uiCommentSortLabel";
-        uiCommentSortLabel.Size = new Size(80, 15);
-        uiCommentSortLabel.TabIndex = 13;
-        uiCommentSortLabel.Text = "Сорт. комм.:";
+        uiCommentSortLabel.TabIndex = 3;
+        uiCommentSortLabel.Text = "По комментариям:";
         //
         // uiCommentSortComboBox
         //
+        uiCommentSortComboBox.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
         uiCommentSortComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
-        uiCommentSortComboBox.Location = new Point(610, 44);
+        uiCommentSortComboBox.Margin = new Padding(0, 3, 0, 3);
         uiCommentSortComboBox.Name = "uiCommentSortComboBox";
         uiCommentSortComboBox.Size = new Size(180, 23);
-        uiCommentSortComboBox.TabIndex = 14;
+        uiCommentSortComboBox.TabIndex = 4;
         uiCommentSortComboBox.SelectedIndexChanged += uiSortChanged;
         //
         // uiCommentSortInvertButton
         //
-        uiCommentSortInvertButton.Location = new Point(793, 43);
+        uiCommentSortInvertButton.Margin = new Padding(3, 2, 0, 2);
         uiCommentSortInvertButton.Name = "uiCommentSortInvertButton";
         uiCommentSortInvertButton.Size = new Size(28, 25);
-        uiCommentSortInvertButton.TabIndex = 15;
+        uiCommentSortInvertButton.TabIndex = 5;
         uiCommentSortInvertButton.Text = "↓";
         uiCommentSortInvertButton.UseVisualStyleBackColor = true;
         uiCommentSortInvertButton.Click += uiCommentSortInvertButton_Click;
         //
-        // uiCountLabel
-        //
-        uiCountLabel.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        uiCountLabel.AutoSize = true;
-        uiCountLabel.ForeColor = Color.FromArgb(100, 100, 100);
-        uiCountLabel.Location = new Point(1000, 47);
-        uiCountLabel.Name = "uiCountLabel";
-        uiCountLabel.Size = new Size(60, 15);
-        uiCountLabel.TabIndex = 16;
-        uiCountLabel.Text = "Найдено: 0";
-        //
         // uiBrowserView
         //
         uiBrowserView.Dock = DockStyle.Fill;
-        uiBrowserView.Location = new Point(0, 76);
+        uiBrowserView.Location = new Point(0, 120);
         uiBrowserView.Name = "uiBrowserView";
-        uiBrowserView.Size = new Size(1100, 552);
+        uiBrowserView.Size = new Size(1100, 508);
         uiBrowserView.TabIndex = 1;
         //
         // uiStatusStrip
         //
-        uiStatusStrip.Items.AddRange(new ToolStripItem[] { uiStatusLabel });
+        uiStatusStrip.Items.AddRange(new ToolStripItem[] { uiStatusLabel, uiFetchCounterLabel, uiFetchProgressBar });
         uiStatusStrip.Location = new Point(0, 628);
         uiStatusStrip.Name = "uiStatusStrip";
         uiStatusStrip.Size = new Size(1100, 22);
@@ -282,6 +468,21 @@ partial class CommentsHtmlControl
         uiStatusLabel.Text = "Готов";
         uiStatusLabel.TextAlign = ContentAlignment.MiddleLeft;
         //
+        // uiFetchProgressBar
+        //
+        uiFetchProgressBar.Alignment = ToolStripItemAlignment.Right;
+        uiFetchProgressBar.Name = "uiFetchProgressBar";
+        uiFetchProgressBar.Size = new Size(200, 16);
+        uiFetchProgressBar.Visible = false;
+        //
+        // uiFetchCounterLabel
+        //
+        uiFetchCounterLabel.Alignment = ToolStripItemAlignment.Right;
+        uiFetchCounterLabel.Name = "uiFetchCounterLabel";
+        uiFetchCounterLabel.Padding = new Padding(6, 0, 6, 0);
+        uiFetchCounterLabel.TextAlign = ContentAlignment.MiddleRight;
+        uiFetchCounterLabel.Visible = false;
+        //
         // CommentsHtmlControl
         //
         AutoScaleDimensions = new SizeF(7F, 15F);
@@ -293,7 +494,23 @@ partial class CommentsHtmlControl
         Size = new Size(1100, 650);
         uiFiltersPanel.ResumeLayout(false);
         uiFiltersPanel.PerformLayout();
+        uiFetchGroup.ResumeLayout(false);
+        uiFetchGroup.PerformLayout();
+        uiFetchLayout.ResumeLayout(false);
+        uiFetchLayout.PerformLayout();
+        ((System.ComponentModel.ISupportInitialize)uiFetchSinceDaysNumeric).EndInit();
+        ((System.ComponentModel.ISupportInitialize)uiFetchOnlyRecentNumeric).EndInit();
+        uiViewGroup.ResumeLayout(false);
+        uiViewGroup.PerformLayout();
+        uiViewLayout.ResumeLayout(false);
+        uiViewLayout.PerformLayout();
+        uiLimitInline.ResumeLayout(false);
+        uiLimitInline.PerformLayout();
         ((System.ComponentModel.ISupportInitialize)uiLimitNumeric).EndInit();
+        uiSortGroup.ResumeLayout(false);
+        uiSortGroup.PerformLayout();
+        uiSortLayout.ResumeLayout(false);
+        uiSortLayout.PerformLayout();
         uiStatusStrip.ResumeLayout(false);
         uiStatusStrip.PerformLayout();
         ResumeLayout(false);

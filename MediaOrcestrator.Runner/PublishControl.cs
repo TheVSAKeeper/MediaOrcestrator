@@ -14,10 +14,15 @@ public partial class PublishControl : UserControl
     private const int DescriptionPreviewLength = 100;
 
     private readonly Orcestrator? _orcestrator;
+    private readonly SyncRetryRunner? _retryRunner;
+    private readonly SyncPlanner? _syncPlanner;
+    private readonly ActionHolder? _actionHolder;
     private readonly ILogger<PublishControl>? _logger;
     private readonly List<string> _titleSuggestions = [];
     private readonly Dictionary<string, string> _titleToDescription = new(StringComparer.Ordinal);
+    private readonly List<Media> _mediasCache = [];
     private CancellationTokenSource? _publishCts;
+    private CancellationTokenSource? _suggestionsCts;
     private string? _videoPath;
     private string? _coverPath;
     private string? _autoFilledTitle;
@@ -25,15 +30,20 @@ public partial class PublishControl : UserControl
     private string? _videoDescription;
     private bool _isPublishing;
     private bool _suppressTitleFilter;
+    private bool _suspendSourceChange;
+    private bool _isMediasCacheValid;
 
     public PublishControl()
     {
         InitializeComponent();
     }
 
-    public PublishControl(Orcestrator orcestrator, ILogger<PublishControl> logger) : this()
+    public PublishControl(Orcestrator orcestrator, SyncRetryRunner retryRunner, SyncPlanner syncPlanner, ActionHolder actionHolder, ILogger<PublishControl> logger) : this()
     {
         _orcestrator = orcestrator;
+        _retryRunner = retryRunner;
+        _syncPlanner = syncPlanner;
+        _actionHolder = actionHolder;
         _logger = logger;
     }
 
@@ -54,34 +64,45 @@ public partial class PublishControl : UserControl
 
         var selectedId = (uiSourceComboBox.SelectedItem as Source)?.Id;
 
-        uiSourceComboBox.BeginUpdate();
-        uiSourceComboBox.Items.Clear();
-        uiSourceComboBox.DisplayMember = nameof(Source.TitleFull);
-
-        var sources = _orcestrator.GetSources()
-            .Where(x => x is { IsDisable: false, Type: not null } && x.Type.ChannelType != SyncDirection.OnlyDownload)
-            .ToList();
-
-        foreach (var source in sources)
+        _suspendSourceChange = true;
+        try
         {
-            uiSourceComboBox.Items.Add(source);
-        }
+            uiSourceComboBox.BeginUpdate();
+            uiSourceComboBox.Items.Clear();
+            uiSourceComboBox.DisplayMember = nameof(Source.TitleFull);
 
-        if (selectedId != null)
-        {
-            var restored = sources.FindIndex(x => x.Id == selectedId);
-            if (restored >= 0)
+            var sources = _orcestrator.GetSources()
+                .Where(x => x is { IsDisable: false, Type: not null } && x.Type.ChannelType != SyncDirection.OnlyDownload)
+                .ToList();
+
+            foreach (var source in sources)
             {
-                uiSourceComboBox.SelectedIndex = restored;
+                uiSourceComboBox.Items.Add(source);
             }
-        }
 
-        if (uiSourceComboBox.SelectedIndex < 0 && uiSourceComboBox.Items.Count > 0)
+            if (selectedId != null)
+            {
+                var restored = sources.FindIndex(x => x.Id == selectedId);
+                if (restored >= 0)
+                {
+                    uiSourceComboBox.SelectedIndex = restored;
+                }
+            }
+
+            if (uiSourceComboBox.SelectedIndex < 0 && uiSourceComboBox.Items.Count > 0)
+            {
+                uiSourceComboBox.SelectedIndex = 0;
+            }
+
+            uiSourceComboBox.EndUpdate();
+        }
+        finally
         {
-            uiSourceComboBox.SelectedIndex = 0;
+            _suspendSourceChange = false;
         }
 
-        uiSourceComboBox.EndUpdate();
+        InvalidateMediasCache();
+        ReloadSourceSuggestions();
         UpdatePublishButtonState();
     }
 
@@ -89,7 +110,6 @@ public partial class PublishControl : UserControl
     {
         base.OnLoad(e);
         ReloadSources();
-        ReloadSourceSuggestions();
         UpdateVideoLabel();
         UpdateCoverLabel();
         UpdateDescriptionCounter();
@@ -103,8 +123,10 @@ public partial class PublishControl : UserControl
         image?.Dispose();
 
         _publishCts?.Cancel();
-        _publishCts?.Dispose();
         _publishCts = null;
+
+        _suggestionsCts?.Cancel();
+        _suggestionsCts = null;
 
         base.OnHandleDestroyed(e);
     }
@@ -158,7 +180,7 @@ public partial class PublishControl : UserControl
         SetCover(null);
     }
 
-    private void uiVideoDropPanel_Click(object? sender, EventArgs e)
+    private void uiVideoPathTextBox_Click(object? sender, EventArgs e)
     {
         if (_isPublishing)
         {
@@ -168,7 +190,7 @@ public partial class PublishControl : UserControl
         uiBrowseVideoButton.PerformClick();
     }
 
-    private void uiCoverDropPanel_Click(object? sender, EventArgs e)
+    private void uiCoverPathTextBox_Click(object? sender, EventArgs e)
     {
         if (_isPublishing)
         {
@@ -180,6 +202,11 @@ public partial class PublishControl : UserControl
 
     private void uiSourceComboBox_SelectedIndexChanged(object? sender, EventArgs e)
     {
+        if (_suspendSourceChange)
+        {
+            return;
+        }
+
         UpdatePublishButtonState();
         ReloadSourceSuggestions();
     }
@@ -221,6 +248,7 @@ public partial class PublishControl : UserControl
         }
 
         FilterTitleSuggestions();
+        TryAutoFillDescriptionFromTitle(uiTitleComboBox.Text);
     }
 
     private void uiTitleComboBox_DropDown(object? sender, EventArgs e)
@@ -270,13 +298,7 @@ public partial class PublishControl : UserControl
         }
 
         _autoFilledTitle = null;
-
-        if (!string.IsNullOrEmpty(selected)
-            && string.IsNullOrWhiteSpace(uiDescriptionTextBox.Text)
-            && _titleToDescription.TryGetValue(selected, out var description))
-        {
-            uiDescriptionTextBox.Text = description;
-        }
+        TryAutoFillDescriptionFromTitle(selected);
     }
 
     private void uiDescriptionTextBox_TextChanged(object? sender, EventArgs e)
@@ -324,9 +346,9 @@ public partial class PublishControl : UserControl
         }
 
         _isPublishing = true;
-        _publishCts?.Dispose();
-        _publishCts = new();
-        var token = _publishCts.Token;
+        var cts = new CancellationTokenSource();
+        _publishCts = cts;
+        var token = cts.Token;
 
         SetControlsBusy(true);
         SetStatus($"Публикация в «{source.TitleFull}»...", false);
@@ -337,10 +359,17 @@ public partial class PublishControl : UserControl
 
         try
         {
-            await Task.Run(() => _orcestrator.PublishMediaAsync(source, title, description, videoPath, coverPath, token), token);
+            var published = await Task.Run(() => _orcestrator.PublishMediaAsync(source, title, description, videoPath, coverPath, token), token);
 
             SetStatus($"Опубликовано в «{source.TitleFull}».", false);
             _logger.LogInformation("Медиа «{Title}» опубликовано в {Source}", title, source.TitleFull);
+            InvalidateMediasCache();
+
+            if (uiRunChainCheckBox.Checked)
+            {
+                await RunPostPublishChainAsync(published, source, token);
+            }
+
             ResetForm();
             MediaPublished?.Invoke(this, EventArgs.Empty);
         }
@@ -359,6 +388,26 @@ public partial class PublishControl : UserControl
             _isPublishing = false;
             SetControlsBusy(false);
             UpdatePublishButtonState();
+
+            if (ReferenceEquals(_publishCts, cts))
+            {
+                _publishCts = null;
+            }
+
+            cts.Dispose();
+        }
+    }
+
+    private static IEnumerable<SyncIntent> EnumerateChain(List<SyncIntent> intents)
+    {
+        foreach (var intent in intents.Where(intent => intent.IsSelected))
+        {
+            yield return intent;
+
+            foreach (var child in EnumerateChain(intent.NextIntents))
+            {
+                yield return child;
+            }
         }
     }
 
@@ -387,6 +436,80 @@ public partial class PublishControl : UserControl
         }
 
         return $"{size:F1} {units[unitIndex]}";
+    }
+
+    private void TryAutoFillDescriptionFromTitle(string? title)
+    {
+        if (string.IsNullOrEmpty(title)
+            || !string.IsNullOrWhiteSpace(uiDescriptionTextBox.Text)
+            || !_titleToDescription.TryGetValue(title, out var description))
+        {
+            return;
+        }
+
+        uiDescriptionTextBox.Text = description;
+    }
+
+    private async Task RunPostPublishChainAsync(Media media, Source publishedSource, CancellationToken cancellationToken)
+    {
+        if (_orcestrator == null || _retryRunner == null || _syncPlanner == null || _actionHolder == null || _logger == null)
+        {
+            return;
+        }
+
+        var relations = _orcestrator.GetRelations();
+        var roots = _syncPlanner.Plan([media], relations);
+        var chain = EnumerateChain(roots).ToList();
+        if (chain.Count == 0)
+        {
+            return;
+        }
+
+        using var chainCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var chainToken = chainCts.Token;
+        var actionName = $"Цепочка после публикации: «{media.Title}» от {publishedSource.TitleFull}";
+        var running = _actionHolder.Register(actionName, "В процессе", chain.Count, chainCts);
+
+        SyncIntent? failedIntent = null;
+
+        try
+        {
+            for (var i = 0; i < chain.Count; i++)
+            {
+                chainToken.ThrowIfCancellationRequested();
+
+                var intent = chain[i];
+                var step = $"{i + 1}/{chain.Count}";
+                var stepLabel = $"{intent.From.TitleFull} → {intent.To.TitleFull}";
+                SetStatus($"Цепочка {step}: {stepLabel}...", false);
+                _actionHolder.SetStatus(running.Id, $"{step}: {stepLabel}");
+
+                failedIntent = intent;
+                await _retryRunner.RunAsync(intent.Media, intent.Relation, cancellationToken: chainToken);
+                failedIntent = null;
+
+                _logger.LogInformation("Цепочка: «{Title}» прошла {From} → {To}",
+                    intent.Media.Title, intent.From.TitleFull, intent.To.TitleFull);
+
+                running.ProgressPlus();
+            }
+
+            SetStatus($"Цепочка завершена ({chain.Count} шаг(ов)).", false);
+            running.Finish();
+        }
+        catch (OperationCanceledException)
+        {
+            running.Finish("Отменено");
+            throw;
+        }
+        catch (Exception exception) when (failedIntent != null)
+        {
+            _logger.LogError(exception, "Цепочка: «{Title}» сорвалась на {From} → {To}",
+                media.Title, failedIntent.From.TitleFull, failedIntent.To.TitleFull);
+
+            SetStatus($"Цепочка прервана на {failedIntent.To.TitleFull}: {exception.Message}", true);
+            running.Finish($"Ошибка на {failedIntent.To.TitleFull}");
+        }
     }
 
     private void FilterTitleSuggestions()
@@ -480,6 +603,7 @@ public partial class PublishControl : UserControl
             var fromFile = Path.GetFileNameWithoutExtension(path);
             uiTitleComboBox.Text = fromFile;
             _autoFilledTitle = fromFile;
+            TryAutoFillDescriptionFromTitle(fromFile);
         }
 
         UpdateVideoDescriptionSuggestion(path);
@@ -603,14 +727,14 @@ public partial class PublishControl : UserControl
     {
         if (string.IsNullOrEmpty(_videoPath))
         {
-            uiVideoDropLabel.Text = "Перетащите видеофайл сюда или нажмите для выбора";
+            uiVideoPathTextBox.Text = string.Empty;
             uiClearVideoButton.Enabled = false;
             return;
         }
 
         var fileName = Path.GetFileName(_videoPath);
         var sizeText = TryFormatFileSize(_videoPath);
-        uiVideoDropLabel.Text = sizeText != null ? $"{fileName}\r\n{sizeText}" : fileName;
+        uiVideoPathTextBox.Text = sizeText != null ? $"{fileName} · {sizeText}" : fileName;
         uiClearVideoButton.Enabled = !_isPublishing;
     }
 
@@ -618,12 +742,12 @@ public partial class PublishControl : UserControl
     {
         if (string.IsNullOrEmpty(_coverPath))
         {
-            uiCoverDropLabel.Text = "Перетащите изображение сюда или нажмите для выбора";
+            uiCoverPathTextBox.Text = string.Empty;
             uiClearCoverButton.Enabled = false;
             return;
         }
 
-        uiCoverDropLabel.Text = Path.GetFileName(_coverPath);
+        uiCoverPathTextBox.Text = Path.GetFileName(_coverPath);
         uiClearCoverButton.Enabled = !_isPublishing;
     }
 
@@ -658,12 +782,10 @@ public partial class PublishControl : UserControl
         uiClearVideoButton.Enabled = !busy && !string.IsNullOrEmpty(_videoPath);
         uiClearCoverButton.Enabled = !busy && !string.IsNullOrEmpty(_coverPath);
 
-        var dropCursor = busy ? Cursors.Default : Cursors.Hand;
-        uiVideoDropPanel.Cursor = dropCursor;
-        uiVideoDropLabel.Cursor = dropCursor;
-        uiCoverDropPanel.Cursor = dropCursor;
-        uiCoverDropLabel.Cursor = dropCursor;
-        uiCoverPreviewPictureBox.Cursor = dropCursor;
+        var pickerCursor = busy ? Cursors.Default : Cursors.Hand;
+        uiVideoPathTextBox.Cursor = pickerCursor;
+        uiCoverPathTextBox.Cursor = pickerCursor;
+        uiCoverPreviewPictureBox.Cursor = pickerCursor;
 
         uiPublishProgressBar.Visible = busy;
 
@@ -688,7 +810,38 @@ public partial class PublishControl : UserControl
         ReloadSourceSuggestions();
     }
 
+    private void InvalidateMediasCache()
+    {
+        _isMediasCacheValid = false;
+        _mediasCache.Clear();
+    }
+
     private void ReloadSourceSuggestions()
+    {
+        _suggestionsCts?.Cancel();
+        _suggestionsCts = null;
+
+        ClearSuggestionUi();
+
+        if (_orcestrator == null || uiSourceComboBox.SelectedItem is not Source source)
+        {
+            return;
+        }
+
+        var sourceId = source.Id;
+
+        if (_isMediasCacheValid)
+        {
+            PopulateSuggestionsForSource(sourceId);
+            return;
+        }
+
+        var cts = new CancellationTokenSource();
+        _suggestionsCts = cts;
+        _ = LoadSuggestionsAsync(sourceId, cts);
+    }
+
+    private void ClearSuggestionUi()
     {
         _suppressTitleFilter = true;
         try
@@ -707,20 +860,75 @@ public partial class PublishControl : UserControl
                 uiDescriptionTemplateComboBox.Items.Add(new DescriptionTemplate(_videoDescription, DescriptionSource.VideoFile));
             }
 
-            if (_orcestrator == null || uiSourceComboBox.SelectedItem is not Source source)
+            uiTitleComboBox.Text = preservedTitle;
+            uiTitleComboBox.EndUpdate();
+            uiDescriptionTemplateComboBox.EndUpdate();
+            uiDescriptionTemplateComboBox.Enabled = !_isPublishing && uiDescriptionTemplateComboBox.Items.Count > 0;
+        }
+        finally
+        {
+            _suppressTitleFilter = false;
+        }
+    }
+
+    private async Task LoadSuggestionsAsync(string sourceId, CancellationTokenSource cts)
+    {
+        var token = cts.Token;
+        try
+        {
+            var orcestrator = _orcestrator;
+            if (orcestrator == null)
             {
-                uiTitleComboBox.Text = preservedTitle;
-                uiTitleComboBox.EndUpdate();
-                uiDescriptionTemplateComboBox.EndUpdate();
-                uiDescriptionTemplateComboBox.Enabled = !_isPublishing && uiDescriptionTemplateComboBox.Items.Count > 0;
                 return;
             }
 
-            var links = _orcestrator.GetMedias()
-                .SelectMany(x => x.Sources ?? [])
-                .Where(x => x.SourceId == source.Id)
-                .OrderByDescending(x => x.SortNumber)
-                .ToList();
+            var medias = await Task.Run(() => orcestrator.GetMedias(), token);
+
+            if (token.IsCancellationRequested || IsDisposed || !IsHandleCreated)
+            {
+                return;
+            }
+
+            _mediasCache.Clear();
+            _mediasCache.AddRange(medias);
+            _isMediasCacheValid = true;
+
+            if (uiSourceComboBox.SelectedItem is Source current && current.Id == sourceId)
+            {
+                PopulateSuggestionsForSource(sourceId);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception exception)
+        {
+            _logger?.LogWarning(exception, "Не удалось загрузить историю публикаций для источника {SourceId}", sourceId);
+        }
+        finally
+        {
+            if (ReferenceEquals(_suggestionsCts, cts))
+            {
+                _suggestionsCts = null;
+            }
+
+            cts.Dispose();
+        }
+    }
+
+    private void PopulateSuggestionsForSource(string sourceId)
+    {
+        var links = _mediasCache
+            .SelectMany(x => x.Sources ?? [])
+            .Where(x => x.SourceId == sourceId)
+            .OrderByDescending(x => x.SortNumber)
+            .ToList();
+
+        _suppressTitleFilter = true;
+        try
+        {
+            uiTitleComboBox.BeginUpdate();
+            var preservedTitle = uiTitleComboBox.Text;
 
             foreach (var title in links.Select(x => x.Title)
                          .Where(x => !string.IsNullOrEmpty(x))
@@ -744,6 +952,7 @@ public partial class PublishControl : UserControl
             uiTitleComboBox.Text = preservedTitle;
             uiTitleComboBox.EndUpdate();
 
+            uiDescriptionTemplateComboBox.BeginUpdate();
             foreach (var description in links.Select(x => x.Description)
                          .Where(x => !string.IsNullOrWhiteSpace(x))
                          .Where(x => !string.Equals(x, _videoDescription, StringComparison.Ordinal))

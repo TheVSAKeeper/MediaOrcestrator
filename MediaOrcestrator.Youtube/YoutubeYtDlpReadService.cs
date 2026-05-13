@@ -3,28 +3,33 @@ using Microsoft.Extensions.Logging;
 
 namespace MediaOrcestrator.Youtube;
 
-public sealed class YoutubeYtDlpReadService(ILogger logger)
+internal sealed class YoutubeYtDlpReadService(ILogger<YoutubeYtDlpReadService> logger)
 {
-    public async Task<MediaDto?> GetVideoByIdAsync(string videoId, YtDlp ytDlp, CancellationToken cancellationToken)
+    public async Task<MediaDto?> GetVideoByIdAsync(
+        string videoId,
+        YtDlp ytDlp,
+        CancellationToken cancellationToken)
     {
         var url = string.Format(YoutubeChannel.VideoUrlTemplate, videoId);
-        logger.LogDebug("yt-dlp: получение метаданных видео {VideoId}", videoId);
+        logger.YtDlpFetchingInfo(videoId);
 
         var info = await ytDlp.GetVideoInfoAsync(url, cancellationToken);
 
         if (info is null)
         {
-            logger.LogWarning("yt-dlp: пустой ответ для видео {VideoId}", videoId);
+            logger.YtDlpEmptyResponse(videoId);
             return null;
         }
 
         return BuildMediaDto(videoId, info);
     }
 
-    public MediaDto BuildMediaDto(string fallbackVideoId, YtDlpVideoInfo info)
+    public MediaDto BuildMediaDto(
+        string fallbackVideoId,
+        YtDlpVideoInfo info)
     {
         var videoId = string.IsNullOrEmpty(info.Id) ? fallbackVideoId : info.Id;
-        logger.LogDebug("yt-dlp: метаданные '{Title}' (ID: {Id})", info.Title, videoId);
+        logger.YtDlpInfoReceived(info.Title, videoId);
 
         return MediaDtoFactory.CreateFull(videoId,
             info.Title,

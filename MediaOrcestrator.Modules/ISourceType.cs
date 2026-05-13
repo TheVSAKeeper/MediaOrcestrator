@@ -1,4 +1,4 @@
-namespace MediaOrcestrator.Modules;
+﻿namespace MediaOrcestrator.Modules;
 
 /// <summary>
 /// Контракт плагина-источника медиа.
@@ -23,6 +23,7 @@ public interface ISourceType
     /// </summary>
     IEnumerable<SourceSettings> SettingsKeys { get; }
 
+    // TODO: CancellationToken
     /// <summary>
     /// Возвращает допустимые варианты для настройки типа <see cref="SettingType.Dropdown" />.
     /// </summary>
@@ -43,6 +44,21 @@ public interface ISourceType
     Uri? GetExternalUri(string externalId, Dictionary<string, string> settings)
     {
         return null;
+    }
+
+    /// <summary>
+    /// Расширенная форма <see cref="GetExternalUri(string, Dictionary{string, string})" />,
+    /// которой плагин может воспользоваться, чтобы выбрать формат ссылки на основе метаданных медиа
+    /// (например, отличить шортс от обычного видео в VK).
+    /// </summary>
+    /// <param name="externalId">Идентификатор медиа в источнике.</param>
+    /// <param name="settings">Конфигурация источника.</param>
+    /// <param name="metadata">
+    /// Метаданные медиа, относящиеся к этому источнику; <see langword="null" /> – контекст недоступен.
+    /// </param>
+    Uri? GetExternalUri(string externalId, Dictionary<string, string> settings, IReadOnlyList<MetadataItem>? metadata)
+    {
+        return GetExternalUri(externalId, settings);
     }
 
     /// <summary>

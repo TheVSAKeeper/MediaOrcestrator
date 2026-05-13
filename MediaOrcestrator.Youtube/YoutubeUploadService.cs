@@ -6,9 +6,10 @@ using Microsoft.Extensions.Logging;
 
 namespace MediaOrcestrator.Youtube;
 
-public sealed class YoutubeUploadService(ILogger logger, YoutubeAuthService authService)
+internal sealed class YoutubeUploadService(ILogger<YoutubeUploadService> logger)
 {
     public async Task<UploadResult> UploadVideoAsync(
+        YouTubeService service,
         MediaDto media,
         Dictionary<string, string> settings,
         CancellationToken cancellationToken)
@@ -24,32 +25,22 @@ public sealed class YoutubeUploadService(ILogger logger, YoutubeAuthService auth
             };
         }
 
-        using var service = await authService.CreateServiceAsync(settings, cancellationToken);
-
         var video = CreateVideoResource(media, settings);
         var uploadBytesPerSecond = SpeedLimitHelper.ParseUploadBytesPerSecond(settings);
 
-        logger.LogInformation("Загрузка видео на YouTube. Название: '{Title}', Статус: {Privacy}", media.Title, video.Status?.PrivacyStatus);
+        logger.UploadStart(media.Title, video.Status?.PrivacyStatus);
 
-        await using var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read);
-        var request = service.Videos.Insert(video, "snippet,status", fileStream, "video/*");
+        await using var rawFileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read);
+        await using var throttledStream = new ThrottledStream(rawFileStream, uploadBytesPerSecond);
+        var request = service.Videos.Insert(video, "snippet,status", throttledStream, "video/*");
 
-        var chunkSize = fileStream.Length switch
+        request.ChunkSize = rawFileStream.Length switch
         {
             < 10 * 1024 * 1024 => ResumableUpload.MinimumChunkSize * 4,
             < 100 * 1024 * 1024 => ResumableUpload.MinimumChunkSize * 16,
             _ => ResumableUpload.MinimumChunkSize * 40,
         };
 
-        if (uploadBytesPerSecond.HasValue)
-        {
-            chunkSize = Math.Min(chunkSize, (int)Math.Max(uploadBytesPerSecond.Value, ResumableUpload.MinimumChunkSize));
-            chunkSize = chunkSize / ResumableUpload.MinimumChunkSize * ResumableUpload.MinimumChunkSize;
-        }
-
-        request.ChunkSize = chunkSize;
-
-        var throttle = new UploadThrottle(uploadBytesPerSecond, chunkSize);
         var bucketedProgress = UploadProgressLogger.CreateBucketed(logger, media.Id);
 
         request.ProgressChanged += progress =>
@@ -57,17 +48,15 @@ public sealed class YoutubeUploadService(ILogger logger, YoutubeAuthService auth
             switch (progress.Status)
             {
                 case UploadStatus.Uploading:
-                    var percent = fileStream.Length > 0
-                        ? (double)progress.BytesSent / fileStream.Length
+                    var percent = rawFileStream.Length > 0
+                        ? (double)progress.BytesSent / rawFileStream.Length
                         : 0;
 
                     bucketedProgress.Report(percent);
-
-                    throttle.WaitIfNeeded();
                     break;
 
                 case UploadStatus.Failed:
-                    logger.LogError("Ошибка загрузки: {Error}", progress.Exception?.Message);
+                    logger.UploadFailed(progress.Exception?.Message ?? "Неизвестная ошибка");
                     break;
             }
         };
@@ -80,10 +69,13 @@ public sealed class YoutubeUploadService(ILogger logger, YoutubeAuthService auth
 
             if (errorMessage.Contains("quotaExceeded", StringComparison.OrdinalIgnoreCase))
             {
+                logger.QuotaExceeded();
                 errorMessage = "Превышена квота YouTube API (лимит ~6 видео/день)";
             }
-
-            logger.LogError("Загрузка на YouTube не удалась: {Error}", errorMessage);
+            else
+            {
+                logger.UploadFailed(errorMessage);
+            }
 
             return new()
             {
@@ -93,7 +85,7 @@ public sealed class YoutubeUploadService(ILogger logger, YoutubeAuthService auth
         }
 
         var uploadedVideo = request.ResponseBody;
-        logger.LogInformation("Видео загружено на YouTube. ID: {VideoId}", uploadedVideo.Id);
+        logger.UploadCompleted(uploadedVideo.Id);
 
         if (!string.IsNullOrEmpty(media.TempPreviewPath) && File.Exists(media.TempPreviewPath))
         {
@@ -108,14 +100,13 @@ public sealed class YoutubeUploadService(ILogger logger, YoutubeAuthService auth
     }
 
     public async Task<UploadResult> UpdateVideoAsync(
+        YouTubeService service,
         string externalId,
         MediaDto tempMedia,
         Dictionary<string, string> settings,
         CancellationToken cancellationToken)
     {
-        using var service = await authService.CreateServiceAsync(settings, cancellationToken);
-
-        logger.LogInformation("Обновление метаданных YouTube видео. ID: {VideoId}", externalId);
+        logger.UpdateStart(externalId);
 
         var listRequest = service.Videos.List("snippet,status");
         listRequest.Id = externalId;
@@ -145,7 +136,7 @@ public sealed class YoutubeUploadService(ILogger logger, YoutubeAuthService auth
         var updateRequest = service.Videos.Update(video, "snippet,status");
         await updateRequest.ExecuteAsync(cancellationToken);
 
-        logger.LogInformation("Метаданные обновлены для видео: {VideoId}", externalId);
+        logger.UpdateCompleted(externalId);
 
         if (!string.IsNullOrEmpty(tempMedia.TempPreviewPath) && File.Exists(tempMedia.TempPreviewPath))
         {
@@ -159,7 +150,9 @@ public sealed class YoutubeUploadService(ILogger logger, YoutubeAuthService auth
         };
     }
 
-    private static Video CreateVideoResource(MediaDto media, Dictionary<string, string> settings)
+    private static Video CreateVideoResource(
+        MediaDto media,
+        Dictionary<string, string> settings)
     {
         var privacyStatus = settings.GetValueOrDefault("privacy_status", "private");
         var publishAt = ParsePublishAt(settings.GetValueOrDefault("publish_at"));
@@ -231,7 +224,7 @@ public sealed class YoutubeUploadService(ILogger logger, YoutubeAuthService auth
         string thumbnailPath,
         CancellationToken cancellationToken)
     {
-        logger.LogInformation("Загрузка превью для видео: {VideoId}", videoId);
+        logger.ThumbnailUploadStart(videoId);
 
         var contentType = Path.GetExtension(thumbnailPath).ToLowerInvariant() switch
         {
@@ -246,36 +239,11 @@ public sealed class YoutubeUploadService(ILogger logger, YoutubeAuthService auth
 
         if (thumbResponse.Status == UploadStatus.Failed)
         {
-            // TODO: Forbidden (403) означает, что канал не верифицирован - кастомные превью требуют подтверждения номера телефона.
-            logger.LogWarning("Не удалось загрузить превью для видео {VideoId}: {Error}", videoId, thumbResponse.Exception?.Message);
+            logger.ThumbnailUploadFailed(videoId, thumbResponse.Exception?.Message);
         }
         else
         {
-            logger.LogInformation("Превью загружено для видео: {VideoId}", videoId);
+            logger.ThumbnailUploaded(videoId);
         }
-    }
-}
-
-file sealed class UploadThrottle(long? bytesPerSecond, int chunkSize)
-{
-    private DateTime _lastChunkTime = DateTime.UtcNow;
-
-    public void WaitIfNeeded()
-    {
-        if (!bytesPerSecond.HasValue)
-        {
-            return;
-        }
-
-        var elapsed = (DateTime.UtcNow - _lastChunkTime).TotalSeconds;
-        var expectedSeconds = (double)chunkSize / bytesPerSecond.Value;
-
-        if (elapsed < expectedSeconds)
-        {
-            var delayMs = (int)((expectedSeconds - elapsed) * 1000);
-            Thread.Sleep(delayMs);
-        }
-
-        _lastChunkTime = DateTime.UtcNow;
     }
 }

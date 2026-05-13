@@ -1,4 +1,4 @@
-using Google.Apis.YouTube.v3;
+﻿using Google.Apis.YouTube.v3;
 using Google.Apis.YouTube.v3.Data;
 using MediaOrcestrator.Modules;
 using Microsoft.Extensions.Logging;
@@ -7,18 +7,16 @@ using System.Xml;
 
 namespace MediaOrcestrator.Youtube;
 
-public sealed class YoutubeApiReadService(ILogger logger, YoutubeAuthService authService)
+internal sealed class YoutubeApiReadService(ILogger<YoutubeApiReadService> logger)
 {
     private const string ChannelParts = "snippet,contentDetails";
     private const string VideoParts = "snippet,contentDetails,statistics";
 
     public async Task<ApiChannelInfo?> GetChannelAsync(
+        YouTubeService service,
         string channelUrl,
-        Dictionary<string, string> settings,
         CancellationToken cancellationToken)
     {
-        using var service = await authService.CreateServiceAsync(settings, cancellationToken);
-
         var channel = await ChannelUrlResolver.ResolveAsync(channelUrl,
             id => GetChannelByIdAsync(service, id, cancellationToken),
             slug => GetChannelByHandleAsync(service, slug, cancellationToken),
@@ -27,24 +25,21 @@ public sealed class YoutubeApiReadService(ILogger logger, YoutubeAuthService aut
 
         if (channel is null)
         {
-            logger.LogWarning("YouTube API: не удалось определить канал по URL: {ChannelUrl}", channelUrl);
+            logger.ApiChannelResolveFailed(channelUrl);
         }
 
         return channel;
     }
 
     public async IAsyncEnumerable<MediaDto> GetMediaAsync(
+        YouTubeService service,
         string channelId,
         bool isFull,
-        Dictionary<string, string> settings,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        using var service = await authService.CreateServiceAsync(settings, cancellationToken);
-
-        // Uploads playlist ID = channel ID с заменой "UC" на "UU"
         var uploadsPlaylistId = "UU" + channelId[2..];
 
-        logger.LogInformation("YouTube API: получение видео из плейлиста загрузок {PlaylistId}", uploadsPlaylistId);
+        logger.FetchingPlaylist(uploadsPlaylistId);
 
         string? pageToken = null;
 
@@ -87,16 +82,14 @@ public sealed class YoutubeApiReadService(ILogger logger, YoutubeAuthService aut
             pageToken = response.NextPageToken;
         } while (pageToken is not null);
 
-        logger.LogInformation("YouTube API: завершено получение видео для канала {ChannelId}", channelId);
+        logger.PlaylistFetchCompleted(channelId);
     }
 
     public async Task<MediaDto?> GetVideoByIdAsync(
+        YouTubeService service,
         string videoId,
-        Dictionary<string, string> settings,
         CancellationToken cancellationToken)
     {
-        using var service = await authService.CreateServiceAsync(settings, cancellationToken);
-
         var request = service.Videos.List(VideoParts);
         request.Id = videoId;
 
@@ -108,7 +101,7 @@ public sealed class YoutubeApiReadService(ILogger logger, YoutubeAuthService aut
             return CreateFullMediaDto(video);
         }
 
-        logger.LogWarning("YouTube API: видео не найдено: {VideoId}", videoId);
+        logger.ApiVideoNotFound(videoId);
         return null;
     }
 
@@ -151,7 +144,10 @@ public sealed class YoutubeApiReadService(ILogger logger, YoutubeAuthService aut
             author: item.Snippet.ChannelTitle);
     }
 
-    private async Task<ApiChannelInfo?> GetChannelByIdAsync(YouTubeService service, string channelId, CancellationToken ct)
+    private async Task<ApiChannelInfo?> GetChannelByIdAsync(
+        YouTubeService service,
+        string channelId,
+        CancellationToken ct)
     {
         var request = service.Channels.List(ChannelParts);
         request.Id = channelId;
@@ -164,11 +160,14 @@ public sealed class YoutubeApiReadService(ILogger logger, YoutubeAuthService aut
             return null;
         }
 
-        logger.LogDebug("YouTube API: канал найден по ID. Название: '{Title}', ID: {Id}", channel.Snippet.Title, channel.Id);
+        logger.ApiChannelByIdHit(channel.Snippet.Title, channel.Id);
         return new(channel.Id, channel.Snippet.Title);
     }
 
-    private async Task<ApiChannelInfo?> GetChannelByHandleAsync(YouTubeService service, string handle, CancellationToken ct)
+    private async Task<ApiChannelInfo?> GetChannelByHandleAsync(
+        YouTubeService service,
+        string handle,
+        CancellationToken ct)
     {
         var request = service.Channels.List(ChannelParts);
         request.ForHandle = handle;
@@ -181,11 +180,14 @@ public sealed class YoutubeApiReadService(ILogger logger, YoutubeAuthService aut
             return null;
         }
 
-        logger.LogDebug("YouTube API: канал найден по handle '@{Handle}'. Название: '{Title}', ID: {Id}", handle, channel.Snippet.Title, channel.Id);
+        logger.ApiChannelByHandleHit(handle, channel.Snippet.Title, channel.Id);
         return new(channel.Id, channel.Snippet.Title);
     }
 
-    private async Task<ApiChannelInfo?> GetChannelByUsernameAsync(YouTubeService service, string username, CancellationToken ct)
+    private async Task<ApiChannelInfo?> GetChannelByUsernameAsync(
+        YouTubeService service,
+        string username,
+        CancellationToken ct)
     {
         var request = service.Channels.List(ChannelParts);
         request.ForUsername = username;
@@ -198,9 +200,9 @@ public sealed class YoutubeApiReadService(ILogger logger, YoutubeAuthService aut
             return null;
         }
 
-        logger.LogDebug("YouTube API: канал найден по username '{Username}'. Название: '{Title}', ID: {Id}", username, channel.Snippet.Title, channel.Id);
+        logger.ApiChannelByUsernameHit(username, channel.Snippet.Title, channel.Id);
         return new(channel.Id, channel.Snippet.Title);
     }
 }
 
-public sealed record ApiChannelInfo(string Id, string Title);
+internal sealed record ApiChannelInfo(string Id, string Title);

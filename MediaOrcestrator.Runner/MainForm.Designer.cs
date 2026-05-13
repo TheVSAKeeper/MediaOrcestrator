@@ -48,8 +48,6 @@
             uiRelationsGraphTabPage = new TabPage();
             uiRelationsGraphControl = new RelationsGraphControl();
             uiAuditTabPage = new TabPage();
-            button1 = new Button();
-            uiRunningActionsFlowLayoutPanel = new FlowLayoutPanel();
             uiAuditSyncHeaderLabel = new Label();
             uiAuditBulkPanel = new Panel();
             uiBulkSourcesLabel = new Label();
@@ -66,9 +64,16 @@
             uiForceScanButton = new Button();
             uiSyncTreeTabPage = new TabPage();
             uiSyncTreeControl = new SyncTreeControl();
+            uiTasksTabPage = new TabPage();
+            uiTasksControl = new TasksControl();
             uiLogsTabPage = new TabPage();
             uiLogsToolbarPanel = new Panel();
             uiReportIssueButton = new Button();
+            uiGoToBottomButton = new Button();
+            uiLogLevelComboBox = new ComboBox();
+            uiLogSourceTextBox = new TextBox();
+            uiLogWordWrapCheckBox = new CheckBox();
+            uiOpenLogsFolderButton = new Button();
             uiCommentsTabPage = new TabPage();
             uiCommentsViewControl = new CommentsViewControl();
             uiCommentsHtmlTabPage = new TabPage();
@@ -96,6 +101,7 @@
             uiAuditBulkPanel.SuspendLayout();
             uiAuditSourcesPanel.SuspendLayout();
             uiSyncTreeTabPage.SuspendLayout();
+            uiTasksTabPage.SuspendLayout();
             uiLogsTabPage.SuspendLayout();
             uiLogsToolbarPanel.SuspendLayout();
             uiCommentsTabPage.SuspendLayout();
@@ -212,6 +218,7 @@
             uiMainTabControl.Controls.Add(uiRelationsGraphTabPage);
             uiMainTabControl.Controls.Add(uiAuditTabPage);
             uiMainTabControl.Controls.Add(uiSyncTreeTabPage);
+            uiMainTabControl.Controls.Add(uiTasksTabPage);
             uiMainTabControl.Controls.Add(uiCommentsTabPage);
             uiMainTabControl.Controls.Add(uiCommentsHtmlTabPage);
             uiMainTabControl.Controls.Add(uiLogsTabPage);
@@ -290,9 +297,7 @@
             uiRelationsGraphControl.TabIndex = 0;
             // 
             // uiAuditTabPage
-            // 
-            uiAuditTabPage.Controls.Add(button1);
-            uiAuditTabPage.Controls.Add(uiRunningActionsFlowLayoutPanel);
+            //
             uiAuditTabPage.Controls.Add(uiAuditSyncHeaderLabel);
             uiAuditTabPage.Controls.Add(uiAuditBulkPanel);
             uiAuditTabPage.Controls.Add(uiAuditSourcesPanel);
@@ -307,27 +312,7 @@
             uiAuditTabPage.TabIndex = 3;
             uiAuditTabPage.Text = "Аудит";
             uiAuditTabPage.UseVisualStyleBackColor = true;
-            // 
-            // button1
-            // 
-            button1.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
-            button1.Location = new Point(6, 552);
-            button1.Name = "button1";
-            button1.Size = new Size(315, 23);
-            button1.TabIndex = 0;
-            button1.Text = "обновить список запущенных процессов";
-            button1.UseVisualStyleBackColor = true;
-            button1.Click += button1_Click;
-            // 
-            // uiRunningActionsFlowLayoutPanel
-            // 
-            uiRunningActionsFlowLayoutPanel.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
-            uiRunningActionsFlowLayoutPanel.AutoScroll = true;
-            uiRunningActionsFlowLayoutPanel.Location = new Point(3, 582);
-            uiRunningActionsFlowLayoutPanel.Name = "uiRunningActionsFlowLayoutPanel";
-            uiRunningActionsFlowLayoutPanel.Size = new Size(1199, 115);
-            uiRunningActionsFlowLayoutPanel.TabIndex = 8;
-            // 
+            //
             // uiAuditSyncHeaderLabel
             // 
             uiAuditSyncHeaderLabel.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
@@ -456,7 +441,7 @@
             uiClearTypeComboBox.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
             uiClearTypeComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
             uiClearTypeComboBox.FormattingEnabled = true;
-            uiClearTypeComboBox.Items.AddRange(new object[] { "medias", "sources", "source_relations" });
+            uiClearTypeComboBox.Items.AddRange(new object[] { "medias", "sources", "source_relations", "media_comments"});
             uiClearTypeComboBox.Location = new Point(232, 728);
             uiClearTypeComboBox.Name = "uiClearTypeComboBox";
             uiClearTypeComboBox.Size = new Size(180, 23);
@@ -503,6 +488,25 @@
             uiSyncTreeControl.Name = "uiSyncTreeControl";
             uiSyncTreeControl.Size = new Size(1212, 757);
             uiSyncTreeControl.TabIndex = 0;
+            //
+            // uiTasksTabPage
+            //
+            uiTasksTabPage.Controls.Add(uiTasksControl);
+            uiTasksTabPage.Location = new Point(4, 24);
+            uiTasksTabPage.Name = "uiTasksTabPage";
+            uiTasksTabPage.Padding = new Padding(3);
+            uiTasksTabPage.Size = new Size(1212, 757);
+            uiTasksTabPage.TabIndex = 12;
+            uiTasksTabPage.Text = "Задачи";
+            uiTasksTabPage.UseVisualStyleBackColor = true;
+            //
+            // uiTasksControl
+            //
+            uiTasksControl.Dock = DockStyle.Fill;
+            uiTasksControl.Location = new Point(3, 3);
+            uiTasksControl.Name = "uiTasksControl";
+            uiTasksControl.Size = new Size(1206, 751);
+            uiTasksControl.TabIndex = 0;
             //
             // uiCommentsTabPage
             //
@@ -555,15 +559,20 @@
             // 
             // uiLogsToolbarPanel
             // 
+            uiLogsToolbarPanel.Controls.Add(uiOpenLogsFolderButton);
+            uiLogsToolbarPanel.Controls.Add(uiLogWordWrapCheckBox);
+            uiLogsToolbarPanel.Controls.Add(uiLogSourceTextBox);
+            uiLogsToolbarPanel.Controls.Add(uiLogLevelComboBox);
+            uiLogsToolbarPanel.Controls.Add(uiGoToBottomButton);
             uiLogsToolbarPanel.Controls.Add(uiReportIssueButton);
             uiLogsToolbarPanel.Dock = DockStyle.Top;
             uiLogsToolbarPanel.Location = new Point(3, 3);
             uiLogsToolbarPanel.Name = "uiLogsToolbarPanel";
             uiLogsToolbarPanel.Size = new Size(1206, 34);
             uiLogsToolbarPanel.TabIndex = 0;
-            // 
+            //
             // uiReportIssueButton
-            // 
+            //
             uiReportIssueButton.Location = new Point(3, 4);
             uiReportIssueButton.Name = "uiReportIssueButton";
             uiReportIssueButton.Size = new Size(200, 26);
@@ -571,6 +580,60 @@
             uiReportIssueButton.Text = "Сообщить о проблеме";
             uiReportIssueButton.UseVisualStyleBackColor = true;
             uiReportIssueButton.Click += uiReportIssueButton_Click;
+            //
+            // uiGoToBottomButton
+            //
+            uiGoToBottomButton.Location = new Point(209, 4);
+            uiGoToBottomButton.Name = "uiGoToBottomButton";
+            uiGoToBottomButton.Size = new Size(160, 26);
+            uiGoToBottomButton.TabIndex = 1;
+            uiGoToBottomButton.Text = "Перейти вниз";
+            uiGoToBottomButton.UseVisualStyleBackColor = true;
+            uiGoToBottomButton.Click += uiGoToBottomButton_Click;
+            //
+            // uiLogLevelComboBox
+            //
+            uiLogLevelComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
+            uiLogLevelComboBox.FormattingEnabled = true;
+            uiLogLevelComboBox.Items.AddRange(new object[] { "Отладка", "Информация", "Предупреждение", "Ошибка", "Критическая" });
+            uiLogLevelComboBox.Location = new Point(375, 5);
+            uiLogLevelComboBox.Name = "uiLogLevelComboBox";
+            uiLogLevelComboBox.Size = new Size(140, 23);
+            uiLogLevelComboBox.TabIndex = 2;
+            uiLogLevelComboBox.SelectedIndex = 0;
+            uiLogLevelComboBox.SelectedIndexChanged += uiLogLevelComboBox_SelectedIndexChanged;
+            //
+            // uiLogSourceTextBox
+            //
+            uiLogSourceTextBox.Location = new Point(521, 6);
+            uiLogSourceTextBox.Name = "uiLogSourceTextBox";
+            uiLogSourceTextBox.PlaceholderText = "Компонент: Foo, !Bar";
+            uiLogSourceTextBox.Size = new Size(240, 23);
+            uiLogSourceTextBox.TabIndex = 3;
+            uiLogSourceTextBox.TextChanged += uiLogSourceTextBox_TextChanged;
+            //
+            // uiLogWordWrapCheckBox
+            //
+            uiLogWordWrapCheckBox.AutoSize = true;
+            uiLogWordWrapCheckBox.Checked = true;
+            uiLogWordWrapCheckBox.CheckState = CheckState.Checked;
+            uiLogWordWrapCheckBox.Location = new Point(767, 8);
+            uiLogWordWrapCheckBox.Name = "uiLogWordWrapCheckBox";
+            uiLogWordWrapCheckBox.Size = new Size(110, 19);
+            uiLogWordWrapCheckBox.TabIndex = 4;
+            uiLogWordWrapCheckBox.Text = "Перенос строк";
+            uiLogWordWrapCheckBox.UseVisualStyleBackColor = true;
+            uiLogWordWrapCheckBox.CheckedChanged += uiLogWordWrapCheckBox_CheckedChanged;
+            //
+            // uiOpenLogsFolderButton
+            //
+            uiOpenLogsFolderButton.Location = new Point(883, 4);
+            uiOpenLogsFolderButton.Name = "uiOpenLogsFolderButton";
+            uiOpenLogsFolderButton.Size = new Size(180, 26);
+            uiOpenLogsFolderButton.TabIndex = 5;
+            uiOpenLogsFolderButton.Text = "Открыть папку логов";
+            uiOpenLogsFolderButton.UseVisualStyleBackColor = true;
+            uiOpenLogsFolderButton.Click += uiOpenLogsFolderButton_Click;
             // 
             // uiToolsTabPage
             // 
@@ -725,6 +788,7 @@
             uiAuditBulkPanel.PerformLayout();
             uiAuditSourcesPanel.ResumeLayout(false);
             uiSyncTreeTabPage.ResumeLayout(false);
+            uiTasksTabPage.ResumeLayout(false);
             uiCommentsTabPage.ResumeLayout(false);
             uiCommentsHtmlTabPage.ResumeLayout(false);
             uiLogsTabPage.ResumeLayout(false);
@@ -768,6 +832,11 @@
         private TabPage uiLogsTabPage;
         private Panel uiLogsToolbarPanel;
         private Button uiReportIssueButton;
+        private Button uiGoToBottomButton;
+        private ComboBox uiLogLevelComboBox;
+        private TextBox uiLogSourceTextBox;
+        private CheckBox uiLogWordWrapCheckBox;
+        private Button uiOpenLogsFolderButton;
         private TabPage uiCommentsTabPage;
         private CommentsViewControl uiCommentsViewControl;
         private TabPage uiCommentsHtmlTabPage;
@@ -795,8 +864,8 @@
         private Button uiCheckUpdatesButton;
         private Button uiSyncNewButton;
         private ToolTip uiAuditToolTip;
-        private FlowLayoutPanel uiRunningActionsFlowLayoutPanel;
         private FlowLayoutPanel flowLayoutPanel1;
-        private Button button1;
+        private TabPage uiTasksTabPage;
+        private TasksControl uiTasksControl;
     }
 }

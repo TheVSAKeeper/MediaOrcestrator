@@ -7,9 +7,9 @@ using System.Text.RegularExpressions;
 
 namespace MediaOrcestrator.Youtube;
 
-public sealed record YtDlpProgress(int PartNumber, double Progress);
+internal sealed record YtDlpProgress(int PartNumber, double Progress);
 
-public sealed record YtDlpVideoInfo(
+internal sealed record YtDlpVideoInfo(
     string Id,
     string Title,
     string? Description,
@@ -20,7 +20,7 @@ public sealed record YtDlpVideoInfo(
     string? Thumbnail,
     IReadOnlyList<string> Tags);
 
-public sealed partial class YtDlp(string path, string ffmpegPath, string jsRuntime = "none", string? jsRuntimeDir = null, string cookiePath = "")
+internal sealed partial class YtDlp(string path, string ffmpegPath, string jsRuntime = "none", string? jsRuntimeDir = null, string cookiePath = "")
 {
     public async Task<YtDlpVideoInfo?> DownloadAsync(
         string url,
@@ -79,8 +79,9 @@ public sealed partial class YtDlp(string path, string ffmpegPath, string jsRunti
 
         try
         {
-            var json = await File.ReadAllTextAsync(infoJsonPath, cancellationToken);
-            return ParseVideoInfo(json);
+            await using var stream = File.OpenRead(infoJsonPath);
+            var info = await JsonSerializer.DeserializeAsync(stream, YoutubeJsonContext.Default.YtDlpInfoJson, cancellationToken);
+            return info is null ? null : MapVideoInfo(info);
         }
         catch (JsonException)
         {
@@ -99,7 +100,9 @@ public sealed partial class YtDlp(string path, string ffmpegPath, string jsRunti
         }
     }
 
-    public async Task<YtDlpVideoInfo?> GetVideoInfoAsync(string url, CancellationToken cancellationToken = default)
+    public async Task<YtDlpVideoInfo?> GetVideoInfoAsync(
+        string url,
+        CancellationToken cancellationToken = default)
     {
         var arguments = new List<string>
         {
@@ -123,69 +126,47 @@ public sealed partial class YtDlp(string path, string ffmpegPath, string jsRunti
 
         arguments.Add(url);
 
-        StringBuilder stdOut = new();
-        await ExecuteAsync(arguments, stdOutBuffer: stdOut, cancellationToken: cancellationToken);
+        using var stdOut = new MemoryStream();
+        await ExecuteAsync(arguments, stdOutStream: stdOut, cancellationToken: cancellationToken);
 
-        return stdOut.Length == 0 ? null : ParseVideoInfo(stdOut.ToString());
+        if (stdOut.Length == 0)
+        {
+            return null;
+        }
+
+        stdOut.Position = 0;
+        var info = await JsonSerializer.DeserializeAsync(stdOut, YoutubeJsonContext.Default.YtDlpInfoJson, cancellationToken);
+        return info is null ? null : MapVideoInfo(info);
     }
 
-    private static YtDlpVideoInfo? ParseVideoInfo(string json)
+    private static YtDlpVideoInfo MapVideoInfo(YtDlpInfoJson info)
     {
-        using var doc = JsonDocument.Parse(json);
-        var root = doc.RootElement;
-
-        var id = TryGetString(root, "id") ?? "";
-        var title = TryGetString(root, "title") ?? "";
-        var description = TryGetString(root, "description");
-        var uploader = TryGetString(root, "uploader") ?? TryGetString(root, "channel");
-        var thumbnail = TryGetString(root, "thumbnail");
-
-        TimeSpan? duration = null;
-        if (root.TryGetProperty("duration", out var durElement) && durElement.ValueKind == JsonValueKind.Number)
-        {
-            duration = TimeSpan.FromSeconds(durElement.GetDouble());
-        }
-
-        long? viewCount = null;
-        if (root.TryGetProperty("view_count", out var viewsElement) && viewsElement.ValueKind == JsonValueKind.Number)
-        {
-            viewCount = viewsElement.GetInt64();
-        }
+        var duration = info.Duration.HasValue
+            ? TimeSpan.FromSeconds(info.Duration.Value)
+            : (TimeSpan?)null;
 
         DateTimeOffset? uploadDate = null;
-        if (root.TryGetProperty("timestamp", out var tsElement) && tsElement.ValueKind == JsonValueKind.Number)
+        if (info.Timestamp.HasValue)
         {
-            uploadDate = DateTimeOffset.FromUnixTimeSeconds(tsElement.GetInt64());
+            uploadDate = DateTimeOffset.FromUnixTimeSeconds(info.Timestamp.Value);
         }
-        else
+        else if (!string.IsNullOrEmpty(info.UploadDate)
+                 && DateTimeOffset.TryParseExact(info.UploadDate, "yyyyMMdd", CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var parsed))
         {
-            var uploadDateStr = TryGetString(root, "upload_date");
-            if (!string.IsNullOrEmpty(uploadDateStr)
-                && DateTimeOffset.TryParseExact(uploadDateStr, "yyyyMMdd", CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var parsed))
-            {
-                uploadDate = parsed;
-            }
+            uploadDate = parsed;
         }
 
-        IReadOnlyList<string> tags = [];
-        if (root.TryGetProperty("tags", out var tagsElement) && tagsElement.ValueKind == JsonValueKind.Array)
-        {
-            tags = tagsElement.EnumerateArray()
-                .Select(t => t.GetString())
-                .Where(s => !string.IsNullOrEmpty(s))
-                .Cast<string>()
-                .ToArray();
-        }
+        IReadOnlyList<string> tags = info.Tags ?? [];
 
-        return new(id, title, description, uploader, duration, viewCount, uploadDate, thumbnail,
+        return new(info.Id ?? "",
+            info.Title ?? "",
+            info.Description,
+            info.Uploader ?? info.Channel,
+            duration,
+            info.ViewCount,
+            uploadDate,
+            info.Thumbnail,
             tags);
-    }
-
-    private static string? TryGetString(JsonElement element, string property)
-    {
-        return element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.String
-            ? value.GetString()
-            : null;
     }
 
     private static PipeTarget CreateProgressRouter(IProgress<double> progress)
@@ -207,7 +188,7 @@ public sealed partial class YtDlp(string path, string ffmpegPath, string jsRunti
         IEnumerable<string> arguments,
         IProgress<double>? progress = null,
         Action<string>? outputCallback = null,
-        StringBuilder? stdOutBuffer = null,
+        Stream? stdOutStream = null,
         CancellationToken cancellationToken = default)
     {
         var argumentsList = arguments.ToList();
@@ -217,7 +198,7 @@ public sealed partial class YtDlp(string path, string ffmpegPath, string jsRunti
 
         var stdOutPipe = PipeTarget.Merge(progress?.Pipe(CreateProgressRouter) ?? PipeTarget.Null,
             outputCallback != null ? PipeTarget.ToDelegate(outputCallback) : PipeTarget.Null,
-            stdOutBuffer != null ? PipeTarget.ToStringBuilder(stdOutBuffer) : PipeTarget.Null);
+            stdOutStream != null ? PipeTarget.ToStream(stdOutStream) : PipeTarget.Null);
 
         var stdErrPipe = PipeTarget.ToStringBuilder(stdErrBuffer);
 

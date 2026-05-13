@@ -54,7 +54,16 @@ public sealed record CommentMutationRequest(
     string ExternalMediaId,
     string? ExternalCommentId,
     string? ParentExternalCommentId,
-    string Text);
+    string Text,
+    string? AuthorId = null);
+
+public sealed record CommentAuthorView(
+    string Id,
+    string Name,
+    string? Avatar,
+    bool IsDefault);
+
+public delegate IReadOnlyList<CommentAuthorView> CommentAuthorsResolver(string sourceId, string externalMediaId);
 
 public sealed partial class CommentsBrowserView : UserControl
 {
@@ -62,12 +71,16 @@ public sealed partial class CommentsBrowserView : UserControl
 
     private static readonly string HtmlTemplate = LoadTemplate();
 
+    private static readonly string EmptyDataJson = """{"search":"","groups":[]}""";
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         WriteIndented = false,
     };
+
+    private bool _prewarmed;
 
     public CommentsBrowserView()
     {
@@ -86,57 +99,14 @@ public sealed partial class CommentsBrowserView : UserControl
 
     public event EventHandler<CommentsBrowserFetchRequest>? OpenExternalRequested;
 
+    public CommentAuthorsResolver? AuthorsResolver { get; set; }
+
     public static string BuildGroupKey(Media? media, string sourceId, string externalMediaId)
     {
         return media?.Id ?? $"__orphan__|{sourceId}|{externalMediaId}";
     }
 
-    public bool TryApplyLikeUpdate(string commentRecordId, bool likedByMe, int likeCount)
-    {
-        return InvokeApply("__applyLike", commentRecordId, likedByMe, likeCount);
-    }
-
-    public bool TryApplyEdit(string commentRecordId, string newText)
-    {
-        return InvokeApply("__applyEdit", commentRecordId, newText);
-    }
-
-    public bool TryApplyDeleted(string commentRecordId, bool isDeleted)
-    {
-        return InvokeApply("__applyDeleted", commentRecordId, isDeleted);
-    }
-
-    public bool TryApplyCreate(
-        Orcestrator orcestrator,
-        CommentRecord newRecord,
-        string groupKey,
-        string? parentCompositeId)
-    {
-        var doc = uiWebBrowser.Document;
-        if (doc == null)
-        {
-            return false;
-        }
-
-        try
-        {
-            var sourcesById = orcestrator.GetSources().ToDictionary(x => x.Id);
-            var sourceTitles = sourcesById.ToDictionary(x => x.Key, x => x.Value.TitleFull);
-            var dto = MapRecordToDto(newRecord, sourcesById, sourceTitles);
-            var json = JsonSerializer.Serialize(dto, JsonOptions);
-
-            var result = doc.InvokeScript("__applyCreate",
-                [json, groupKey, parentCompositeId ?? string.Empty]);
-
-            return result is true;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    public void Render(
+    public static string BuildRenderJson(
         Orcestrator orcestrator,
         IReadOnlyList<CommentRecord> records,
         CommentsRenderOptions? options = null)
@@ -206,7 +176,8 @@ public sealed partial class CommentsBrowserView : UserControl
                         r.CanEdit,
                         r.CanDelete,
                         HasLikes(sourcesById, r.SourceId),
-                        r.LikedByMe))
+                        r.LikedByMe,
+                        HasAuthors(sourcesById, r.SourceId)))
                     .ToList();
 
                 var sources = grp
@@ -216,7 +187,8 @@ public sealed partial class CommentsBrowserView : UserControl
                         s.SourceTitle,
                         s.Records.Count,
                         HasExternalLink(sourcesById, s.SourceId, s.ExternalMediaId),
-                        HasMutations(sourcesById, s.SourceId)))
+                        HasMutations(sourcesById, s.SourceId),
+                        HasAuthors(sourcesById, s.SourceId)))
                     .ToList();
 
                 var dto = new GroupDto(grp.Key,
@@ -254,13 +226,83 @@ public sealed partial class CommentsBrowserView : UserControl
 
         var groups = sortedGroups.Select(g => g.Group).ToList();
 
-        var json = JsonSerializer.Serialize(new RenderData(options.Search, groups), JsonOptions);
-        uiWebBrowser.DocumentText = HtmlTemplate.Replace("{{data}}", EscapeForInlineScript(json));
+        return JsonSerializer.Serialize(new RenderData(options.Search, groups), JsonOptions);
     }
 
-    private static string EscapeForInlineScript(string json)
+    public void Prewarm()
     {
-        return json.Replace("</", @"<\/", StringComparison.Ordinal);
+        if (_prewarmed)
+        {
+            return;
+        }
+
+        _prewarmed = true;
+        uiWebBrowser.DocumentText = HtmlTemplate.Replace("{{data}}", EscapeForInlineScript(EmptyDataJson));
+    }
+
+    public bool TryApplyLikeUpdate(string commentRecordId, bool likedByMe, int likeCount)
+    {
+        return InvokeApply("__applyLike", commentRecordId, likedByMe, likeCount);
+    }
+
+    public bool TryApplyEdit(string commentRecordId, string newText)
+    {
+        return InvokeApply("__applyEdit", commentRecordId, newText);
+    }
+
+    public bool TryApplyDeleted(string commentRecordId, bool isDeleted)
+    {
+        return InvokeApply("__applyDeleted", commentRecordId, isDeleted);
+    }
+
+    public bool TryApplyCreate(
+        Orcestrator orcestrator,
+        CommentRecord newRecord,
+        string groupKey,
+        string? parentCompositeId)
+    {
+        var doc = uiWebBrowser.Document;
+        if (doc == null)
+        {
+            return false;
+        }
+
+        try
+        {
+            var sourcesById = orcestrator.GetSources().ToDictionary(x => x.Id);
+            var sourceTitles = sourcesById.ToDictionary(x => x.Key, x => x.Value.TitleFull);
+            var dto = MapRecordToDto(newRecord, sourcesById, sourceTitles);
+            var json = JsonSerializer.Serialize(dto, JsonOptions);
+
+            var result = doc.InvokeScript("__applyCreate",
+                [json, groupKey, parentCompositeId ?? string.Empty]);
+
+            return result is true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public void Render(
+        Orcestrator orcestrator,
+        IReadOnlyList<CommentRecord> records,
+        CommentsRenderOptions? options = null)
+    {
+        var json = BuildRenderJson(orcestrator, records, options);
+        ApplyJson(json);
+    }
+
+    public void ApplyJson(string json)
+    {
+        if (InvokeApply("__applyAll", json))
+        {
+            return;
+        }
+
+        _prewarmed = true;
+        uiWebBrowser.DocumentText = HtmlTemplate.Replace("{{data}}", EscapeForInlineScript(json));
     }
 
     private void uiWebBrowser_Navigating(object? sender, WebBrowserNavigatingEventArgs e)
@@ -296,6 +338,11 @@ public sealed partial class CommentsBrowserView : UserControl
         }
     }
 
+    private static string EscapeForInlineScript(string json)
+    {
+        return json.Replace("</", @"<\/", StringComparison.Ordinal);
+    }
+
     private static bool HasExternalLink(Dictionary<string, Source> sourcesById, string sourceId, string externalId)
     {
         if (string.IsNullOrEmpty(externalId))
@@ -326,6 +373,11 @@ public sealed partial class CommentsBrowserView : UserControl
     private static bool HasLikes(Dictionary<string, Source> sourcesById, string sourceId)
     {
         return sourcesById.TryGetValue(sourceId, out var source) && source.Type is ISupportsCommentLikes;
+    }
+
+    private static bool HasAuthors(Dictionary<string, Source> sourcesById, string sourceId)
+    {
+        return sourcesById.TryGetValue(sourceId, out var source) && source.Type is ISupportsCommentAuthors;
     }
 
     private static bool HasCommentPermalink(Dictionary<string, Source> sourcesById, CommentRecord record)
@@ -482,6 +534,30 @@ public sealed partial class CommentsBrowserView : UserControl
         return reader.ReadToEnd();
     }
 
+    private string LoadAuthorsJson(string? sourceId, string? externalMediaId)
+    {
+        if (string.IsNullOrEmpty(sourceId) || string.IsNullOrEmpty(externalMediaId))
+        {
+            return "[]";
+        }
+
+        var resolver = AuthorsResolver;
+        if (resolver == null)
+        {
+            return "[]";
+        }
+
+        try
+        {
+            var authors = resolver(sourceId, externalMediaId);
+            return JsonSerializer.Serialize(authors, JsonOptions);
+        }
+        catch
+        {
+            return "[]";
+        }
+    }
+
     private bool InvokeApply(string functionName, params object[] args)
     {
         var doc = uiWebBrowser.Document;
@@ -525,7 +601,8 @@ public sealed partial class CommentsBrowserView : UserControl
             r.CanEdit,
             r.CanDelete,
             HasLikes(sourcesById, r.SourceId),
-            r.LikedByMe);
+            r.LikedByMe,
+            HasAuthors(sourcesById, r.SourceId));
     }
 
     private void RaiseMutation(CommentMutationRequest request)
@@ -551,6 +628,11 @@ public sealed partial class CommentsBrowserView : UserControl
 
         public void OnAction(string kind, string sourceId, string externalMediaId, string externalCommentId, string parentExternalCommentId, string text)
         {
+            OnActionAs(kind, sourceId, externalMediaId, externalCommentId, parentExternalCommentId, text, string.Empty);
+        }
+
+        public void OnActionAs(string kind, string sourceId, string externalMediaId, string externalCommentId, string parentExternalCommentId, string text, string authorId)
+        {
             if (!Enum.TryParse<CommentMutationKind>(kind, true, out var parsed))
             {
                 return;
@@ -561,9 +643,15 @@ public sealed partial class CommentsBrowserView : UserControl
                 externalMediaId ?? string.Empty,
                 string.IsNullOrEmpty(externalCommentId) ? null : externalCommentId,
                 string.IsNullOrEmpty(parentExternalCommentId) ? null : parentExternalCommentId,
-                text ?? string.Empty);
+                text ?? string.Empty,
+                string.IsNullOrEmpty(authorId) ? null : authorId);
 
             _owner.RaiseMutation(request);
+        }
+
+        public string GetAuthors(string sourceId, string externalMediaId)
+        {
+            return _owner.LoadAuthorsJson(sourceId, externalMediaId);
         }
     }
 
@@ -584,7 +672,8 @@ public sealed partial class CommentsBrowserView : UserControl
         string SourceTitle,
         int Count,
         bool HasExternalLink,
-        bool HasMutations);
+        bool HasMutations,
+        bool HasAuthors);
 
     private sealed record CommentDto(
         string Id,
@@ -606,5 +695,6 @@ public sealed partial class CommentsBrowserView : UserControl
         bool CanEdit,
         bool CanDelete,
         bool HasLikes,
-        bool LikedByMe);
+        bool LikedByMe,
+        bool HasAuthors);
 }

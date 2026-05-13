@@ -17,9 +17,9 @@ public class Orcestrator(
         return pluginManager.MediaSources;
     }
 
-    public void Init(string pluginPath)
+    public void Init()
     {
-        pluginManager.Init(pluginPath);
+        pluginManager.Init();
         var sources = GetSourceTypes();
     }
 
