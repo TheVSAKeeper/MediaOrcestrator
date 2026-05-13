@@ -68,6 +68,7 @@ public partial class PublishControl : UserControl
         try
         {
             uiSourceComboBox.BeginUpdate();
+            uiSourceComboBox.SelectedIndex = -1;
             uiSourceComboBox.Items.Clear();
             uiSourceComboBox.DisplayMember = nameof(Source.TitleFull);
 
@@ -848,11 +849,13 @@ public partial class PublishControl : UserControl
         {
             uiTitleComboBox.BeginUpdate();
             var preservedTitle = uiTitleComboBox.Text;
+            uiTitleComboBox.SelectedIndex = -1;
             uiTitleComboBox.Items.Clear();
             _titleSuggestions.Clear();
             _titleToDescription.Clear();
 
             uiDescriptionTemplateComboBox.BeginUpdate();
+            uiDescriptionTemplateComboBox.SelectedIndex = -1;
             uiDescriptionTemplateComboBox.Items.Clear();
 
             if (_videoDescription != null)
