@@ -25,6 +25,7 @@ public sealed class VkVideoChannel(
     private const string SubtypeMetadataKey = "_system_vk_subtype";
     private const string ClipSubtype = "clip";
     private const string VideoSubtype = "video";
+    private static readonly TimeSpan MaxShortsDuration = TimeSpan.FromMinutes(3);
 
     private readonly ConcurrentDictionary<string, CachedEntry> _serviceCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly SemaphoreSlim _cacheLock = new(1, 1);
@@ -397,8 +398,15 @@ public sealed class VkVideoChannel(
         var frameSize = await videoTranscoder.GetVideoFrameSizeAsync(filePath, cancellationToken)
                         ?? throw new NonRetriableException("Не удалось определить размер кадра видео — невозможно выбрать режим загрузки (обычное / shorts)");
 
-        // todo поидее ещё и размер фаила надо проверять, но после первого инцидента будем
-        var isShorts = frameSize.IsPortrait;
+        var duration = await videoTranscoder.GetVideoDurationAsync(filePath, cancellationToken)
+                       ?? throw new NonRetriableException("Не удалось определить длительность видео — невозможно выбрать режим загрузки (обычное / shorts)");
+
+        var isShorts = frameSize.IsSquareOrPortrait && duration <= MaxShortsDuration;
+
+        if (frameSize.IsSquareOrPortrait && !isShorts)
+        {
+            logger.VideoTooLongForShorts(duration, MaxShortsDuration);
+        }
 
         using var lease = await AcquireServiceLeaseAsync(settings, cancellationToken);
         var service = lease.Service;
@@ -465,7 +473,7 @@ public sealed class VkVideoChannel(
         string externalId,
         MediaDto tempMedia,
         Dictionary<string, string> settings,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken = default)
     {
         logger.UpdatingVideo(externalId);
 
@@ -475,7 +483,10 @@ public sealed class VkVideoChannel(
 
         var errorMessage = "";
         SaveThumbResponse? thumbResult = null;
-        var isShorts = await ResolveIsShortsAsync(tempMedia, service, ownerId, videoId, cancellationToken);
+        var video = await service.GetVideoByIdAsync(ownerId, videoId, cancellationToken)
+                    ?? throw new NonRetriableException("Не удалось получить видео из VK для определения типа (обычное / shorts)");
+
+        var isShorts = IsClip(video);
 
         if (!string.IsNullOrEmpty(tempMedia.TempPreviewPath) && File.Exists(tempMedia.TempPreviewPath))
         {
@@ -1047,38 +1058,6 @@ public sealed class VkVideoChannel(
             logger.ThumbnailCropFailed(ex);
             return previewPath;
         }
-    }
-
-    private async Task<bool> ResolveIsShortsAsync(
-        MediaDto tempMedia,
-        VkVideoService service,
-        long ownerId,
-        long videoId,
-        CancellationToken cancellationToken)
-    {
-        if (!string.IsNullOrEmpty(tempMedia.TempDataPath) && File.Exists(tempMedia.TempDataPath))
-        {
-            var frameSize = await videoTranscoder.GetVideoFrameSizeAsync(tempMedia.TempDataPath, cancellationToken);
-            if (frameSize is (> 0, > 0))
-            {
-                return frameSize.Value.IsPortrait;
-            }
-        }
-
-        var video = await service.GetVideoByIdAsync(ownerId, videoId, cancellationToken)
-                    ?? throw new NonRetriableException("Не удалось получить видео из VK для определения ориентации (обычное / shorts)");
-
-        if (IsClip(video))
-        {
-            return true;
-        }
-
-        if (video.Width <= 0 || video.Height <= 0)
-        {
-            throw new NonRetriableException("VK не вернул размер кадра видео — невозможно выбрать режим обновления превью (обычное / shorts)");
-        }
-
-        return video.Width < video.Height;
     }
 
     private async Task<ServiceLease> AcquireServiceLeaseAsync(
