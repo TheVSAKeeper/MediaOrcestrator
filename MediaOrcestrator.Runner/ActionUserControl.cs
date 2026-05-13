@@ -4,22 +4,34 @@ namespace MediaOrcestrator.Runner;
 
 public partial class ActionUserControl : UserControl
 {
-    private ActionHolder.RunningAction _act;
+    private ActionHolder.RunningAction? _act;
     private bool _isCanceled;
 
     public ActionUserControl()
     {
         InitializeComponent();
+        Disposed += OnDisposed;
     }
 
     public void SetAction(ActionHolder.RunningAction act)
     {
+        if (_act != null)
+        {
+            _act.Changed -= OnActionChanged;
+        }
+
         _act = act;
+        _act.Changed += OnActionChanged;
         UpdateStatus();
     }
 
     public void UpdateStatus()
     {
+        if (_act == null)
+        {
+            return;
+        }
+
         label1.Text = _act.Name + " " + _act.Status;
         if (_isCanceled)
         {
@@ -43,8 +55,40 @@ public partial class ActionUserControl : UserControl
         }
     }
 
+    private void OnActionChanged(object? sender, EventArgs e)
+    {
+        if (IsDisposed)
+        {
+            return;
+        }
+
+        if (InvokeRequired)
+        {
+            BeginInvoke(UpdateStatus);
+            return;
+        }
+
+        UpdateStatus();
+    }
+
+    private void OnDisposed(object? sender, EventArgs e)
+    {
+        if (_act == null)
+        {
+            return;
+        }
+
+        _act.Changed -= OnActionChanged;
+        _act = null;
+    }
+
     private void button1_Click(object sender, EventArgs e)
     {
+        if (_act == null)
+        {
+            return;
+        }
+
         _act.Status = "Отменено";
         _act.ProgressMax = 0;
         _isCanceled = true;

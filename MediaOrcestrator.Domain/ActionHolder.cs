@@ -5,7 +5,14 @@ namespace MediaOrcestrator.Domain;
 
 public class ActionHolder(ILogger<ActionHolder> logger)
 {
-    public ConcurrentDictionary<Guid, RunningAction> Actions = new();
+    private readonly ConcurrentDictionary<Guid, RunningAction> _actions = new();
+
+    public event EventHandler? Changed;
+
+    public IReadOnlyList<RunningAction> Snapshot()
+    {
+        return _actions.Values.ToArray();
+    }
 
     public RunningAction Register(string name, string status, int progressMax, CancellationTokenSource ctx)
     {
@@ -20,14 +27,15 @@ public class ActionHolder(ILogger<ActionHolder> logger)
             Holder = this,
         };
 
-        Actions.TryAdd(id, act);
+        _actions.TryAdd(id, act);
         logger.LogInformation("Action registered: {Id} {Name}", id, name);
+        OnChanged();
         return act;
     }
 
     public void SetStatus(Guid id, string value)
     {
-        if (Actions.TryGetValue(id, out var act))
+        if (_actions.TryGetValue(id, out var act))
         {
             act.Status = value;
         }
@@ -35,7 +43,7 @@ public class ActionHolder(ILogger<ActionHolder> logger)
 
     public void ProgressPlus(Guid id)
     {
-        if (Actions.TryGetValue(id, out var act))
+        if (_actions.TryGetValue(id, out var act))
         {
             act.IncrementProgress();
         }
@@ -43,7 +51,7 @@ public class ActionHolder(ILogger<ActionHolder> logger)
 
     public void Cancel(Guid id)
     {
-        if (!Actions.TryRemove(id, out var act))
+        if (!_actions.TryRemove(id, out var act))
         {
             return;
         }
@@ -58,24 +66,35 @@ public class ActionHolder(ILogger<ActionHolder> logger)
         {
             act.CancellationTokenSource.Dispose();
         }
+
+        OnChanged();
     }
 
     internal void Remove(Guid id)
     {
-        if (!Actions.TryRemove(id, out var act))
+        if (!_actions.TryRemove(id, out var act))
         {
             return;
         }
 
         logger.LogInformation("Action finished: {Id} {Name} status={Status}", act.Id, act.Name, act.Status);
         act.CancellationTokenSource.Dispose();
+        OnChanged();
+    }
+
+    private void OnChanged()
+    {
+        Changed?.Invoke(this, EventArgs.Empty);
     }
 
     public class RunningAction
     {
         private string _status = string.Empty;
         private int _progressValue;
+        private int _progressMax;
         private int _terminal;
+
+        public event EventHandler? Changed;
 
         public Guid Id { get; set; }
         public string Name { get; set; }
@@ -83,7 +102,11 @@ public class ActionHolder(ILogger<ActionHolder> logger)
         public string Status
         {
             get => Volatile.Read(ref _status);
-            set => Volatile.Write(ref _status, value);
+            set
+            {
+                Volatile.Write(ref _status, value);
+                OnChanged();
+            }
         }
 
         public int ProgressValue
@@ -92,7 +115,16 @@ public class ActionHolder(ILogger<ActionHolder> logger)
             private set => Volatile.Write(ref _progressValue, value);
         }
 
-        public int ProgressMax { get; set; }
+        public int ProgressMax
+        {
+            get => Volatile.Read(ref _progressMax);
+            set
+            {
+                Volatile.Write(ref _progressMax, value);
+                OnChanged();
+            }
+        }
+
         public CancellationTokenSource CancellationTokenSource { get; set; }
         public ActionHolder Holder { get; internal set; }
 
@@ -126,6 +158,12 @@ public class ActionHolder(ILogger<ActionHolder> logger)
         internal void IncrementProgress()
         {
             Interlocked.Increment(ref _progressValue);
+            OnChanged();
+        }
+
+        private void OnChanged()
+        {
+            Changed?.Invoke(this, EventArgs.Empty);
         }
     }
 }

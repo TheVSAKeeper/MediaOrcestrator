@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.Logging.Abstractions;
+using NSubstitute;
 using NUnit.Framework;
 
 namespace MediaOrcestrator.Domain.Tests;
@@ -9,6 +10,11 @@ public class ActionHolderTests
     private static ActionHolder CreateHolder()
     {
         return new(NullLogger<ActionHolder>.Instance);
+    }
+
+    private static bool ContainsAction(ActionHolder holder, Guid id)
+    {
+        return holder.Snapshot().Any(a => a.Id == id);
     }
 
     [Test]
@@ -26,7 +32,7 @@ public class ActionHolderTests
             Assert.That(act.Status, Is.EqualTo("Старт"));
             Assert.That(act.ProgressMax, Is.EqualTo(10));
             Assert.That(act.ProgressValue, Is.Zero);
-            Assert.That(holder.Actions.ContainsKey(act.Id), Is.True);
+            Assert.That(ContainsAction(holder, act.Id), Is.True);
         }
     }
 
@@ -51,7 +57,7 @@ public class ActionHolderTests
 
         act.Finish();
 
-        Assert.That(holder.Actions.ContainsKey(act.Id), Is.False);
+        Assert.That(ContainsAction(holder, act.Id), Is.False);
     }
 
     [Test]
@@ -86,7 +92,7 @@ public class ActionHolderTests
         {
             Assert.That(cts.IsCancellationRequested, Is.True);
             Assert.That(act.Status, Is.EqualTo("Отменено"));
-            Assert.That(holder.Actions.ContainsKey(act.Id), Is.False);
+            Assert.That(ContainsAction(holder, act.Id), Is.False);
         }
     }
 
@@ -103,7 +109,7 @@ public class ActionHolderTests
         using (Assert.EnterMultipleScope())
         {
             Assert.That(act.Status, Is.EqualTo("X"));
-            Assert.That(holder.Actions.ContainsKey(act.Id), Is.False);
+            Assert.That(ContainsAction(holder, act.Id), Is.False);
         }
     }
 
@@ -196,5 +202,103 @@ public class ActionHolderTests
             Assert.That(actB.Status, Is.EqualTo(actA.Status));
             Assert.That(actA.Status, Is.EqualTo("Новый"));
         }
+    }
+
+    [Test]
+    public void Регистрация_порождает_событие_изменения_реестра()
+    {
+        var holder = CreateHolder();
+        using var cts = new CancellationTokenSource();
+        var handler = Substitute.For<EventHandler>();
+        holder.Changed += handler;
+
+        holder.Register("test", "Старт", 0, cts);
+
+        handler.Received(1).Invoke(holder, Arg.Any<EventArgs>());
+    }
+
+    [Test]
+    public void Отмена_порождает_событие_изменения_реестра()
+    {
+        var holder = CreateHolder();
+        var cts = new CancellationTokenSource();
+        var act = holder.Register("test", "Старт", 0, cts);
+        var handler = Substitute.For<EventHandler>();
+        holder.Changed += handler;
+
+        act.Cancel();
+
+        handler.Received(1).Invoke(holder, Arg.Any<EventArgs>());
+    }
+
+    [Test]
+    public void Завершение_порождает_событие_изменения_реестра()
+    {
+        var holder = CreateHolder();
+        var cts = new CancellationTokenSource();
+        var act = holder.Register("test", "Старт", 0, cts);
+        var handler = Substitute.For<EventHandler>();
+        holder.Changed += handler;
+
+        act.Finish();
+
+        handler.Received(1).Invoke(holder, Arg.Any<EventArgs>());
+    }
+
+    [Test]
+    public void Изменение_статуса_порождает_событие_действия()
+    {
+        var holder = CreateHolder();
+        using var cts = new CancellationTokenSource();
+        var act = holder.Register("test", "Старт", 0, cts);
+        var handler = Substitute.For<EventHandler>();
+        act.Changed += handler;
+
+        act.Status = "X";
+
+        handler.Received(1).Invoke(act, Arg.Any<EventArgs>());
+    }
+
+    [Test]
+    public void Инкремент_прогресса_порождает_событие_действия()
+    {
+        var holder = CreateHolder();
+        using var cts = new CancellationTokenSource();
+        var act = holder.Register("test", "Старт", 10, cts);
+        var handler = Substitute.For<EventHandler>();
+        act.Changed += handler;
+
+        act.ProgressPlus();
+
+        handler.Received(1).Invoke(act, Arg.Any<EventArgs>());
+    }
+
+    [Test]
+    public void Снимок_возвращает_текущие_действия()
+    {
+        var holder = CreateHolder();
+        using var cts1 = new CancellationTokenSource();
+        using var cts2 = new CancellationTokenSource();
+        using var cts3 = new CancellationTokenSource();
+
+        holder.Register("a", "Старт", 0, cts1);
+        holder.Register("b", "Старт", 0, cts2);
+        holder.Register("c", "Старт", 0, cts3);
+
+        var names = holder.Snapshot().Select(a => a.Name).ToArray();
+
+        Assert.That(names, Is.EquivalentTo(["a", "b", "c"]));
+    }
+
+    [Test]
+    public void Снимок_не_содержит_завершённое_действие()
+    {
+        var holder = CreateHolder();
+        using var cts = new CancellationTokenSource();
+        var act = holder.Register("test", "Старт", 0, cts);
+
+        act.Finish();
+
+        Assert.That(holder.Snapshot(), Is.Empty);
     }
 }

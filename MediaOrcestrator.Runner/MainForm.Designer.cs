@@ -48,7 +48,6 @@
             uiRelationsGraphTabPage = new TabPage();
             uiRelationsGraphControl = new RelationsGraphControl();
             uiAuditTabPage = new TabPage();
-            button1 = new Button();
             uiRunningActionsFlowLayoutPanel = new FlowLayoutPanel();
             uiAuditSyncHeaderLabel = new Label();
             uiAuditBulkPanel = new Panel();
@@ -296,7 +295,6 @@
             // 
             // uiAuditTabPage
             // 
-            uiAuditTabPage.Controls.Add(button1);
             uiAuditTabPage.Controls.Add(uiRunningActionsFlowLayoutPanel);
             uiAuditTabPage.Controls.Add(uiAuditSyncHeaderLabel);
             uiAuditTabPage.Controls.Add(uiAuditBulkPanel);
@@ -312,20 +310,9 @@
             uiAuditTabPage.TabIndex = 3;
             uiAuditTabPage.Text = "Аудит";
             uiAuditTabPage.UseVisualStyleBackColor = true;
-            // 
-            // button1
-            // 
-            button1.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
-            button1.Location = new Point(6, 552);
-            button1.Name = "button1";
-            button1.Size = new Size(315, 23);
-            button1.TabIndex = 0;
-            button1.Text = "обновить список запущенных процессов";
-            button1.UseVisualStyleBackColor = true;
-            button1.Click += button1_Click;
-            // 
+            //
             // uiRunningActionsFlowLayoutPanel
-            // 
+            //
             uiRunningActionsFlowLayoutPanel.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
             uiRunningActionsFlowLayoutPanel.AutoScroll = true;
             uiRunningActionsFlowLayoutPanel.Location = new Point(3, 582);
@@ -866,6 +853,5 @@
         private ToolTip uiAuditToolTip;
         private FlowLayoutPanel uiRunningActionsFlowLayoutPanel;
         private FlowLayoutPanel flowLayoutPanel1;
-        private Button button1;
     }
 }

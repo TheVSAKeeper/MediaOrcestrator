@@ -25,6 +25,7 @@ public partial class MainForm : Form
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<MainForm> _logger;
     private readonly AppUpdateManager _updateManager;
+    private readonly ActionHolder _actionHolder;
     private readonly Dictionary<string, AuditSourceRow> _auditRows = new();
     private readonly PublishControl? _publishControl;
     private LogViewContext? _logContext;
@@ -36,6 +37,7 @@ public partial class MainForm : Form
         _serviceProvider = serviceProvider;
         _logger = logger;
         _updateManager = updateManager;
+        _actionHolder = _serviceProvider.GetRequiredService<ActionHolder>();
 
         InitializeComponent();
 
@@ -44,6 +46,9 @@ public partial class MainForm : Form
         _publishControl.Dock = DockStyle.Fill;
         _publishControl.MediaPublished += OnMediaPublished;
         uiPublishTabPage.Controls.Add(_publishControl);
+
+        _actionHolder.Changed += OnActionsChanged;
+        FormClosed += (_, _) => _actionHolder.Changed -= OnActionsChanged;
     }
 
     public Action? StartupCompleted { get; set; }
@@ -198,6 +203,8 @@ public partial class MainForm : Form
         }
 
         StartupCompleted?.Invoke();
+
+        RefreshActionsPanel();
 
         CheckToolUpdatesInBackground();
         CheckAppUpdateInBackground();
@@ -462,16 +469,37 @@ public partial class MainForm : Form
         uiMediaMatrixGridControl.RefreshData();
     }
 
-    private void button1_Click(object sender, EventArgs e)
+    private void OnActionsChanged(object? sender, EventArgs e)
     {
+        if (IsDisposed)
+        {
+            return;
+        }
+
+        if (InvokeRequired)
+        {
+            BeginInvoke(RefreshActionsPanel);
+            return;
+        }
+
+        RefreshActionsPanel();
+    }
+
+    private void RefreshActionsPanel()
+    {
+        foreach (Control c in uiRunningActionsFlowLayoutPanel.Controls)
+        {
+            c.Dispose();
+        }
+
         uiRunningActionsFlowLayoutPanel.Controls.Clear();
-        var actionHolder = _serviceProvider.GetRequiredService<ActionHolder>();
+
         var i = -1;
-        foreach (var action in actionHolder.Actions)
+        foreach (var action in _actionHolder.Snapshot())
         {
             i++;
             var btn = new ActionUserControl();
-            btn.SetAction(action.Value);
+            btn.SetAction(action);
 
             btn.AutoSize = false;
             btn.Width = uiRunningActionsFlowLayoutPanel.Width - 10;
