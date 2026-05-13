@@ -21,6 +21,7 @@ public class ActionHolder(ILogger<ActionHolder> logger)
         };
 
         Actions.TryAdd(id, act);
+        logger.LogInformation("Action registered: {Id} {Name}", id, name);
         return act;
     }
 
@@ -36,7 +37,7 @@ public class ActionHolder(ILogger<ActionHolder> logger)
     {
         if (Actions.TryGetValue(id, out var act))
         {
-            act.ProgressValue++;
+            act.IncrementProgress();
         }
     }
 
@@ -47,34 +48,84 @@ public class ActionHolder(ILogger<ActionHolder> logger)
             return;
         }
 
-        act.CancellationTokenSource.Cancel();
+        logger.LogWarning("Action cancelled: {Id} {Name}", act.Id, act.Name);
+
+        try
+        {
+            act.CancellationTokenSource.Cancel();
+        }
+        finally
+        {
+            act.CancellationTokenSource.Dispose();
+        }
+    }
+
+    internal void Remove(Guid id)
+    {
+        if (!Actions.TryRemove(id, out var act))
+        {
+            return;
+        }
+
+        logger.LogInformation("Action finished: {Id} {Name} status={Status}", act.Id, act.Name, act.Status);
+        act.CancellationTokenSource.Dispose();
     }
 
     public class RunningAction
     {
+        private string _status = string.Empty;
+        private int _progressValue;
+        private int _terminal;
+
         public Guid Id { get; set; }
         public string Name { get; set; }
-        public string Status { get; set; }
-        public int ProgressValue { get; set; }
+
+        public string Status
+        {
+            get => Volatile.Read(ref _status);
+            set => Volatile.Write(ref _status, value);
+        }
+
+        public int ProgressValue
+        {
+            get => Volatile.Read(ref _progressValue);
+            private set => Volatile.Write(ref _progressValue, value);
+        }
+
         public int ProgressMax { get; set; }
         public CancellationTokenSource CancellationTokenSource { get; set; }
         public ActionHolder Holder { get; internal set; }
 
         public void Cancel()
         {
+            if (Interlocked.CompareExchange(ref _terminal, 1, 0) != 0)
+            {
+                return;
+            }
+
             Status = "Отменено";
             Holder.Cancel(Id);
         }
 
         public void ProgressPlus()
         {
-            Holder.ProgressPlus(Id);
+            IncrementProgress();
         }
 
         public void Finish(string? finalStatus = null)
         {
+            if (Interlocked.CompareExchange(ref _terminal, 1, 0) != 0)
+            {
+                return;
+            }
+
             Status = finalStatus ?? "Выполнено";
-            Holder.Cancel(Id);
+            Holder.Remove(Id);
+        }
+
+        internal void IncrementProgress()
+        {
+            Interlocked.Increment(ref _progressValue);
         }
     }
 }
