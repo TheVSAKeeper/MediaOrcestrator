@@ -14,7 +14,6 @@ public sealed class CommentsViewSettings
     public string Search { get; set; } = "";
     public int FetchSinceDays { get; set; }
     public int FetchOnlyRecent { get; set; }
-    public int FetchStaleDays { get; set; }
 
     public static CommentsViewSettings Load()
     {

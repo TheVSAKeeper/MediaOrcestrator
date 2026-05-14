@@ -108,38 +108,22 @@ public sealed class CommentsRepository
         Collection.Upsert(record);
     }
 
-    public void ReplaceAll(string sourceId, string externalMediaId, IReadOnlyList<CommentRecord> records, bool preserveLikedByMe = false)
+    public void UpsertMany(IReadOnlyList<CommentRecord> records)
     {
+        if (records.Count == 0)
+        {
+            return;
+        }
+
         _db.BeginTrans();
 
         try
         {
             var collection = Collection;
 
-            if (preserveLikedByMe && records.Count > 0)
+            foreach (var record in records)
             {
-                var likedIds = collection
-                    .Find(x => x.SourceId == sourceId && x.ExternalMediaId == externalMediaId && x.LikedByMe)
-                    .Select(x => x.Id)
-                    .ToHashSet(StringComparer.Ordinal);
-
-                if (likedIds.Count > 0)
-                {
-                    foreach (var record in records)
-                    {
-                        if (!record.LikedByMe && likedIds.Contains(record.Id))
-                        {
-                            record.LikedByMe = true;
-                        }
-                    }
-                }
-            }
-
-            collection.DeleteMany(x => x.SourceId == sourceId && x.ExternalMediaId == externalMediaId);
-
-            if (records.Count > 0)
-            {
-                collection.InsertBulk(records);
+                collection.Upsert(record);
             }
 
             _db.Commit();

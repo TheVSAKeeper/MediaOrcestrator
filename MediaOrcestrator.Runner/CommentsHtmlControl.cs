@@ -14,11 +14,9 @@ public partial class CommentsHtmlControl : UserControl
     private const string AnySourceLabel = "(любой)";
     private const int SearchDebounceMs = 300;
 
-    private static readonly TimeSpan AuthorsCacheTtl = TimeSpan.FromMinutes(10);
-
     private readonly Timer _searchDebounce = new() { Interval = SearchDebounceMs };
 
-    private readonly ConcurrentDictionary<(string SourceId, string ExternalMediaId), (DateTime FetchedAt, IReadOnlyList<CommentAuthorView> Authors)> _authorsCache = new();
+    private readonly ConcurrentDictionary<(string SourceId, string ExternalMediaId), byte> _authorsInFlight = new();
 
     private Orcestrator? _orcestrator;
     private CommentsService? _commentsService;
@@ -115,14 +113,14 @@ public partial class CommentsHtmlControl : UserControl
         }
 
         _loaded = true;
-        ApplyFilters();
+        ApplyFilters(warmAuthors: true);
     }
 
     private void uiSourceComboBox_SelectedIndexChanged(object? sender, EventArgs e)
     {
         SaveSettings();
         UpdateForceFetchButtonState();
-        ApplyFilters();
+        ApplyFilters(warmAuthors: true);
     }
 
     private void uiSearchTextBox_TextChanged(object? sender, EventArgs e)
@@ -175,7 +173,6 @@ public partial class CommentsHtmlControl : UserControl
 
         _settings.FetchSinceDays = dialog.SinceDays;
         _settings.FetchOnlyRecent = dialog.OnlyRecent;
-        _settings.FetchStaleDays = dialog.StaleDays;
         _settings.Save();
 
         await FetchAllForSourceAsync(source);
@@ -285,9 +282,9 @@ public partial class CommentsHtmlControl : UserControl
         }
     }
 
-    private static string BuildFilterSummary(int? sinceDays, int? takeRecent, int? staleDays)
+    private static string BuildFilterSummary(int? sinceDays, int? takeRecent)
     {
-        var parts = new List<string>(3);
+        var parts = new List<string>(2);
 
         if (sinceDays != null)
         {
@@ -297,11 +294,6 @@ public partial class CommentsHtmlControl : UserControl
         if (takeRecent != null)
         {
             parts.Add($"только последние {takeRecent.Value}");
-        }
-
-        if (staleDays != null)
-        {
-            parts.Add($"не обновлялись > {staleDays.Value} дн.");
         }
 
         return string.Join(", ", parts);
@@ -426,7 +418,7 @@ public partial class CommentsHtmlControl : UserControl
         }
     }
 
-    private async void ApplyFilters()
+    private async void ApplyFilters(bool warmAuthors = false)
     {
         if (!_loaded || _orcestrator == null || _commentsService == null)
         {
@@ -488,16 +480,23 @@ public partial class CommentsHtmlControl : UserControl
                 return;
             }
 
-            WarmAuthors(records);
-
             uiStatusLabel.Text = records.Count == 0
                 ? "Ничего не найдено"
                 : truncated
                     ? $"Комментариев: ≥{records.Count} (увеличьте лимит)"
                     : $"Комментариев: {records.Count}";
+
+            if (warmAuthors)
+            {
+                WarmAuthors(records);
+            }
         }
         catch (OperationCanceledException)
         {
+            if (version == _applyFiltersVersion && !IsDisposed)
+            {
+                uiStatusLabel.Text = "";
+            }
         }
         catch (Exception ex)
         {
@@ -797,14 +796,6 @@ public partial class CommentsHtmlControl : UserControl
 
     private IReadOnlyList<CommentAuthorView> ResolveCommentAuthors(string sourceId, string externalMediaId)
     {
-        var now = DateTime.UtcNow;
-        var cacheKey = (sourceId, externalMediaId);
-
-        if (_authorsCache.TryGetValue(cacheKey, out var cached) && now - cached.FetchedAt < AuthorsCacheTtl)
-        {
-            return cached.Authors;
-        }
-
         TriggerAuthorsLoad(sourceId, externalMediaId);
         return [];
     }
@@ -816,7 +807,12 @@ public partial class CommentsHtmlControl : UserControl
             return;
         }
 
-        var cacheKey = (sourceId, externalMediaId);
+        var key = (sourceId, externalMediaId);
+        if (!_authorsInFlight.TryAdd(key, 0))
+        {
+            return;
+        }
+
         var orcestrator = _orcestrator;
         var commentsService = _commentsService;
 
@@ -827,7 +823,6 @@ public partial class CommentsHtmlControl : UserControl
                 var source = orcestrator.GetSources().FirstOrDefault(s => s.Id == sourceId);
                 if (source?.Type is not ISupportsCommentAuthors)
                 {
-                    _authorsCache[cacheKey] = (DateTime.UtcNow, []);
                     return;
                 }
 
@@ -846,7 +841,6 @@ public partial class CommentsHtmlControl : UserControl
                     .Select(a => new CommentAuthorView(a.Id, a.Name, a.AvatarUrl, a.IsDefault))
                     .ToList();
 
-                _authorsCache[cacheKey] = (DateTime.UtcNow, view);
                 NotifyAuthorsReady(sourceId, externalMediaId, view);
             }
             catch (OperationCanceledException)
@@ -856,6 +850,10 @@ public partial class CommentsHtmlControl : UserControl
             catch (Exception ex)
             {
                 _logger?.LogWarning(ex, "Не удалось получить список авторов для {Source}/{Media}", sourceId, externalMediaId);
+            }
+            finally
+            {
+                _authorsInFlight.TryRemove(key, out _);
             }
         });
     }
@@ -885,79 +883,24 @@ public partial class CommentsHtmlControl : UserControl
 
     private void WarmAuthors(IReadOnlyList<CommentRecord> records)
     {
-        if (_orcestrator == null || _commentsService == null)
+        if (_orcestrator == null)
         {
             return;
         }
 
-        var orcestrator = _orcestrator;
-        var commentsService = _commentsService;
+        const int maxWarmPerCall = 20;
+        var sourcesById = _orcestrator.GetSources().ToDictionary(s => s.Id);
 
-        _ = Task.Run(async () =>
+        var keys = records
+            .Select(r => (r.SourceId, r.ExternalMediaId))
+            .Distinct()
+            .Where(key => sourcesById.TryGetValue(key.SourceId, out var src) && src.Type is ISupportsCommentAuthors)
+            .Take(maxWarmPerCall);
+
+        foreach (var key in keys)
         {
-            var sourcesById = orcestrator.GetSources().ToDictionary(s => s.Id);
-            var now = DateTime.UtcNow;
-
-            var linkByKey = orcestrator.GetMedias()
-                .SelectMany(m => m.Sources)
-                .Where(l => !string.IsNullOrEmpty(l.SourceId) && !string.IsNullOrEmpty(l.ExternalId))
-                .GroupBy(l => (l.SourceId, l.ExternalId))
-                .ToDictionary(g => g.Key, g => g.First());
-
-            const int maxWarmPerCall = 20;
-
-            var keys = records
-                .Select(r => (r.SourceId, r.ExternalMediaId))
-                .Distinct()
-                .Where(key =>
-                {
-                    if (!sourcesById.TryGetValue(key.SourceId, out var src) || src.Type is not ISupportsCommentAuthors)
-                    {
-                        return false;
-                    }
-
-                    return !_authorsCache.TryGetValue(key, out var cached)
-                           || now - cached.FetchedAt >= AuthorsCacheTtl;
-                })
-                .Take(maxWarmPerCall)
-                .ToList();
-
-            if (keys.Count == 0)
-            {
-                return;
-            }
-
-            foreach (var key in keys)
-            {
-                try
-                {
-                    if (!sourcesById.TryGetValue(key.SourceId, out var source))
-                    {
-                        continue;
-                    }
-
-                    if (!linkByKey.TryGetValue((key.SourceId, key.ExternalMediaId), out var link))
-                    {
-                        continue;
-                    }
-
-                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-                    var authors = await commentsService.GetAvailableAuthorsAsync(source, link, cts.Token);
-                    var view = authors
-                        .Select(a => new CommentAuthorView(a.Id, a.Name, a.AvatarUrl, a.IsDefault))
-                        .ToList();
-
-                    _authorsCache[key] = (DateTime.UtcNow, view);
-                }
-                catch (OperationCanceledException)
-                {
-                }
-                catch (Exception ex)
-                {
-                    _logger?.LogWarning(ex, "Прогрев авторов не удался для {Source}/{Media}", key.SourceId, key.ExternalMediaId);
-                }
-            }
-        });
+            TriggerAuthorsLoad(key.SourceId, key.ExternalMediaId);
+        }
     }
 
     private async Task FetchForExternalAsync(string sourceId, string externalId)
@@ -1079,9 +1022,6 @@ public partial class CommentsHtmlControl : UserControl
 
         var takeRecent = _settings.FetchOnlyRecent > 0 ? (int?)_settings.FetchOnlyRecent : null;
 
-        var staleDays = _settings.FetchStaleDays > 0 ? (int?)_settings.FetchStaleDays : null;
-        var staleThreshold = staleDays != null ? DateTime.UtcNow.AddDays(-staleDays.Value) : (DateTime?)null;
-
         var allForSource = _orcestrator.GetMedias()
             .SelectMany(media => media.Sources
                 .Where(link => link.SourceId == source.Id && !string.IsNullOrEmpty(link.ExternalId))
@@ -1096,19 +1036,14 @@ public partial class CommentsHtmlControl : UserControl
             filtered = filtered.Where(t => TryGetCreationDate(t.Media) is { } d && d >= since.Value);
         }
 
-        if (staleThreshold != null)
-        {
-            filtered = filtered.Where(t => t.Link.CommentsFetchedAt == null || t.Link.CommentsFetchedAt <= staleThreshold.Value);
-        }
-
         if (takeRecent != null)
         {
             filtered = filtered.OrderByDescending(t => t.Link.SortNumber).Take(takeRecent.Value);
         }
 
         var targets = filtered.ToList();
-        var hasFilters = since != null || takeRecent != null || staleThreshold != null;
-        var filterSummary = BuildFilterSummary(sinceDays, takeRecent, staleDays);
+        var hasFilters = since != null || takeRecent != null;
+        var filterSummary = BuildFilterSummary(sinceDays, takeRecent);
 
         if (targets.Count == 0)
         {

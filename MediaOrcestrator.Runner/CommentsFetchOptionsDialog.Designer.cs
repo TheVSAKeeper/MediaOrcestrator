@@ -23,9 +23,6 @@ partial class CommentsFetchOptionsDialog
     private Label uiOnlyRecentTitleLabel;
     private NumericUpDown uiOnlyRecentNumeric;
     private Label uiOnlyRecentUnitLabel;
-    private Label uiStaleTitleLabel;
-    private NumericUpDown uiStaleNumeric;
-    private Label uiStaleUnitLabel;
     private FlowLayoutPanel uiButtonsPanel;
     private Button uiOkButton;
     private Button uiCancelButton;
@@ -41,9 +38,6 @@ partial class CommentsFetchOptionsDialog
         uiOnlyRecentTitleLabel = new Label();
         uiOnlyRecentNumeric = new NumericUpDown();
         uiOnlyRecentUnitLabel = new Label();
-        uiStaleTitleLabel = new Label();
-        uiStaleNumeric = new NumericUpDown();
-        uiStaleUnitLabel = new Label();
         uiButtonsPanel = new FlowLayoutPanel();
         uiOkButton = new Button();
         uiCancelButton = new Button();
@@ -51,7 +45,6 @@ partial class CommentsFetchOptionsDialog
         uiLayout.SuspendLayout();
         ((System.ComponentModel.ISupportInitialize)uiSinceNumeric).BeginInit();
         ((System.ComponentModel.ISupportInitialize)uiOnlyRecentNumeric).BeginInit();
-        ((System.ComponentModel.ISupportInitialize)uiStaleNumeric).BeginInit();
         uiButtonsPanel.SuspendLayout();
         SuspendLayout();
         //
@@ -67,16 +60,12 @@ partial class CommentsFetchOptionsDialog
         uiLayout.Controls.Add(uiOnlyRecentTitleLabel, 0, 1);
         uiLayout.Controls.Add(uiOnlyRecentNumeric, 1, 1);
         uiLayout.Controls.Add(uiOnlyRecentUnitLabel, 2, 1);
-        uiLayout.Controls.Add(uiStaleTitleLabel, 0, 2);
-        uiLayout.Controls.Add(uiStaleNumeric, 1, 2);
-        uiLayout.Controls.Add(uiStaleUnitLabel, 2, 2);
-        uiLayout.Controls.Add(uiButtonsPanel, 0, 3);
+        uiLayout.Controls.Add(uiButtonsPanel, 0, 2);
         uiLayout.SetColumnSpan(uiButtonsPanel, 3);
         uiLayout.Dock = DockStyle.Fill;
         uiLayout.Name = "uiLayout";
         uiLayout.Padding = new Padding(12);
-        uiLayout.RowCount = 4;
-        uiLayout.RowStyles.Add(new RowStyle());
+        uiLayout.RowCount = 3;
         uiLayout.RowStyles.Add(new RowStyle());
         uiLayout.RowStyles.Add(new RowStyle());
         uiLayout.RowStyles.Add(new RowStyle());
@@ -131,31 +120,6 @@ partial class CommentsFetchOptionsDialog
         uiOnlyRecentUnitLabel.Name = "uiOnlyRecentUnitLabel";
         uiOnlyRecentUnitLabel.Text = "медиа";
         //
-        // uiStaleTitleLabel
-        //
-        uiStaleTitleLabel.AutoSize = true;
-        uiStaleTitleLabel.Margin = new Padding(0, 7, 8, 0);
-        uiStaleTitleLabel.Name = "uiStaleTitleLabel";
-        uiStaleTitleLabel.Text = "Не обновлялись более";
-        //
-        // uiStaleNumeric
-        //
-        uiStaleNumeric.Margin = new Padding(0, 3, 8, 3);
-        uiStaleNumeric.Maximum = new decimal(new int[] { 3650, 0, 0, 0 });
-        uiStaleNumeric.Name = "uiStaleNumeric";
-        uiStaleNumeric.Size = new Size(80, 23);
-        uiToolTip.SetToolTip(uiStaleNumeric,
-            "Загружать только те медиа, чьи комментарии не обновлялись дольше N дней. 0 = без фильтра."
-            + Environment.NewLine
-            + "Медиа без записи о времени последнего обновления тоже попадают в выборку.");
-        //
-        // uiStaleUnitLabel
-        //
-        uiStaleUnitLabel.AutoSize = true;
-        uiStaleUnitLabel.Margin = new Padding(0, 7, 0, 0);
-        uiStaleUnitLabel.Name = "uiStaleUnitLabel";
-        uiStaleUnitLabel.Text = "дн.";
-        //
         // uiButtonsPanel
         //
         uiButtonsPanel.AutoSize = true;
@@ -194,7 +158,7 @@ partial class CommentsFetchOptionsDialog
         AutoScaleDimensions = new SizeF(7F, 15F);
         AutoScaleMode = AutoScaleMode.Font;
         CancelButton = uiCancelButton;
-        ClientSize = new Size(360, 180);
+        ClientSize = new Size(360, 150);
         Controls.Add(uiLayout);
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
@@ -207,7 +171,6 @@ partial class CommentsFetchOptionsDialog
         uiLayout.PerformLayout();
         ((System.ComponentModel.ISupportInitialize)uiSinceNumeric).EndInit();
         ((System.ComponentModel.ISupportInitialize)uiOnlyRecentNumeric).EndInit();
-        ((System.ComponentModel.ISupportInitialize)uiStaleNumeric).EndInit();
         uiButtonsPanel.ResumeLayout(false);
         uiButtonsPanel.PerformLayout();
         ResumeLayout(false);
