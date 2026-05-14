@@ -540,6 +540,10 @@
             -ms-flex-align: start;
         }
 
+        .flat-row:hover {
+            background: #f7f8fa;
+        }
+
         .flat-row.deleted .flat-body {
             font-style: italic;
             color: #999;
@@ -622,6 +626,11 @@
             background: #eef2f6;
         }
 
+        .flat-author-chip.is-author {
+            color: #fff;
+            background: #2a2a2a;
+        }
+
         .flat-body {
             min-width: 0;
             max-width: 100%;
@@ -676,15 +685,47 @@
         }
 
         .flat-actions button.like-btn {
-            color: #c43b3b;
+            font-size: 14px;
+            line-height: 1;
+            padding: 2px 6px;
+            color: #5b6c84;
+            border-radius: 4px;
+        }
+
+        .flat-actions button.like-btn:hover {
+            background: #eef3fb;
         }
 
         .flat-actions button.like-btn.liked {
             font-weight: 600;
+            color: #c43b3b;
+        }
+
+        .flat-actions .flat-like-count {
+            font-size: 11px;
+            margin-right: 10px;
+            color: #888;
         }
 
         .flat-actions .toggle-replies {
             font-weight: 500;
+        }
+
+        .flat-actions .toggle-replies.empty {
+            cursor: default;
+            color: #888;
+        }
+
+        .flat-actions .toggle-replies.empty:hover {
+            text-decoration: none;
+        }
+
+        .flat-action-secondary {
+            visibility: hidden;
+        }
+
+        .flat-row:hover .flat-action-secondary {
+            visibility: visible;
         }
 
         .flat-replies {
@@ -766,8 +807,11 @@
             line-height: 1.3;
             display: block;
             overflow: hidden;
+            max-height: 2.6em;
             margin-top: 6px;
             text-decoration: none;
+            word-wrap: break-word;
+            overflow-wrap: anywhere;
             color: #1a4f9b;
         }
 
@@ -1650,6 +1694,20 @@
                 return Math.floor(diff / 31536000) + " г. назад";
             }
 
+            function buildFlatRowMeta(comment, group) {
+                var mediaSources = {};
+                var srcs = group.sources || [];
+                for (var si = 0; si < srcs.length; si++) {
+                    mediaSources[srcs[si].sourceId] = srcs[si];
+                }
+                return {
+                    comment: comment,
+                    group: group,
+                    sources: mediaSources,
+                    idx: buildIndex(group.comments || [])
+                };
+            }
+
             function collectFlatRows() {
                 var rows = [];
                 var indexes = {};
@@ -1693,7 +1751,8 @@
                 var main = el("div", "flat-main");
 
                 var head = el("div", "flat-head");
-                var chip = el("span", "flat-author-chip");
+                var chip = el("span", "flat-author-chip" + (c.isAuthor ? " is-author" : ""));
+                if (c.isAuthor) chip.setAttribute("title", "Комментарий от автора");
                 chip.appendChild(text(c.author ? "@" + c.author : "—"));
                 head.appendChild(chip);
 
@@ -1701,13 +1760,6 @@
                     var likes = el("span", "flat-likes-small");
                     likes.appendChild(text("  ♥ " + c.likes));
                     head.appendChild(likes);
-                }
-
-                if (c.isAuthor) {
-                    var badge = el("span", "author-badge");
-                    badge.setAttribute("title", "Комментарий от автора");
-                    badge.appendChild(text("Автор"));
-                    head.appendChild(badge);
                 }
 
                 if (c.likedByAuthor) {
@@ -1747,10 +1799,12 @@
                 var formHost = el("div", "flat-form-host");
                 main.appendChild(formHost);
 
-                var actionsBar = buildFlatActions(c, body, formHost, row, rowDiv);
+                var actionsBar = buildFlatActions(c, body, formHost, row, rowDiv, depth);
                 if (actionsBar) main.appendChild(actionsBar);
 
                 rowDiv._data = c;
+                rowDiv._row = row;
+                rowDiv._depth = depth;
 
                 rowDiv.appendChild(main);
 
@@ -1814,20 +1868,20 @@
                 return wrap;
             }
 
-            function buildFlatActions(c, bodyHost, formHost, row, rowDiv) {
+            function buildLikeButton(c) {
+                var likeBtn = el("button", "like-btn" + (c.likedByMe ? " liked" : ""));
+                likeBtn.setAttribute("title", c.likedByMe ? "Убрать лайк" : "Поставить лайк");
+                likeBtn.appendChild(text(c.likedByMe ? "♥" : "♡"));
+                likeBtn.onclick = function () {
+                    notify(c.likedByMe ? "Unlike" : "Like",
+                        c.sourceId, c.externalMediaId, c.externalCommentId, "", "");
+                };
+                return likeBtn;
+            }
+
+            function buildFlatActions(c, bodyHost, formHost, row, rowDiv, depth) {
                 var bar = el("div", "flat-actions");
                 var hasAny = false;
-
-                if (c.hasLikes && !c.deleted) {
-                    var likeBtn = el("button", "like-btn" + (c.likedByMe ? " liked" : ""));
-                    likeBtn.appendChild(text(c.likedByMe ? "♥ Не нравится" : "♡ Нравится"));
-                    likeBtn.onclick = function () {
-                        notify(c.likedByMe ? "Unlike" : "Like",
-                            c.sourceId, c.externalMediaId, c.externalCommentId, "", "");
-                    };
-                    bar.appendChild(likeBtn);
-                    hasAny = true;
-                }
 
                 if (c.hasMutations && !c.deleted) {
                     var replyBtn = el("button");
@@ -1850,8 +1904,16 @@
                     hasAny = true;
                 }
 
+                if (c.hasLikes && !c.deleted) {
+                    bar.appendChild(buildLikeButton(c));
+                    var likeCount = el("span", "flat-like-count");
+                    if (c.likes > 0) likeCount.appendChild(text(String(c.likes)));
+                    bar.appendChild(likeCount);
+                    hasAny = true;
+                }
+
                 if (c.canEdit && !c.deleted) {
-                    var editBtn = el("button");
+                    var editBtn = el("button", "flat-action-secondary");
                     editBtn.appendChild(text("Изменить"));
                     editBtn.onclick = function () {
                         var originalText = bodyHost.__originalText || "";
@@ -1872,7 +1934,7 @@
                 }
 
                 if (c.canDelete && !c.deleted) {
-                    var delBtn = el("button");
+                    var delBtn = el("button", "flat-action-secondary");
                     delBtn.appendChild(text("Удалить"));
                     delBtn.onclick = function () {
                         notify("Delete", c.sourceId, c.externalMediaId, c.externalCommentId, "", "");
@@ -1891,14 +1953,18 @@
                     hasAny = true;
                 }
 
-                if (c.replyCount > 0) {
-                    var toggle = el("button", "toggle-replies");
-                    var label = c.replyCount + " " + replyWord(c.replyCount);
-                    toggle.appendChild(text("▾ " + label));
+                var isRoot = (depth || 0) === 0;
+                var hasReplies = c.replyCount > 0;
+                if (isRoot || hasReplies) {
+                    var toggle = el("button", "toggle-replies" + (hasReplies ? "" : " empty"));
+                    var label = hasReplies
+                        ? c.replyCount + " " + replyWord(c.replyCount)
+                        : "Нет ответов";
+                    toggle.appendChild(text((hasReplies ? "▾ " : "") + label));
                     var expanded = false;
                     var repliesHost = null;
                     function doExpand() {
-                        if (expanded) return;
+                        if (expanded || !hasReplies) return;
                         expanded = true;
                         while (toggle.firstChild) toggle.removeChild(toggle.firstChild);
                         toggle.appendChild(text("▴ Скрыть ответы"));
@@ -1922,10 +1988,16 @@
                         }
                         repliesHost = null;
                     }
-                    toggle.onclick = function () {
-                        if (expanded) doCollapse(); else doExpand();
-                    };
-                    if (rowDiv) rowDiv.__expandReplies = doExpand;
+                    if (hasReplies) {
+                        toggle.onclick = function () {
+                            if (expanded) doCollapse(); else doExpand();
+                        };
+                    }
+                    if (rowDiv) {
+                        rowDiv.__expandReplies = doExpand;
+                        rowDiv.__hasExpandedReplies = function () { return expanded; };
+                        rowDiv.__getRepliesHost = function () { return repliesHost; };
+                    }
                     bar.appendChild(toggle);
                     hasAny = true;
                 }
@@ -2001,6 +2073,62 @@
                 return null;
             }
 
+            function findFlatRow(id) {
+                var nodes = document.getElementsByClassName("flat-row");
+                for (var i = 0; i < nodes.length; i++) {
+                    if (nodes[i]._commentId === id) return nodes[i];
+                }
+                return null;
+            }
+
+            function findDescendantByClass(parent, cls) {
+                if (!parent) return null;
+                var nodes = parent.getElementsByClassName(cls);
+                return nodes && nodes.length ? nodes[0] : null;
+            }
+
+            function rebuildFlatActions(rowDiv) {
+                var c = rowDiv._data;
+                if (!c) return;
+                var main = findDescendantByClass(rowDiv, "flat-main");
+                if (!main) return;
+                var body = findDescendantByClass(main, "flat-body");
+                var formHost = findDescendantByClass(main, "flat-form-host");
+                if (!body || !formHost) return;
+
+                var existing = findDescendantByClass(main, "flat-actions");
+                if (existing && existing.parentNode === main) {
+                    main.removeChild(existing);
+                }
+
+                var fresh = buildFlatActions(c, body, formHost, rowDiv._row, rowDiv, rowDiv._depth || 0);
+                if (fresh) main.appendChild(fresh);
+            }
+
+            function updateFlatLikeCount(rowDiv, count) {
+                var bar = findDescendantByClass(rowDiv, "flat-actions");
+                if (!bar) return;
+                var counter = findDescendantByClass(bar, "flat-like-count");
+                if (!counter) return;
+                while (counter.firstChild) counter.removeChild(counter.firstChild);
+                if (count > 0) counter.appendChild(text(String(count)));
+            }
+
+            function updateFlatLikeButton(rowDiv, liked) {
+                var bar = findDescendantByClass(rowDiv, "flat-actions");
+                if (!bar) return;
+                var btns = bar.getElementsByTagName("button");
+                for (var i = 0; i < btns.length; i++) {
+                    var b = btns[i];
+                    if ((b.className || "").indexOf("like-btn") < 0) continue;
+                    while (b.firstChild) b.removeChild(b.firstChild);
+                    b.appendChild(text(liked ? "♥" : "♡"));
+                    b.className = "like-btn" + (liked ? " liked" : "");
+                    b.setAttribute("title", liked ? "Убрать лайк" : "Поставить лайк");
+                    break;
+                }
+            }
+
             function findCommentInData(id) {
                 if (!data.groups) return null;
                 for (var i = 0; i < data.groups.length; i++) {
@@ -2052,7 +2180,22 @@
                         var hit = findCommentInData(id);
                         if (!hit) return false;
                         hit.c.text = newText;
-                        renderFlat();
+
+                        var rowDiv = findFlatRow(id);
+                        if (!rowDiv) return true;
+
+                        var flatBody = findDescendantByClass(rowDiv, "flat-body");
+                        if (flatBody) {
+                            clearChildren(flatBody);
+                            appendLinkified(flatBody, newText, data.search);
+                            flatBody.__originalText = newText;
+                            flatBody.style.display = "";
+                        }
+
+                        var flatFormHost = findDescendantByClass(rowDiv, "flat-form-host");
+                        if (flatFormHost) clearChildren(flatFormHost);
+
+                        rebuildFlatActions(rowDiv);
                         return true;
                     }
                     var div = findCommentDiv(id);
@@ -2084,7 +2227,27 @@
                         var hit = findCommentInData(id);
                         if (!hit) return false;
                         hit.c.deleted = isDeleted;
-                        renderFlat();
+
+                        var rowDiv = findFlatRow(id);
+                        if (!rowDiv) return true;
+
+                        rowDiv.className = "flat-row" + (isDeleted ? " deleted" : "");
+
+                        var flatBody = findDescendantByClass(rowDiv, "flat-body");
+                        if (flatBody) {
+                            clearChildren(flatBody);
+                            if (isDeleted) {
+                                flatBody.appendChild(text("[удалён]"));
+                            } else {
+                                appendLinkified(flatBody, flatBody.__originalText || hit.c.text || "", data.search);
+                            }
+                            flatBody.style.display = "";
+                        }
+
+                        var flatFormHost = findDescendantByClass(rowDiv, "flat-form-host");
+                        if (flatFormHost) clearChildren(flatFormHost);
+
+                        rebuildFlatActions(rowDiv);
                         return true;
                     }
                     var div = findCommentDiv(id);
@@ -2132,11 +2295,62 @@
                         if (!target.comments) target.comments = [];
                         target.comments.unshift(c);
                         target.total = (target.total || 0) + 1;
+
                         if (parentCompositeId) {
-                            var parent = findCommentInData(parentCompositeId);
-                            if (parent) parent.c.replyCount = (parent.c.replyCount || 0) + 1;
+                            var parentHit = findCommentInData(parentCompositeId);
+                            if (parentHit) parentHit.c.replyCount = (parentHit.c.replyCount || 0) + 1;
+
+                            var parentRow = findFlatRow(parentCompositeId);
+                            if (!parentRow) {
+                                renderFlat();
+                                return true;
+                            }
+
+                            if (parentRow._row && parentRow._row.idx) {
+                                parentRow._row.idx.byId[c.id] = c;
+                                if (c.parent) {
+                                    var bucket = parentRow._row.idx.childrenByParent[c.parent];
+                                    if (!bucket) {
+                                        bucket = [];
+                                        parentRow._row.idx.childrenByParent[c.parent] = bucket;
+                                    }
+                                    bucket.push(c);
+                                }
+                            }
+
+                            var existingReplies = null;
+                            var siblings = parentRow.childNodes;
+                            for (var sIdx = 0; sIdx < siblings.length; sIdx++) {
+                                var sib = siblings[sIdx];
+                                if (sib && sib.nodeType === 1 && (sib.className || "") === "flat-replies") {
+                                    existingReplies = sib;
+                                    break;
+                                }
+                            }
+                            if (existingReplies) parentRow.removeChild(existingReplies);
+
+                            rebuildFlatActions(parentRow);
+                            if (parentRow.__expandReplies) parentRow.__expandReplies();
+                            return true;
                         }
-                        renderFlat();
+
+                        var list = root.getElementsByClassName("flat-list")[0];
+                        var emptyHost = root.getElementsByClassName("flat-empty")[0];
+                        if (emptyHost && emptyHost.parentNode) {
+                            emptyHost.parentNode.removeChild(emptyHost);
+                        }
+                        if (!list) {
+                            list = el("div", "flat-list");
+                            root.appendChild(list);
+                        }
+
+                        var newMeta = buildFlatRowMeta(c, target);
+                        var newRow = renderFlatRow(newMeta, 0);
+                        if (list.firstChild) {
+                            list.insertBefore(newRow, list.firstChild);
+                        } else {
+                            list.appendChild(newRow);
+                        }
                         return true;
                     }
 
@@ -2255,7 +2469,11 @@
                         if (!hit) return false;
                         hit.c.likedByMe = liked;
                         hit.c.likes = count;
-                        renderFlat();
+
+                        var rowDiv = findFlatRow(id);
+                        if (!rowDiv) return true;
+                        updateFlatLikeButton(rowDiv, liked);
+                        updateFlatLikeCount(rowDiv, count);
                         return true;
                     }
                     var nodes = document.getElementsByClassName("comment");
