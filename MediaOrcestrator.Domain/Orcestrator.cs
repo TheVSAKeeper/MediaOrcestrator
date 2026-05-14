@@ -711,6 +711,15 @@ public class Orcestrator(
 
         tempManager.CleanMedia(mediaId);
 
+        try
+        {
+            await ForceUpdateMetadataAsync(media, source.Id, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(exception, "Не удалось обновить метаданные после публикации «{Title}» в {Source}", title, source.TitleFull);
+        }
+
         logger.LogInformation("Публикация «{Title}» завершена. ExternalId: {ExternalId}", title, uploadResult.Id);
         return media;
     }
@@ -814,6 +823,24 @@ public class Orcestrator(
                     tempManager.CleanMedia(guid);
                 }
             }
+
+            try
+            {
+                await ForceUpdateMetadataAsync(media, rel.From.Id, cancellationToken);
+            }
+            catch (Exception exception)
+            {
+                logger.LogWarning(exception, "Не удалось обновить метаданные источника {FromSource} после переноса медиа {Media}", rel.From, media);
+            }
+
+            try
+            {
+                await ForceUpdateMetadataAsync(media, rel.To.Id, cancellationToken);
+            }
+            catch (Exception exception)
+            {
+                logger.LogWarning(exception, "Не удалось обновить метаданные после переноса медиа {Media} в {ToSource}", media, rel.To);
+            }
         }
         else
         {
@@ -885,7 +912,7 @@ public class Orcestrator(
                 sourceLink.Title = dto.Title;
             }
 
-            if (dto.Description is not null)
+            if (!string.IsNullOrEmpty(dto.Description))
             {
                 sourceLink.Description = dto.Description;
             }
