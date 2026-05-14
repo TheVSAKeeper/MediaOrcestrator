@@ -12,7 +12,6 @@ public sealed record CommentsRenderOptions
 {
     public string Search { get; init; } = "";
     public CommentsLayoutMode Layout { get; init; } = CommentsLayoutMode.Grouped;
-    public CommentsSortKey Sort { get; init; } = CommentsSortKey.Newest;
 }
 
 public sealed record CommentsBrowserFetchRequest(string SourceId, string ExternalId);
@@ -201,7 +200,6 @@ public sealed partial class CommentsBrowserView : UserControl
 
         return JsonSerializer.Serialize(new RenderData(options.Search,
                 options.Layout.ToString().ToLowerInvariant(),
-                options.Sort.ToString().ToLowerInvariant(),
                 groups),
             JsonOptions);
     }
@@ -717,7 +715,7 @@ public sealed partial class CommentsBrowserView : UserControl
         }
     }
 
-    private sealed record RenderData(string Search, string Layout, string Sort, List<GroupDto> Groups);
+    private sealed record RenderData(string Search, string Layout, List<GroupDto> Groups);
 
     private sealed record GroupDto(
         string Key,

@@ -9,11 +9,13 @@ public enum CommentsLayoutMode
     Flat = 1,
 }
 
-public enum CommentsSortKey
+public enum CommentsReplyStatusFilter
 {
-    Newest = 0,
-    Oldest = 1,
-    MostLikes = 2,
+    All = 0,
+    WithoutReply = 1,
+    WithReply = 2,
+    NewReplies = 3,
+    WithoutReplyAndLike = 4,
 }
 
 public sealed class CommentsViewSettings
@@ -30,7 +32,7 @@ public sealed class CommentsViewSettings
     public int FetchSinceDays { get; set; }
     public int FetchOnlyRecent { get; set; }
     public CommentsLayoutMode LayoutMode { get; set; } = CommentsLayoutMode.Grouped;
-    public CommentsSortKey SortKey { get; set; } = CommentsSortKey.Newest;
+    public CommentsReplyStatusFilter ReplyStatus { get; set; } = CommentsReplyStatusFilter.WithoutReplyAndLike;
 
     public static CommentsViewSettings Load()
     {

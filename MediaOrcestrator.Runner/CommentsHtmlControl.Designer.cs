@@ -27,8 +27,8 @@ partial class CommentsHtmlControl
     private Button uiForceFetchAllButton;
     private Label uiLimitLabel;
     private NumericUpDown uiLimitNumeric;
-    private Label uiSortLabel;
-    private ComboBox uiSortComboBox;
+    private Label uiReplyStatusLabel;
+    private ComboBox uiReplyStatusComboBox;
     private TabControl uiTabs;
     private TabPage uiGroupedTab;
     private TabPage uiFlatTab;
@@ -48,8 +48,8 @@ partial class CommentsHtmlControl
         uiSearchLabel = new Label();
         uiSearchTextBox = new TextBox();
         uiForceFetchAllButton = new Button();
-        uiSortLabel = new Label();
-        uiSortComboBox = new ComboBox();
+        uiReplyStatusLabel = new Label();
+        uiReplyStatusComboBox = new ComboBox();
         uiLimitLabel = new Label();
         uiLimitNumeric = new NumericUpDown();
         uiTabs = new TabControl();
@@ -83,8 +83,8 @@ partial class CommentsHtmlControl
         uiFiltersPanel.Controls.Add(uiSearchLabel, 2, 0);
         uiFiltersPanel.Controls.Add(uiSearchTextBox, 3, 0);
         uiFiltersPanel.Controls.Add(uiForceFetchAllButton, 4, 0);
-        uiFiltersPanel.Controls.Add(uiSortLabel, 5, 0);
-        uiFiltersPanel.Controls.Add(uiSortComboBox, 6, 0);
+        uiFiltersPanel.Controls.Add(uiReplyStatusLabel, 5, 0);
+        uiFiltersPanel.Controls.Add(uiReplyStatusComboBox, 6, 0);
         uiFiltersPanel.Controls.Add(uiLimitLabel, 7, 0);
         uiFiltersPanel.Controls.Add(uiLimitNumeric, 8, 0);
         uiFiltersPanel.Dock = DockStyle.Top;
@@ -148,20 +148,20 @@ partial class CommentsHtmlControl
             + Environment.NewLine
             + "Для каждого попавшего медиа всегда загружаются все его комментарии.");
         //
-        // uiSortLabel
+        // uiReplyStatusLabel
         //
-        uiSortLabel.AutoSize = true;
-        uiSortLabel.Margin = new Padding(0, 7, 6, 0);
-        uiSortLabel.Name = "uiSortLabel";
-        uiSortLabel.Text = "Сортировка:";
+        uiReplyStatusLabel.AutoSize = true;
+        uiReplyStatusLabel.Margin = new Padding(0, 7, 6, 0);
+        uiReplyStatusLabel.Name = "uiReplyStatusLabel";
+        uiReplyStatusLabel.Text = "Статус ответа:";
         //
-        // uiSortComboBox
+        // uiReplyStatusComboBox
         //
-        uiSortComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
-        uiSortComboBox.Margin = new Padding(0, 3, 12, 3);
-        uiSortComboBox.Name = "uiSortComboBox";
-        uiSortComboBox.Size = new Size(150, 23);
-        uiSortComboBox.SelectedIndexChanged += uiSortComboBox_SelectedIndexChanged;
+        uiReplyStatusComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
+        uiReplyStatusComboBox.Margin = new Padding(0, 3, 12, 3);
+        uiReplyStatusComboBox.Name = "uiReplyStatusComboBox";
+        uiReplyStatusComboBox.Size = new Size(190, 23);
+        uiReplyStatusComboBox.SelectedIndexChanged += uiReplyStatusComboBox_SelectedIndexChanged;
         //
         // uiLimitLabel
         //

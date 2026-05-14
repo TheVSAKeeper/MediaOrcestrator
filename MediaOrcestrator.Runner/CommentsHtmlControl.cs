@@ -123,7 +123,7 @@ public partial class CommentsHtmlControl : UserControl
         ApplyFilters(warmAuthors: true);
     }
 
-    private void uiSortComboBox_SelectedIndexChanged(object? sender, EventArgs e)
+    private void uiReplyStatusComboBox_SelectedIndexChanged(object? sender, EventArgs e)
     {
         SaveSettings();
         ApplyFilters();
@@ -137,7 +137,6 @@ public partial class CommentsHtmlControl : UserControl
         }
 
         ReparentBrowserToActiveTab();
-        UpdateSortVisibility();
         SaveSettings();
         ApplyFilters();
     }
@@ -301,6 +300,124 @@ public partial class CommentsHtmlControl : UserControl
         }
     }
 
+    private static List<CommentRecord> FilterByReplyStatus(
+        List<CommentRecord> records,
+        CommentsReplyStatusFilter filter)
+    {
+        if (filter == CommentsReplyStatusFilter.All || records.Count == 0)
+        {
+            return records;
+        }
+
+        var byId = new Dictionary<string, CommentRecord>(records.Count, StringComparer.Ordinal);
+        foreach (var r in records)
+        {
+            byId.TryAdd(r.Id, r);
+        }
+
+        var childrenByParent = new Dictionary<string, List<CommentRecord>>(StringComparer.Ordinal);
+        foreach (var r in records)
+        {
+            if (string.IsNullOrEmpty(r.ParentExternalCommentId))
+            {
+                continue;
+            }
+
+            var parentId = $"{r.SourceId}|{r.ExternalMediaId}|{r.ParentExternalCommentId}";
+            if (!byId.ContainsKey(parentId))
+            {
+                continue;
+            }
+
+            if (!childrenByParent.TryGetValue(parentId, out var bucket))
+            {
+                bucket = [];
+                childrenByParent[parentId] = bucket;
+            }
+
+            bucket.Add(r);
+        }
+
+        var result = new List<CommentRecord>();
+        foreach (var root in records)
+        {
+            if (!IsRoot(root, byId))
+            {
+                continue;
+            }
+
+            if (root.IsAuthor)
+            {
+                continue;
+            }
+
+            var descendants = new List<CommentRecord>();
+            CollectDescendants(root, childrenByParent, descendants);
+
+            if (!MatchesReplyStatus(root, descendants, filter))
+            {
+                continue;
+            }
+
+            result.Add(root);
+            result.AddRange(descendants);
+        }
+
+        return result;
+    }
+
+    private static bool IsRoot(CommentRecord r, Dictionary<string, CommentRecord> byId)
+    {
+        if (string.IsNullOrEmpty(r.ParentExternalCommentId))
+        {
+            return true;
+        }
+
+        var parentId = $"{r.SourceId}|{r.ExternalMediaId}|{r.ParentExternalCommentId}";
+        return !byId.ContainsKey(parentId);
+    }
+
+    private static void CollectDescendants(
+        CommentRecord node,
+        Dictionary<string, List<CommentRecord>> childrenByParent,
+        List<CommentRecord> output)
+    {
+        if (!childrenByParent.TryGetValue(node.Id, out var kids))
+        {
+            return;
+        }
+
+        foreach (var kid in kids)
+        {
+            output.Add(kid);
+            CollectDescendants(kid, childrenByParent, output);
+        }
+    }
+
+    private static bool MatchesReplyStatus(CommentRecord root, List<CommentRecord> descendants, CommentsReplyStatusFilter filter)
+    {
+        DateTime? latestAuthorReply = null;
+        foreach (var d in descendants)
+        {
+            if (d.IsAuthor && (latestAuthorReply == null || d.PublishedAt > latestAuthorReply))
+            {
+                latestAuthorReply = d.PublishedAt;
+            }
+        }
+
+        var hasAuthorReply = latestAuthorReply != null;
+
+        return filter switch
+        {
+            CommentsReplyStatusFilter.WithoutReply => !hasAuthorReply,
+            CommentsReplyStatusFilter.WithReply => hasAuthorReply,
+            CommentsReplyStatusFilter.NewReplies => hasAuthorReply
+                                                    && descendants.Any(d => !d.IsAuthor && d.PublishedAt > latestAuthorReply!.Value),
+            CommentsReplyStatusFilter.WithoutReplyAndLike => !hasAuthorReply && !root.LikedByAuthor,
+            _ => true,
+        };
+    }
+
     private static string BuildFilterSummary(int? sinceDays, int? takeRecent)
     {
         var parts = new List<string>(2);
@@ -378,13 +495,6 @@ public partial class CommentsHtmlControl : UserControl
         target.Controls.Add(uiBrowserView);
     }
 
-    private void UpdateSortVisibility()
-    {
-        var flat = GetActiveLayoutMode() == CommentsLayoutMode.Flat;
-        uiSortLabel.Visible = flat;
-        uiSortComboBox.Visible = flat;
-    }
-
     private void ApplySettingsToUi()
     {
         _suppressSettingsSave = true;
@@ -393,14 +503,13 @@ public partial class CommentsHtmlControl : UserControl
             uiSearchTextBox.Text = _settings.Search;
             uiLimitNumeric.Value = Math.Clamp(_settings.Limit, (int)uiLimitNumeric.Minimum, (int)uiLimitNumeric.Maximum);
 
-            PopulateSortCombo();
+            PopulateReplyStatusCombo();
 
             uiTabs.SelectedTab = _settings.LayoutMode == CommentsLayoutMode.Flat
                 ? uiFlatTab
                 : uiGroupedTab;
 
             ReparentBrowserToActiveTab();
-            UpdateSortVisibility();
 
             if (!string.IsNullOrEmpty(_settings.SelectedSourceId)
                 && uiSourceComboBox.DataSource is List<SourceComboItem> items
@@ -415,28 +524,30 @@ public partial class CommentsHtmlControl : UserControl
         }
     }
 
-    private void PopulateSortCombo()
+    private void PopulateReplyStatusCombo()
     {
-        var items = new List<SortComboItem>
+        var items = new List<ReplyStatusComboItem>
         {
-            new(CommentsSortKey.Newest, "Сначала новые"),
-            new(CommentsSortKey.Oldest, "Сначала старые"),
-            new(CommentsSortKey.MostLikes, "Больше лайков"),
+            new(CommentsReplyStatusFilter.WithoutReplyAndLike, "Без ответа и лайка"),
+            new(CommentsReplyStatusFilter.All, "Все"),
+            new(CommentsReplyStatusFilter.WithoutReply, "Без ответа"),
+            new(CommentsReplyStatusFilter.WithReply, "С ответом"),
+            new(CommentsReplyStatusFilter.NewReplies, "Новые ответы"),
         };
 
-        uiSortComboBox.BeginUpdate();
+        uiReplyStatusComboBox.BeginUpdate();
         try
         {
-            uiSortComboBox.DataSource = items;
-            uiSortComboBox.DisplayMember = nameof(SortComboItem.Label);
-            uiSortComboBox.ValueMember = nameof(SortComboItem.Key);
+            uiReplyStatusComboBox.DataSource = items;
+            uiReplyStatusComboBox.DisplayMember = nameof(ReplyStatusComboItem.Label);
+            uiReplyStatusComboBox.ValueMember = nameof(ReplyStatusComboItem.Key);
 
-            var current = items.FirstOrDefault(x => x.Key == _settings.SortKey) ?? items[0];
-            uiSortComboBox.SelectedItem = current;
+            var current = items.FirstOrDefault(x => x.Key == _settings.ReplyStatus) ?? items[0];
+            uiReplyStatusComboBox.SelectedItem = current;
         }
         finally
         {
-            uiSortComboBox.EndUpdate();
+            uiReplyStatusComboBox.EndUpdate();
         }
     }
 
@@ -453,9 +564,9 @@ public partial class CommentsHtmlControl : UserControl
 
         _settings.LayoutMode = GetActiveLayoutMode();
 
-        if (uiSortComboBox.SelectedItem is SortComboItem sort)
+        if (uiReplyStatusComboBox.SelectedItem is ReplyStatusComboItem replyStatus)
         {
-            _settings.SortKey = sort.Key;
+            _settings.ReplyStatus = replyStatus.Key;
         }
 
         _settings.Save();
@@ -523,7 +634,7 @@ public partial class CommentsHtmlControl : UserControl
         var search = uiSearchTextBox.Text.Trim();
         var limit = (int)uiLimitNumeric.Value;
         var layout = GetActiveLayoutMode();
-        var sort = (uiSortComboBox.SelectedItem as SortComboItem)?.Key ?? _settings.SortKey;
+        var replyStatus = (uiReplyStatusComboBox.SelectedItem as ReplyStatusComboItem)?.Key ?? _settings.ReplyStatus;
 
         uiStatusLabel.Text = "Загрузка...";
 
@@ -545,11 +656,12 @@ public partial class CommentsHtmlControl : UserControl
 
                 BackfillOrphanParents(fetched, commentsService, ct);
 
+                fetched = FilterByReplyStatus(fetched, replyStatus);
+
                 var renderJson = CommentsBrowserView.BuildRenderJson(orcestrator, fetched, new()
                 {
                     Search = search,
                     Layout = layout,
-                    Sort = sort,
                 });
 
                 return (Records: fetched, Json: renderJson, Truncated: isTruncated);
@@ -1075,12 +1187,14 @@ public partial class CommentsHtmlControl : UserControl
             var records = _commentsService.GetByMedia(link.SourceId, link.ExternalId);
             BackfillOrphanParents(records, _commentsService, CancellationToken.None);
 
+            var replyStatus = (uiReplyStatusComboBox.SelectedItem as ReplyStatusComboItem)?.Key ?? _settings.ReplyStatus;
+            records = FilterByReplyStatus(records, replyStatus);
+
             var groupKey = CommentsBrowserView.BuildGroupKey(media, link.SourceId, link.ExternalId);
             var options = new CommentsRenderOptions
             {
                 Search = uiSearchTextBox.Text.Trim(),
                 Layout = GetActiveLayoutMode(),
-                Sort = (uiSortComboBox.SelectedItem as SortComboItem)?.Key ?? _settings.SortKey,
             };
 
             return uiBrowserView.TryApplyFetched(_orcestrator, records, groupKey, options);
@@ -1277,9 +1391,9 @@ public partial class CommentsHtmlControl : UserControl
         }
     }
 
-    private sealed class SortComboItem(CommentsSortKey key, string label)
+    private sealed class ReplyStatusComboItem(CommentsReplyStatusFilter key, string label)
     {
-        public CommentsSortKey Key { get; } = key;
+        public CommentsReplyStatusFilter Key { get; } = key;
         public string Label { get; } = label;
 
         public override string ToString()
