@@ -123,6 +123,25 @@ public partial class CommentsHtmlControl : UserControl
         ApplyFilters(warmAuthors: true);
     }
 
+    private void uiSortComboBox_SelectedIndexChanged(object? sender, EventArgs e)
+    {
+        SaveSettings();
+        ApplyFilters();
+    }
+
+    private void uiTabs_SelectedIndexChanged(object? sender, EventArgs e)
+    {
+        if (_suppressSettingsSave)
+        {
+            return;
+        }
+
+        ReparentBrowserToActiveTab();
+        UpdateSortVisibility();
+        SaveSettings();
+        ApplyFilters();
+    }
+
     private void uiSearchTextBox_TextChanged(object? sender, EventArgs e)
     {
         SaveSettings();
@@ -341,6 +360,31 @@ public partial class CommentsHtmlControl : UserControl
         return rootId;
     }
 
+    private CommentsLayoutMode GetActiveLayoutMode()
+    {
+        return uiTabs.SelectedTab == uiFlatTab
+            ? CommentsLayoutMode.Flat
+            : CommentsLayoutMode.Grouped;
+    }
+
+    private void ReparentBrowserToActiveTab()
+    {
+        var target = uiTabs.SelectedTab == uiFlatTab ? uiFlatTab : uiGroupedTab;
+        if (uiBrowserView.Parent == target)
+        {
+            return;
+        }
+
+        target.Controls.Add(uiBrowserView);
+    }
+
+    private void UpdateSortVisibility()
+    {
+        var flat = GetActiveLayoutMode() == CommentsLayoutMode.Flat;
+        uiSortLabel.Visible = flat;
+        uiSortComboBox.Visible = flat;
+    }
+
     private void ApplySettingsToUi()
     {
         _suppressSettingsSave = true;
@@ -348,6 +392,15 @@ public partial class CommentsHtmlControl : UserControl
         {
             uiSearchTextBox.Text = _settings.Search;
             uiLimitNumeric.Value = Math.Clamp(_settings.Limit, (int)uiLimitNumeric.Minimum, (int)uiLimitNumeric.Maximum);
+
+            PopulateSortCombo();
+
+            uiTabs.SelectedTab = _settings.LayoutMode == CommentsLayoutMode.Flat
+                ? uiFlatTab
+                : uiGroupedTab;
+
+            ReparentBrowserToActiveTab();
+            UpdateSortVisibility();
 
             if (!string.IsNullOrEmpty(_settings.SelectedSourceId)
                 && uiSourceComboBox.DataSource is List<SourceComboItem> items
@@ -362,6 +415,31 @@ public partial class CommentsHtmlControl : UserControl
         }
     }
 
+    private void PopulateSortCombo()
+    {
+        var items = new List<SortComboItem>
+        {
+            new(CommentsSortKey.Newest, "Сначала новые"),
+            new(CommentsSortKey.Oldest, "Сначала старые"),
+            new(CommentsSortKey.MostLikes, "Больше лайков"),
+        };
+
+        uiSortComboBox.BeginUpdate();
+        try
+        {
+            uiSortComboBox.DataSource = items;
+            uiSortComboBox.DisplayMember = nameof(SortComboItem.Label);
+            uiSortComboBox.ValueMember = nameof(SortComboItem.Key);
+
+            var current = items.FirstOrDefault(x => x.Key == _settings.SortKey) ?? items[0];
+            uiSortComboBox.SelectedItem = current;
+        }
+        finally
+        {
+            uiSortComboBox.EndUpdate();
+        }
+    }
+
     private void SaveSettings()
     {
         if (_suppressSettingsSave)
@@ -372,6 +450,13 @@ public partial class CommentsHtmlControl : UserControl
         _settings.SelectedSourceId = (uiSourceComboBox.SelectedItem as SourceComboItem)?.SourceId;
         _settings.Search = uiSearchTextBox.Text;
         _settings.Limit = (int)uiLimitNumeric.Value;
+
+        _settings.LayoutMode = GetActiveLayoutMode();
+
+        if (uiSortComboBox.SelectedItem is SortComboItem sort)
+        {
+            _settings.SortKey = sort.Key;
+        }
 
         _settings.Save();
     }
@@ -437,6 +522,8 @@ public partial class CommentsHtmlControl : UserControl
         var sourceId = (uiSourceComboBox.SelectedItem as SourceComboItem)?.SourceId;
         var search = uiSearchTextBox.Text.Trim();
         var limit = (int)uiLimitNumeric.Value;
+        var layout = GetActiveLayoutMode();
+        var sort = (uiSortComboBox.SelectedItem as SortComboItem)?.Key ?? _settings.SortKey;
 
         uiStatusLabel.Text = "Загрузка...";
 
@@ -461,6 +548,8 @@ public partial class CommentsHtmlControl : UserControl
                 var renderJson = CommentsBrowserView.BuildRenderJson(orcestrator, fetched, new()
                 {
                     Search = search,
+                    Layout = layout,
+                    Sort = sort,
                 });
 
                 return (Records: fetched, Json: renderJson, Truncated: isTruncated);
@@ -718,7 +807,7 @@ public partial class CommentsHtmlControl : UserControl
                             ? null
                             : $"{source.Id}|{link.ExternalId}|{request.ParentExternalCommentId}";
 
-                        patchedInPlace = uiBrowserView.TryApplyCreate(_orcestrator, record, groupKey, parentCompositeId);
+                        patchedInPlace = uiBrowserView.TryApplyCreate(_orcestrator, media, record, groupKey, parentCompositeId);
                         break;
                     }
 
@@ -990,6 +1079,8 @@ public partial class CommentsHtmlControl : UserControl
             var options = new CommentsRenderOptions
             {
                 Search = uiSearchTextBox.Text.Trim(),
+                Layout = GetActiveLayoutMode(),
+                Sort = (uiSortComboBox.SelectedItem as SortComboItem)?.Key ?? _settings.SortKey,
             };
 
             return uiBrowserView.TryApplyFetched(_orcestrator, records, groupKey, options);
@@ -1178,6 +1269,17 @@ public partial class CommentsHtmlControl : UserControl
     private sealed class SourceComboItem(string? sourceId, string label)
     {
         public string? SourceId { get; } = sourceId;
+        public string Label { get; } = label;
+
+        public override string ToString()
+        {
+            return Label;
+        }
+    }
+
+    private sealed class SortComboItem(CommentsSortKey key, string label)
+    {
+        public CommentsSortKey Key { get; } = key;
         public string Label { get; } = label;
 
         public override string ToString()
