@@ -49,6 +49,8 @@ public delegate IReadOnlyList<CommentAuthorView> CommentAuthorsResolver(string s
 public sealed partial class CommentsBrowserView : UserControl
 {
     private const string TemplateResourceName = "MediaOrcestrator.Runner.Resources.comments.template.html";
+    private const string StylesResourceName = "MediaOrcestrator.Runner.Resources.comments.template.css";
+    private const string ScriptResourceName = "MediaOrcestrator.Runner.Resources.comments.template.js";
 
     private static readonly string HtmlTemplate = LoadTemplate();
 
@@ -580,8 +582,19 @@ public sealed partial class CommentsBrowserView : UserControl
 
     private static string LoadTemplate()
     {
-        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(TemplateResourceName)
-                           ?? throw new InvalidOperationException($"Не найден embedded ресурс {TemplateResourceName}");
+        var skeleton = ReadEmbeddedResource(TemplateResourceName);
+        var styles = ReadEmbeddedResource(StylesResourceName);
+        var script = ReadEmbeddedResource(ScriptResourceName);
+
+        return skeleton
+            .Replace("{{styles}}", styles)
+            .Replace("{{script}}", script);
+    }
+
+    private static string ReadEmbeddedResource(string name)
+    {
+        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(name)
+                           ?? throw new InvalidOperationException($"Не найден embedded ресурс {name}");
 
         using var reader = new StreamReader(stream);
         return reader.ReadToEnd();
