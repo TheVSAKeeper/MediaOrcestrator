@@ -23,8 +23,18 @@ public class Orcestrator(
         var sources = GetSourceTypes();
     }
 
+    private bool isProcess = false;
     public async Task GetStorageFullInfo(bool isFull, Source? filterSource = null, bool onlyNew = false, IProgress<string>? progress = null)
     {
+        try
+        {
+            if (isProcess)
+            {
+                logger.LogWarning("Я в процессе уже");
+                return;
+            }
+            
+        isProcess = true;
         logger.LogInformation("Запуск процесса синхронизации {Source}...", filterSource?.TitleFull);
         progress?.Report(filterSource != null ? $"Запуск синхронизации «{filterSource.TitleFull}»" : "Запуск полной синхронизации");
 
@@ -244,6 +254,12 @@ public class Orcestrator(
 
         logger.LogInformation("Синхронизация успешно завершена.");
         progress?.Report("Синхронизация завершена");
+
+        }
+        finally
+        {
+            isProcess = false;
+        }
     }
 
     public List<Media> GetMedias()

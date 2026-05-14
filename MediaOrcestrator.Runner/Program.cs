@@ -288,10 +288,18 @@ file static class Program
     /// <returns></returns>
     private static async Task GoGo(Orcestrator orcestrator)
     {
-        //await orcestrator.GetStorageFullInfo();
+        var logger = Log.Logger;
+        while (true)
+        {
+            logger.Information("Получение новых данных из всех хранилищ...");
+            await orcestrator.GetStorageFullInfo(false, null, true, null);
+            var delay = TimeSpan.FromHours(1);
+            var nextRun = DateTime.Now.Add(delay);
+            logger.Information("Цикл завершен. Следующий запуск в {NextRunTime}", nextRun);
+            await Task.Delay(delay);
+        }
         return;
 
-        var logger = Log.Logger;
         logger.Information("Цикл GoGo запущен");
         var sources = orcestrator.GetSources();
         logger.Debug("Найдено источников: {SourceCount}", sources.Count);
