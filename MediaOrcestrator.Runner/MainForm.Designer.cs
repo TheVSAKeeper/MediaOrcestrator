@@ -74,8 +74,6 @@
             uiLogSourceTextBox = new TextBox();
             uiLogWordWrapCheckBox = new CheckBox();
             uiOpenLogsFolderButton = new Button();
-            uiCommentsTabPage = new TabPage();
-            uiCommentsViewControl = new CommentsViewControl();
             uiCommentsHtmlTabPage = new TabPage();
             uiCommentsHtmlControl = new CommentsHtmlControl();
             uiToolsTabPage = new TabPage();
@@ -104,7 +102,6 @@
             uiTasksTabPage.SuspendLayout();
             uiLogsTabPage.SuspendLayout();
             uiLogsToolbarPanel.SuspendLayout();
-            uiCommentsTabPage.SuspendLayout();
             uiCommentsHtmlTabPage.SuspendLayout();
             uiToolsTabPage.SuspendLayout();
             groupBox3.SuspendLayout();
@@ -219,7 +216,6 @@
             uiMainTabControl.Controls.Add(uiAuditTabPage);
             uiMainTabControl.Controls.Add(uiSyncTreeTabPage);
             uiMainTabControl.Controls.Add(uiTasksTabPage);
-            uiMainTabControl.Controls.Add(uiCommentsTabPage);
             uiMainTabControl.Controls.Add(uiCommentsHtmlTabPage);
             uiMainTabControl.Controls.Add(uiLogsTabPage);
             uiMainTabControl.Controls.Add(uiToolsTabPage);
@@ -508,25 +504,6 @@
             uiTasksControl.Size = new Size(1206, 751);
             uiTasksControl.TabIndex = 0;
             //
-            // uiCommentsTabPage
-            //
-            uiCommentsTabPage.Controls.Add(uiCommentsViewControl);
-            uiCommentsTabPage.Location = new Point(4, 24);
-            uiCommentsTabPage.Name = "uiCommentsTabPage";
-            uiCommentsTabPage.Padding = new Padding(3);
-            uiCommentsTabPage.Size = new Size(1212, 757);
-            uiCommentsTabPage.TabIndex = 9;
-            uiCommentsTabPage.Text = "Комментарии";
-            uiCommentsTabPage.UseVisualStyleBackColor = true;
-            //
-            // uiCommentsViewControl
-            //
-            uiCommentsViewControl.Dock = DockStyle.Fill;
-            uiCommentsViewControl.Location = new Point(3, 3);
-            uiCommentsViewControl.Name = "uiCommentsViewControl";
-            uiCommentsViewControl.Size = new Size(1206, 751);
-            uiCommentsViewControl.TabIndex = 0;
-            //
             // uiCommentsHtmlTabPage
             //
             uiCommentsHtmlTabPage.Controls.Add(uiCommentsHtmlControl);
@@ -535,7 +512,7 @@
             uiCommentsHtmlTabPage.Padding = new Padding(3);
             uiCommentsHtmlTabPage.Size = new Size(1212, 757);
             uiCommentsHtmlTabPage.TabIndex = 11;
-            uiCommentsHtmlTabPage.Text = "Комментарии (HTML)";
+            uiCommentsHtmlTabPage.Text = "Комментарии";
             uiCommentsHtmlTabPage.UseVisualStyleBackColor = true;
             //
             // uiCommentsHtmlControl
@@ -789,7 +766,6 @@
             uiAuditSourcesPanel.ResumeLayout(false);
             uiSyncTreeTabPage.ResumeLayout(false);
             uiTasksTabPage.ResumeLayout(false);
-            uiCommentsTabPage.ResumeLayout(false);
             uiCommentsHtmlTabPage.ResumeLayout(false);
             uiLogsTabPage.ResumeLayout(false);
             uiLogsToolbarPanel.ResumeLayout(false);
@@ -837,8 +813,6 @@
         private TextBox uiLogSourceTextBox;
         private CheckBox uiLogWordWrapCheckBox;
         private Button uiOpenLogsFolderButton;
-        private TabPage uiCommentsTabPage;
-        private CommentsViewControl uiCommentsViewControl;
         private TabPage uiCommentsHtmlTabPage;
         private CommentsHtmlControl uiCommentsHtmlControl;
         private TabPage uiToolsTabPage;

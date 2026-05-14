@@ -1,16 +1,12 @@
-﻿using LiteDB;
-using MediaOrcestrator.Modules;
+﻿using MediaOrcestrator.Modules;
 using Microsoft.Extensions.Logging;
 
 namespace MediaOrcestrator.Domain.Comments;
 
 public sealed class CommentsService(
-    LiteDatabase db,
     CommentsRepository repository,
     ILogger<CommentsService> logger)
 {
-    private static readonly TimeSpan DefaultCacheTtl = TimeSpan.MaxValue; // TimeSpan.FromHours(24);
-
     public List<CommentRecord> GetCached(MediaSourceLink link)
     {
         return repository.GetByMedia(link.SourceId, link.ExternalId);
@@ -21,6 +17,11 @@ public sealed class CommentsService(
         return repository.GetByMedia(sourceId, externalMediaId);
     }
 
+    public CommentRecord? GetById(string id)
+    {
+        return repository.GetById(id);
+    }
+
     public List<CommentRecord> Query(
         string? sourceId = null,
         DateTime? from = null,
@@ -29,17 +30,6 @@ public sealed class CommentsService(
         int limit = 1000)
     {
         return repository.Query(sourceId, null, from, to, textContains, limit);
-    }
-
-    public bool IsStale(MediaSourceLink link, TimeSpan? ttl = null)
-    {
-        if (link.CommentsFetchedAt == null)
-        {
-            return true;
-        }
-
-        var effective = ttl ?? DefaultCacheTtl;
-        return DateTime.UtcNow - link.CommentsFetchedAt.Value > effective;
     }
 
     public async Task<int> RefreshAsync(
@@ -69,12 +59,7 @@ public sealed class CommentsService(
             }
         }
 
-        repository.ReplaceAll(source.Id, link.ExternalId, fetched);
-
-        link.CommentsFetchedAt = DateTime.UtcNow;
-        link.CommentsCount = fetched.Count;
-
-        db.GetCollection<Media>("medias").Update(media);
+        repository.UpsertMany(fetched);
 
         progress?.Report($"«{source.TitleFull}»: загружено {fetched.Count} комментариев");
         logger.LogInformation("Загружено {Count} комментариев media={MediaId} source={SourceId}",

@@ -89,4 +89,10 @@ internal static partial class VkVideoChannelLog
     public static partial void ReadingAuthState(
         this ILogger logger,
         string authStatePath);
+
+    [LoggerMessage(EventId = 4117, Level = LogLevel.Information, Message = "Видео ({Duration}) длиннее лимита шортсов ({MaxDuration}) — загружаем как обычное видео")]
+    public static partial void VideoTooLongForShorts(
+        this ILogger logger,
+        TimeSpan duration,
+        TimeSpan maxDuration);
 }

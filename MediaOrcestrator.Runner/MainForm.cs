@@ -172,11 +172,6 @@ public partial class MainForm : Form
 
         using (Splash.Current.StartSpan("Подготовка комментариев..."))
         {
-            uiCommentsViewControl.Initialize(_orcestrator,
-                _serviceProvider.GetRequiredService<CommentsService>(),
-                _serviceProvider.GetRequiredService<ActionHolder>(),
-                _serviceProvider.GetRequiredService<ILogger<CommentsViewControl>>());
-
             uiCommentsHtmlControl.Initialize(_orcestrator,
                 _serviceProvider.GetRequiredService<CommentsService>(),
                 _serviceProvider.GetRequiredService<ActionHolder>(),
@@ -218,11 +213,7 @@ public partial class MainForm : Form
 
     private void OnMainTabSelected(object? sender, TabControlEventArgs e)
     {
-        if (e.TabPage == uiCommentsTabPage)
-        {
-            uiCommentsViewControl.EnsureLoaded();
-        }
-        else if (e.TabPage == uiCommentsHtmlTabPage)
+        if (e.TabPage == uiCommentsHtmlTabPage)
         {
             uiCommentsHtmlControl.EnsureLoaded();
         }

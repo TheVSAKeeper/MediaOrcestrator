@@ -8,29 +8,9 @@ using System.Text.Json.Serialization;
 
 namespace MediaOrcestrator.Runner;
 
-public enum MediaSort
-{
-    ByTitle = 0,
-    BySortNumber = 1,
-}
-
-public enum CommentSort
-{
-    OldestFirst = 0,
-    NewestFirst = 1,
-    MostLiked = 2,
-    MostReplied = 3,
-    NoAuthorReply = 4,
-}
-
 public sealed record CommentsRenderOptions
 {
     public string Search { get; init; } = "";
-    public CommentSort CommentSort { get; init; } = CommentSort.OldestFirst;
-    public bool InvertCommentSort { get; init; }
-    public MediaSort MediaSort { get; init; } = MediaSort.ByTitle;
-    public bool InvertMediaSort { get; init; }
-    public string MediaSearch { get; init; } = "";
 }
 
 public sealed record CommentsBrowserFetchRequest(string SourceId, string ExternalId);
@@ -154,7 +134,7 @@ public sealed partial class CommentsBrowserView : UserControl
                 var title = media?.Title ?? $"<{first.ExternalMediaId}>";
 
                 var allRecords = grp.SelectMany(s => s.Records).ToList();
-                var ordered = OrderForRender(allRecords, options.CommentSort, options.InvertCommentSort);
+                var ordered = OrderForRender(allRecords);
 
                 var comments = ordered
                     .Select(r => new CommentDto(r.Id,
@@ -204,27 +184,11 @@ public sealed partial class CommentsBrowserView : UserControl
             })
             .ToList();
 
-        if (!string.IsNullOrEmpty(options.MediaSearch))
-        {
-            groupsRaw = groupsRaw
-                .Where(g => g.Group.MediaTitle.Contains(options.MediaSearch, StringComparison.OrdinalIgnoreCase))
-                .ToList();
-        }
-
-        IEnumerable<(GroupDto Group, int SortNumber)> sortedGroups = options.MediaSort switch
-        {
-            MediaSort.BySortNumber => groupsRaw
-                .OrderBy(g => g.SortNumber)
-                .ThenBy(g => g.Group.MediaTitle, StringComparer.OrdinalIgnoreCase),
-            _ => groupsRaw.OrderBy(g => g.Group.MediaTitle, StringComparer.OrdinalIgnoreCase),
-        };
-
-        if (options.InvertMediaSort)
-        {
-            sortedGroups = sortedGroups.Reverse();
-        }
-
-        var groups = sortedGroups.Select(g => g.Group).ToList();
+        var groups = groupsRaw
+            .OrderByDescending(g => g.SortNumber)
+            .ThenByDescending(g => g.Group.MediaTitle, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.Group)
+            .ToList();
 
         return JsonSerializer.Serialize(new RenderData(options.Search, groups), JsonOptions);
     }
@@ -243,6 +207,45 @@ public sealed partial class CommentsBrowserView : UserControl
     public bool TryApplyLikeUpdate(string commentRecordId, bool likedByMe, int likeCount)
     {
         return InvokeApply("__applyLike", commentRecordId, likedByMe, likeCount);
+    }
+
+    public void NotifyAuthors(string sourceId, string externalMediaId, IReadOnlyList<CommentAuthorView> authors)
+    {
+        var json = JsonSerializer.Serialize(authors, JsonOptions);
+        InvokeApply("__setAuthors", sourceId, externalMediaId, json);
+    }
+
+    public bool TryApplyFetched(
+        Orcestrator orcestrator,
+        IReadOnlyList<CommentRecord> records,
+        string groupKey,
+        CommentsRenderOptions options)
+    {
+        try
+        {
+            var json = BuildRenderJson(orcestrator, records, options);
+            using var doc = JsonDocument.Parse(json);
+            if (!doc.RootElement.TryGetProperty("groups", out var groupsArray))
+            {
+                return false;
+            }
+
+            foreach (var group in groupsArray.EnumerateArray())
+            {
+                if (group.TryGetProperty("key", out var keyElement)
+                    && keyElement.GetString() == groupKey)
+                {
+                    var groupJson = group.GetRawText();
+                    return InvokeApply("__applyGroup", groupKey, groupJson);
+                }
+            }
+
+            return false;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     public bool TryApplyEdit(string commentRecordId, string newText)
@@ -401,13 +404,13 @@ public sealed partial class CommentsBrowserView : UserControl
         return $"{r.SourceId}|{r.ExternalMediaId}|{r.ParentExternalCommentId}";
     }
 
-    private static List<CommentRecord> OrderForRender(IEnumerable<CommentRecord> source, CommentSort sort, bool invert)
+    private static List<CommentRecord> OrderForRender(IEnumerable<CommentRecord> source)
     {
         var list = source.ToList();
         var byId = new Dictionary<string, CommentRecord>(list.Count);
         foreach (var r in list)
         {
-            byId[r.Id] = r;
+            byId.TryAdd(r.Id, r);
         }
 
         var childrenByParent = new Dictionary<string, List<CommentRecord>>();
@@ -433,39 +436,13 @@ public sealed partial class CommentsBrowserView : UserControl
             bucket.Sort((a, b) => a.PublishedAt.CompareTo(b.PublishedAt));
         }
 
-        var roots = list
+        var sortedRoots = list
             .Where(r =>
             {
                 var parentId = ComposedParentId(r);
                 return parentId == null || !byId.ContainsKey(parentId);
             })
-            .ToList();
-
-        var stats = new Dictionary<string, (int DescendantCount, bool HasAuthorReply)>(roots.Count);
-        foreach (var root in roots)
-        {
-            stats[root.Id] = CollectStats(root, childrenByParent);
-        }
-
-        IEnumerable<CommentRecord> sortedRoots = sort switch
-        {
-            CommentSort.NewestFirst => roots.OrderByDescending(r => r.PublishedAt),
-            CommentSort.MostLiked => roots
-                .OrderByDescending(r => r.LikeCount.GetValueOrDefault())
-                .ThenByDescending(r => r.PublishedAt),
-            CommentSort.MostReplied => roots
-                .OrderByDescending(r => stats[r.Id].DescendantCount)
-                .ThenByDescending(r => r.PublishedAt),
-            CommentSort.NoAuthorReply => roots
-                .OrderBy(r => stats[r.Id].HasAuthorReply ? 1 : 0)
-                .ThenBy(r => r.PublishedAt),
-            _ => roots.OrderBy(r => r.PublishedAt),
-        };
-
-        if (invert)
-        {
-            sortedRoots = sortedRoots.Reverse();
-        }
+            .OrderByDescending(r => r.PublishedAt);
 
         var result = new List<CommentRecord>(list.Count);
         foreach (var root in sortedRoots)
@@ -474,38 +451,6 @@ public sealed partial class CommentsBrowserView : UserControl
         }
 
         return result;
-    }
-
-    private static (int DescendantCount, bool HasAuthorReply) CollectStats(
-        CommentRecord root,
-        Dictionary<string, List<CommentRecord>> childrenByParent)
-    {
-        var count = 0;
-        var hasAuthor = false;
-        var stack = new Stack<CommentRecord>();
-        stack.Push(root);
-
-        while (stack.Count > 0)
-        {
-            var current = stack.Pop();
-            if (!childrenByParent.TryGetValue(current.Id, out var kids))
-            {
-                continue;
-            }
-
-            foreach (var kid in kids)
-            {
-                count++;
-                if (kid.IsAuthor)
-                {
-                    hasAuthor = true;
-                }
-
-                stack.Push(kid);
-            }
-        }
-
-        return (count, hasAuthor);
     }
 
     private static void AppendRecursive(

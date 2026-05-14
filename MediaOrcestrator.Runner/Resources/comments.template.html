@@ -699,6 +699,49 @@
                 }
             }
 
+            var __authorSubscribers = {};
+
+            function authorKey(sourceId, externalMediaId) {
+                return (sourceId || "") + "|" + (externalMediaId || "");
+            }
+
+            function subscribeAuthors(sourceId, externalMediaId, callback) {
+                var key = authorKey(sourceId, externalMediaId);
+                if (!__authorSubscribers[key]) __authorSubscribers[key] = [];
+                __authorSubscribers[key].push(callback);
+                return function () {
+                    var list = __authorSubscribers[key];
+                    if (!list) return;
+                    for (var i = 0; i < list.length; i++) {
+                        if (list[i] === callback) {
+                            list.splice(i, 1);
+                            return;
+                        }
+                    }
+                };
+            }
+
+            window.__setAuthors = function (sourceId, externalMediaId, json) {
+                try {
+                    var list = __authorSubscribers[authorKey(sourceId, externalMediaId)];
+                    if (!list || list.length === 0) return true;
+
+                    var parsed = json ? JSON.parse(String(json)) : [];
+                    if (!Array.isArray(parsed)) parsed = [];
+
+                    var snapshot = list.slice();
+                    for (var i = 0; i < snapshot.length; i++) {
+                        try {
+                            snapshot[i](parsed);
+                        } catch (e) {
+                        }
+                    }
+                    return true;
+                } catch (e) {
+                    return false;
+                }
+            };
+
             function buildAuthorAvatar(author, baseClass) {
                 var name = author && author.name ? author.name : "";
                 var avatar = el("span", baseClass + " placeholder-" + paletteIndex(name));
@@ -767,7 +810,6 @@
 
             function buildAuthorSelect(sourceId, externalMediaId) {
                 var authors = loadAuthors(sourceId, externalMediaId);
-                if (!authors || authors.length < 2) return null;
 
                 ensureAuthorSelectGlobalHandlers();
 
@@ -802,17 +844,28 @@
                 var byId = {};
                 var defaultId = "";
 
-                for (var i = 0; i < authors.length; i++) {
-                    var a = authors[i];
-                    if (!a) continue;
-                    byId[a.id] = a;
-                    if (a.isDefault && !defaultId) defaultId = a.id;
+                function applyAuthors(list) {
+                    authors = Array.isArray(list) ? list : [];
+                    byId = {};
+                    defaultId = "";
+                    for (var i = 0; i < authors.length; i++) {
+                        var a = authors[i];
+                        if (!a) continue;
+                        byId[a.id] = a;
+                        if (a.isDefault && !defaultId) defaultId = a.id;
+                    }
+                    if (!defaultId && authors.length > 0) defaultId = authors[0].id;
+                    if (!selectedId || !byId[selectedId]) selectedId = defaultId;
                 }
-                if (!defaultId && authors.length > 0) defaultId = authors[0].id;
-                selectedId = defaultId;
+
+                applyAuthors(authors);
 
                 function renderTrigger() {
                     while (triggerRowHost.firstChild) triggerRowHost.removeChild(triggerRowHost.firstChild);
+                    if (authors.length === 0) {
+                        triggerRowHost.appendChild(text("Загрузка..."));
+                        return;
+                    }
                     var current = byId[selectedId] || authors[0];
                     triggerRowHost.appendChild(buildAuthorRow(current, "author-select-avatar"));
                 }
@@ -835,6 +888,13 @@
                         })(authors[k]);
                     }
                 }
+
+                var unsubscribe = subscribeAuthors(sourceId, externalMediaId, function (list) {
+                    applyAuthors(list);
+                    renderTrigger();
+                    renderMenu();
+                });
+                wrap.__unsubscribeAuthors = unsubscribe;
 
                 function openMenu() {
                     if (__activeAuthorSelect && __activeAuthorSelect !== wrap) {
@@ -1463,6 +1523,39 @@
                         }
                     }
 
+                    return true;
+                } catch (e) {
+                    return false;
+                }
+            };
+
+            function findGroupDiv(groupKey) {
+                var mediaNodes = document.getElementsByClassName("media");
+                for (var i = 0; i < mediaNodes.length; i++) {
+                    if (mediaNodes[i]._groupKey === groupKey) return mediaNodes[i];
+                }
+                return null;
+            }
+
+            window.__applyGroup = function (groupKey, json) {
+                try {
+                    var existing = findGroupDiv(groupKey);
+                    if (!existing) return false;
+
+                    var groupData = json ? JSON.parse(json) : null;
+                    if (!groupData) return false;
+
+                    if (data.groups) {
+                        for (var i = 0; i < data.groups.length; i++) {
+                            if (data.groups[i].key === groupKey) {
+                                data.groups[i] = groupData;
+                                break;
+                            }
+                        }
+                    }
+
+                    var replacement = renderGroup(groupData);
+                    existing.parentNode.replaceChild(replacement, existing);
                     return true;
                 } catch (e) {
                     return false;
