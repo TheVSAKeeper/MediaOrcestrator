@@ -12,6 +12,8 @@ public class Orcestrator(
     ActionHolder actionHolder,
     ILogger<Orcestrator> logger)
 {
+    private bool _isProcess;
+
     public Dictionary<string, ISourceType> GetSourceTypes()
     {
         return pluginManager.MediaSources;
@@ -23,242 +25,240 @@ public class Orcestrator(
         var sources = GetSourceTypes();
     }
 
-    private bool isProcess = false;
     public async Task GetStorageFullInfo(bool isFull, Source? filterSource = null, bool onlyNew = false, IProgress<string>? progress = null)
     {
         try
         {
-            if (isProcess)
+            if (_isProcess)
             {
                 logger.LogWarning("Я в процессе уже");
                 return;
             }
-            
-        isProcess = true;
-        logger.LogInformation("Запуск процесса синхронизации {Source}...", filterSource?.TitleFull);
-        progress?.Report(filterSource != null ? $"Запуск синхронизации «{filterSource.TitleFull}»" : "Запуск полной синхронизации");
 
-        var mediaCol = db.GetCollection<Media>("medias");
-        //mediaCol.DeleteAll();
-        var mediaAll = mediaCol.FindAll().ToList();
+            _isProcess = true;
+            logger.LogInformation("Запуск процесса синхронизации {Source}...", filterSource?.TitleFull);
+            progress?.Report(filterSource != null ? $"Запуск синхронизации «{filterSource.TitleFull}»" : "Запуск полной синхронизации");
 
-        var cache = new MediaSourceCache();
+            var mediaCol = db.GetCollection<Media>("medias");
+            //mediaCol.DeleteAll();
+            var mediaAll = mediaCol.FindAll().ToList();
 
-        foreach (var media in mediaAll)
-        {
-            foreach (var source in media.Sources)
+            var cache = new MediaSourceCache();
+
+            foreach (var media in mediaAll)
             {
-                if (filterSource != null)
+                foreach (var source in media.Sources)
                 {
-                    if (source.SourceId != filterSource.Id)
+                    if (filterSource != null)
                     {
+                        if (source.SourceId != filterSource.Id)
+                        {
+                            continue;
+                        }
+                    }
+
+                    source.Media = media;
+                    cache.GetMedia(source.SourceId).Add(source);
+                }
+            }
+
+            logger.LogInformation("Обнаружено {Count} элементов медиа в локальном кэше.", mediaAll.Count);
+            progress?.Report($"Загружено {mediaAll.Count} медиа из кэша");
+
+            var sourceTypes = GetSourceTypes();
+            var sources = GetSources();
+
+            if (filterSource != null)
+            {
+                sources = sources.Where(x => x.Id == filterSource.Id).ToList();
+            }
+
+            await Parallel.ForEachAsync(sources, async (mediaSource, cancellationToken) =>
+            {
+                var ctx = new CancellationTokenSource();
+                var action = actionHolder.Register("Синхронизация " + mediaSource.TitleFull + " isFull=" + isFull + " onlyNew=" + onlyNew, "Запущена", 0, ctx);
+
+                var plugin = sourceTypes.Values.FirstOrDefault(x => x.Name == mediaSource.TypeId);
+
+                if (plugin == null)
+                {
+                    logger.LogError("Плагин для типа {TypeId} не найден.", mediaSource.TypeId);
+                    progress?.Report($"Плагин для {mediaSource.TypeId} не найден");
+                    return;
+                }
+
+                progress?.Report($"Сбор медиа из «{mediaSource.TitleFull}»...");
+                var syncMedia = plugin.GetMedia(mediaSource.Settings, isFull, ctx.Token);
+                var mediaList = new List<MediaDto>();
+                var foundIds = new List<string>();
+                await foreach (var s in syncMedia)
+                {
+                    foundIds.Add(s.Id);
+                    if (foundIds.Count % 25 == 0)
+                    {
+                        progress?.Report($"«{mediaSource.TitleFull}»: получено {foundIds.Count}");
+                    }
+
+                    action.Status = $"получено {foundIds.Count}";
+
+                    var foundMediaSource = cache.GetMedia(mediaSource.Id).FirstOrDefault(x => x.ExternalId == s.Id);
+                    if (foundMediaSource == null)
+                    {
+                        mediaList.Insert(0, s);
                         continue;
                     }
-                }
 
-                source.Media = media;
-                cache.GetMedia(source.SourceId).Add(source);
-            }
-        }
-
-        logger.LogInformation("Обнаружено {Count} элементов медиа в локальном кэше.", mediaAll.Count);
-        progress?.Report($"Загружено {mediaAll.Count} медиа из кэша");
-
-        var sourceTypes = GetSourceTypes();
-        var sources = GetSources();
-
-        if (filterSource != null)
-        {
-            sources = sources.Where(x => x.Id == filterSource.Id).ToList();
-        }
-
-        await Parallel.ForEachAsync(sources, async (mediaSource, cancellationToken) =>
-        {
-            var ctx = new CancellationTokenSource();
-            var action = actionHolder.Register("Синхронизация " + mediaSource.TitleFull + " isFull=" + isFull + " onlyNew=" + onlyNew, "Запущена", 0, ctx);
-
-            var plugin = sourceTypes.Values.FirstOrDefault(x => x.Name == mediaSource.TypeId);
-
-            if (plugin == null)
-            {
-                logger.LogError("Плагин для типа {TypeId} не найден.", mediaSource.TypeId);
-                progress?.Report($"Плагин для {mediaSource.TypeId} не найден");
-                return;
-            }
-
-            progress?.Report($"Сбор медиа из «{mediaSource.TitleFull}»...");
-            var syncMedia = plugin.GetMedia(mediaSource.Settings, isFull, ctx.Token);
-            var mediaList = new List<MediaDto>();
-            var foundIds = new List<string>();
-            await foreach (var s in syncMedia)
-            {
-                foundIds.Add(s.Id);
-                if (foundIds.Count % 25 == 0)
-                {
-                    progress?.Report($"«{mediaSource.TitleFull}»: получено {foundIds.Count}");
-                }
-
-                action.Status = $"получено {foundIds.Count}";
-
-                var foundMediaSource = cache.GetMedia(mediaSource.Id).FirstOrDefault(x => x.ExternalId == s.Id);
-                if (foundMediaSource == null)
-                {
-                    mediaList.Insert(0, s);
-                    continue;
-                }
-
-                if (onlyNew)
-                {
-                    logger.LogInformation(s.Title + " уже существует. синхронизация остановлена");
-                    // получили только свежие, обновлять ничего не будем
-                    break;
-                }
-
-                var hasChange = false;
-                if (s.Metadata is { Count: > 0 } && foundMediaSource.Media != null)
-                {
-                    var providedKeys = new HashSet<string>();
-                    foreach (var item in s.Metadata)
+                    if (onlyNew)
                     {
-                        providedKeys.Add(item.Key);
-                        var existing = foundMediaSource.Media.Metadata
-                            .FirstOrDefault(m => m.Key == item.Key && m.SourceId == mediaSource.Id);
-
-                        if (existing != null)
-                        {
-                            existing.Value = item.Value;
-                            existing.DisplayName = item.DisplayName;
-                            existing.DisplayType = item.DisplayType;
-                        }
-                        else
-                        {
-                            item.SourceId = mediaSource.Id;
-                            foundMediaSource.Media.Metadata.Add(item);
-                        }
+                        logger.LogInformation(s.Title + " уже существует. синхронизация остановлена");
+                        // получили только свежие, обновлять ничего не будем
+                        break;
                     }
 
-                    foundMediaSource.Media.Metadata
-                        .RemoveAll(m => m.SourceId == mediaSource.Id && !providedKeys.Contains(m.Key));
-
-                    hasChange = true;
-                }
-
-                if (foundMediaSource.Media.Sources.Count == 1)
-                {
-                    if (foundMediaSource.Media.Title != s.Title)
+                    var hasChange = false;
+                    if (s.Metadata is { Count: > 0 } && foundMediaSource.Media != null)
                     {
-                        foundMediaSource.Media.Title = s.Title;
+                        var providedKeys = new HashSet<string>();
+                        foreach (var item in s.Metadata)
+                        {
+                            providedKeys.Add(item.Key);
+                            var existing = foundMediaSource.Media.Metadata
+                                .FirstOrDefault(m => m.Key == item.Key && m.SourceId == mediaSource.Id);
+
+                            if (existing != null)
+                            {
+                                existing.Value = item.Value;
+                                existing.DisplayName = item.DisplayName;
+                                existing.DisplayType = item.DisplayType;
+                            }
+                            else
+                            {
+                                item.SourceId = mediaSource.Id;
+                                foundMediaSource.Media.Metadata.Add(item);
+                            }
+                        }
+
+                        foundMediaSource.Media.Metadata
+                            .RemoveAll(m => m.SourceId == mediaSource.Id && !providedKeys.Contains(m.Key));
+
                         hasChange = true;
                     }
 
-                    if (foundMediaSource.Media.Description != s.Description)
+                    if (foundMediaSource.Media.Sources.Count == 1)
                     {
-                        foundMediaSource.Media.Description = s.Description;
-                        hasChange = true;
-                    }
-                }
-
-                if (foundMediaSource.Title != s.Title)
-                {
-                    foundMediaSource.Title = s.Title;
-                    hasChange = true;
-                }
-
-                if (foundMediaSource.Description != s.Description)
-                {
-                    foundMediaSource.Description = s.Description;
-                    hasChange = true;
-                }
-
-                if (foundMediaSource.Status is MediaStatus.Missing or MediaStatus.Error)
-                {
-                    foundMediaSource.Status = MediaStatus.Ok;
-                    hasChange = true;
-                }
-
-                if (hasChange)
-                {
-                    mediaCol.Update(foundMediaSource!.Media);
-                }
-            }
-
-            var sortNumber = cache.GetMedia(mediaSource.Id).Select(x => x.SortNumber).DefaultIfEmpty(1).Max();
-            foreach (var s in mediaList)
-            {
-                var mediaId = Guid.NewGuid().ToString();
-                foreach (var item in s.Metadata ?? [])
-                {
-                    item.SourceId = mediaSource.Id;
-                }
-
-                var myMedia = new Media
-                {
-                    Title = s.Title,
-                    Id = mediaId,
-                    Description = s.Description,
-                    Metadata = s.Metadata ?? [],
-                    Sources = [],
-                };
-
-                var newMediaSource = new MediaSourceLink
-                {
-                    MediaId = mediaId,
-                    Media = myMedia,
-                    ExternalId = s.Id,
-                    Description = s.Description,
-                    Title = s.Title,
-                    Status = MediaStatus.Ok,
-                    SourceId = mediaSource.Id,
-                    SortNumber = sortNumber,
-                };
-
-                sortNumber++;
-
-                myMedia.Sources.Add(newMediaSource);
-                // поправить циклический зависимость
-                mediaCol.Insert(myMedia);
-                mediaAll.Add(myMedia);
-                cache.GetMedia(mediaSource.Id).Add(newMediaSource);
-            }
-
-            if (!onlyNew)
-            {
-                if (foundIds.Count > 0)
-                {
-                    var existsVideos = cache.GetMedia(mediaSource.Id);
-                    foreach (var existsVideo in existsVideos)
-                    {
-                        if (!foundIds.Contains(existsVideo.ExternalId))
+                        if (foundMediaSource.Media.Title != s.Title)
                         {
-                            existsVideo.Status = MediaStatus.Missing;
-                            mediaCol.Update(existsVideo.Media);
+                            foundMediaSource.Media.Title = s.Title;
+                            hasChange = true;
+                        }
+
+                        if (foundMediaSource.Media.Description != s.Description)
+                        {
+                            foundMediaSource.Media.Description = s.Description;
+                            hasChange = true;
                         }
                     }
+
+                    if (foundMediaSource.Title != s.Title)
+                    {
+                        foundMediaSource.Title = s.Title;
+                        hasChange = true;
+                    }
+
+                    if (foundMediaSource.Description != s.Description)
+                    {
+                        foundMediaSource.Description = s.Description;
+                        hasChange = true;
+                    }
+
+                    if (foundMediaSource.Status is MediaStatus.Missing or MediaStatus.Error)
+                    {
+                        foundMediaSource.Status = MediaStatus.Ok;
+                        hasChange = true;
+                    }
+
+                    if (hasChange)
+                    {
+                        mediaCol.Update(foundMediaSource!.Media);
+                    }
                 }
-                else
+
+                var sortNumber = cache.GetMedia(mediaSource.Id).Select(x => x.SortNumber).DefaultIfEmpty(1).Max();
+                foreach (var s in mediaList)
                 {
-                    logger.LogWarning("Пропуск пометки «пропало» для источника {Source}: список полученных элементов пуст", mediaSource.TitleFull);
+                    var mediaId = Guid.NewGuid().ToString();
+                    foreach (var item in s.Metadata ?? [])
+                    {
+                        item.SourceId = mediaSource.Id;
+                    }
+
+                    var myMedia = new Media
+                    {
+                        Title = s.Title,
+                        Id = mediaId,
+                        Description = s.Description,
+                        Metadata = s.Metadata ?? [],
+                        Sources = [],
+                    };
+
+                    var newMediaSource = new MediaSourceLink
+                    {
+                        MediaId = mediaId,
+                        Media = myMedia,
+                        ExternalId = s.Id,
+                        Description = s.Description,
+                        Title = s.Title,
+                        Status = MediaStatus.Ok,
+                        SourceId = mediaSource.Id,
+                        SortNumber = sortNumber,
+                    };
+
+                    sortNumber++;
+
+                    myMedia.Sources.Add(newMediaSource);
+                    // поправить циклический зависимость
+                    mediaCol.Insert(myMedia);
+                    mediaAll.Add(myMedia);
+                    cache.GetMedia(mediaSource.Id).Add(newMediaSource);
                 }
-            }
 
-            var sourcesCol = db.GetCollection<Source>("sources");
-            var dbSource = sourcesCol.FindById(mediaSource.Id);
-            if (dbSource != null)
-            {
-                dbSource.LastSyncedAt = DateTime.UtcNow;
-                sourcesCol.Update(dbSource);
-            }
+                if (!onlyNew)
+                {
+                    if (foundIds.Count > 0)
+                    {
+                        var existsVideos = cache.GetMedia(mediaSource.Id);
+                        foreach (var existsVideo in existsVideos)
+                        {
+                            if (!foundIds.Contains(existsVideo.ExternalId))
+                            {
+                                existsVideo.Status = MediaStatus.Missing;
+                                mediaCol.Update(existsVideo.Media);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        logger.LogWarning("Пропуск пометки «пропало» для источника {Source}: список полученных элементов пуст", mediaSource.TitleFull);
+                    }
+                }
 
-            action.Finish();
-        });
+                var sourcesCol = db.GetCollection<Source>("sources");
+                var dbSource = sourcesCol.FindById(mediaSource.Id);
+                if (dbSource != null)
+                {
+                    dbSource.LastSyncedAt = DateTime.UtcNow;
+                    sourcesCol.Update(dbSource);
+                }
 
-        logger.LogInformation("Синхронизация успешно завершена.");
-        progress?.Report("Синхронизация завершена");
+                action.Finish();
+            });
 
+            logger.LogInformation("Синхронизация успешно завершена.");
+            progress?.Report("Синхронизация завершена");
         }
         finally
         {
-            isProcess = false;
+            _isProcess = false;
         }
     }
 
@@ -760,6 +760,38 @@ public class Orcestrator(
             // фаил уже загружен, значит ничего не делаем
             // в будущем возможно обновлять будем
             logger.LogInformation("Пропущено синхронизирование медиа {Media} в {ToSource} / уже имеется", media, rel.To);
+            return;
+        }
+
+        var persistedToLink = db.GetCollection<Media>("medias")
+            .FindById(media.Id)
+            ?.Sources?
+            .FirstOrDefault(x => x.SourceId == rel.To.Id);
+
+        if (persistedToLink is { Status: MediaStatus.Ok })
+        {
+            if (toMediaSource == null)
+            {
+                toMediaSource = new()
+                {
+                    MediaId = media.Id,
+                    Media = media,
+                    SourceId = rel.To.Id,
+                };
+
+                media.Sources.Add(toMediaSource);
+            }
+
+            toMediaSource.Title = persistedToLink.Title;
+            toMediaSource.Description = persistedToLink.Description;
+            toMediaSource.Status = persistedToLink.Status;
+            toMediaSource.StatusMessage = persistedToLink.StatusMessage;
+            toMediaSource.ExternalId = persistedToLink.ExternalId;
+            toMediaSource.SortNumber = persistedToLink.SortNumber;
+
+            logger.LogWarning("Предотвращён двойной залив (#55): медиа {Media} уже загружено в {ToSource} (ExternalId {ExternalId}) по данным БД, переданный объект устарел",
+                media, rel.To, persistedToLink.ExternalId);
+
             return;
         }
 
