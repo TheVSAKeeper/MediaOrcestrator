@@ -22,8 +22,7 @@ internal sealed class ConvertAction : IAsyncMediaMenuAction
         var allSources = ctx.Orcestrator.GetSources();
 
         var sources = selection.SpecificSource != null
-            ? new()
-                { selection.SpecificSource }
+            ? [selection.SpecificSource]
             : allSources.Where(s => !s.IsDisable).ToList();
 
         var result = new List<MenuItemSpec>();
