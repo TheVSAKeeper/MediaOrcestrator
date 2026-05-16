@@ -676,7 +676,7 @@ public class Orcestrator(
         UploadResult uploadResult;
         try
         {
-            uploadResult = await source.Type.UploadAsync(dto, source.Settings, cancellationToken);
+            uploadResult = await UploadWithActionAsync(source, dto, title, cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -813,7 +813,7 @@ public class Orcestrator(
         }
         else
         {
-            tempMedia = await rel.From.Type.DownloadAsync(fromMediaSource.ExternalId, rel.From.Settings, cancellationToken);
+            tempMedia = await DownloadWithActionAsync(rel.From, fromMediaSource.ExternalId, media.Title, cancellationToken);
             tempMedia.Id = media.Id;
             try
             {
@@ -824,7 +824,7 @@ public class Orcestrator(
                 }
                 else
                 {
-                    uploadResult = await rel.To.Type.UploadAsync(tempMedia, rel.To.Settings, cancellationToken);
+                    uploadResult = await UploadWithActionAsync(rel.To, tempMedia, media.Title, cancellationToken);
                 }
             }
             catch (OperationCanceledException)
@@ -925,6 +925,73 @@ public class Orcestrator(
         }
 
         CleanupMediaLinks(media, source.Id);
+    }
+
+    // TODO: Присутсвует дублирование с UploadWithActionAsync
+    private async Task<MediaDto> DownloadWithActionAsync(Source source, string externalId, string mediaTitle, CancellationToken cancellationToken)
+    {
+        var downloadCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var downloadAction = actionHolder.Register($"Загрузка: «{mediaTitle}» ({source.TitleFull})",
+            "Подготовка...",
+            100,
+            downloadCts);
+
+        try
+        {
+            var downloadProgress = new Progress<DownloadProgress>(p =>
+            {
+                var percent = (int)Math.Clamp(p.Percent, 0, 100);
+                downloadAction.SetProgress(percent);
+                downloadAction.Status = $"Загрузка {percent}%";
+            });
+
+            var result = await source.Type!.DownloadAsync(externalId, source.Settings, downloadProgress, downloadCts.Token);
+            downloadAction.Finish("Загружено");
+            return result;
+        }
+        catch (OperationCanceledException)
+        {
+            downloadAction.Finish("Отменено");
+            throw;
+        }
+        catch
+        {
+            downloadAction.Finish("Ошибка");
+            throw;
+        }
+    }
+
+    private async Task<UploadResult> UploadWithActionAsync(Source target, MediaDto dto, string mediaTitle, CancellationToken cancellationToken)
+    {
+        var uploadCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var uploadAction = actionHolder.Register($"Заливка: «{mediaTitle}» ({target.TitleFull})",
+            "Подготовка...",
+            100,
+            uploadCts);
+
+        try
+        {
+            var uploadProgress = new Progress<UploadProgress>(p =>
+            {
+                var percent = (int)Math.Clamp(p.Percent, 0, 100);
+                uploadAction.SetProgress(percent);
+                uploadAction.Status = $"Заливка {percent}%";
+            });
+
+            var result = await target.Type!.UploadAsync(dto, target.Settings, uploadProgress, uploadCts.Token);
+            uploadAction.Finish("Залито");
+            return result;
+        }
+        catch (OperationCanceledException)
+        {
+            uploadAction.Finish("Отменено");
+            throw;
+        }
+        catch
+        {
+            uploadAction.Finish("Ошибка");
+            throw;
+        }
     }
 
     private async Task UpdateSourceMetadataAsync(Media media, string sourceId, CancellationToken ct)

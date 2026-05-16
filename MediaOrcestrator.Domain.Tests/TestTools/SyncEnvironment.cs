@@ -20,18 +20,18 @@ public sealed class SyncEnvironment : IDisposable
             Database,
             null!,
             null!,
-            null!,
+            new(NullLogger<ActionHolder>.Instance),
             NullLogger<Orcestrator>.Instance);
 
         FromType = Substitute.For<ISourceType>();
         ToType = Substitute.For<ISourceType>();
 
         FromType
-            .DownloadAsync(Arg.Any<string>(), Arg.Any<Dictionary<string, string>>(), Arg.Any<CancellationToken>())
+            .DownloadAsync(Arg.Any<string>(), Arg.Any<Dictionary<string, string>>(), Arg.Any<IProgress<DownloadProgress>>(), Arg.Any<CancellationToken>())
             .Returns(new MediaDto { Id = MediaId, Title = "T", Description = "D", TempDataPath = string.Empty });
 
         ToType
-            .UploadAsync(Arg.Any<MediaDto>(), Arg.Any<Dictionary<string, string>>(), Arg.Any<CancellationToken>())
+            .UploadAsync(Arg.Any<MediaDto>(), Arg.Any<Dictionary<string, string>>(), Arg.Any<IProgress<UploadProgress>>(), Arg.Any<CancellationToken>())
             .Returns(new UploadResult { Status = MediaStatusHelper.Ok(), Id = TestRandom.GetString("to-ext") });
 
         From = new() { Id = "src-from", TypeId = "from", Settings = new(), Type = FromType };
@@ -93,7 +93,7 @@ public sealed class SyncEnvironment : IDisposable
     public SyncEnvironment WhenDownloadFails(string message)
     {
         FromType
-            .DownloadAsync(Arg.Any<string>(), Arg.Any<Dictionary<string, string>>(), Arg.Any<CancellationToken>())
+            .DownloadAsync(Arg.Any<string>(), Arg.Any<Dictionary<string, string>>(), Arg.Any<IProgress<DownloadProgress>>(), Arg.Any<CancellationToken>())
             .ThrowsAsync(new InvalidOperationException(message));
 
         return this;

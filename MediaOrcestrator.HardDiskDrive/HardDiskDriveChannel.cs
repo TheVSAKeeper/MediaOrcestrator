@@ -119,6 +119,7 @@ public sealed class HardDiskDriveChannel(
     public Task<MediaDto> DownloadAsync(
         string videoId,
         Dictionary<string, string> settings,
+        IProgress<DownloadProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
         logger.RequestingFileInfo(videoId);
@@ -148,6 +149,8 @@ public sealed class HardDiskDriveChannel(
 
         logger.FileFound(videoId, fullPath, thumbnailExists);
 
+        progress?.Report(new(100));
+
         return Task.FromResult(new MediaDto
         {
             Id = file.Id,
@@ -161,6 +164,7 @@ public sealed class HardDiskDriveChannel(
     public async Task<UploadResult> UploadAsync(
         MediaDto media,
         Dictionary<string, string> settings,
+        IProgress<UploadProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
         logger.UploadStarting(media.Title);
@@ -246,6 +250,8 @@ public sealed class HardDiskDriveChannel(
             logger.DatabaseSaveFailed(hddId, ex);
             throw;
         }
+
+        progress?.Report(new(100));
 
         return new()
         {

@@ -49,6 +49,14 @@ public class ActionHolder(ILogger<ActionHolder> logger)
         }
     }
 
+    public void SetProgress(Guid id, int value)
+    {
+        if (_actions.TryGetValue(id, out var act))
+        {
+            act.SetProgress(value);
+        }
+    }
+
     public void Cancel(Guid id)
     {
         if (!_actions.TryRemove(id, out var act))
@@ -142,6 +150,12 @@ public class ActionHolder(ILogger<ActionHolder> logger)
         public void ProgressPlus()
         {
             IncrementProgress();
+        }
+
+        public void SetProgress(int value)
+        {
+            ProgressValue = value;
+            OnChanged();
         }
 
         public void Finish(string? finalStatus = null)
