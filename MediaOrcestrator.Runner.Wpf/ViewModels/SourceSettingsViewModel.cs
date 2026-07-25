@@ -81,6 +81,15 @@ public sealed partial class SourceSettingsViewModel : ObservableObject, IDialogV
     [ObservableProperty]
     private bool _wasBackRequested;
 
+    [ObservableProperty]
+    private bool _isQuotaSupported;
+
+    [ObservableProperty]
+    private string _quotaStatusText = string.Empty;
+
+    [ObservableProperty]
+    private bool _isQuotaExhausted;
+
     public SourceSettingsViewModel(
         StateManager stateManager,
         ActionHolder actionHolder,
@@ -446,6 +455,7 @@ public sealed partial class SourceSettingsViewModel : ObservableObject, IDialogV
         PluginDisplayName = _plugin?.Name;
         IsAuthSupported = _plugin is IAuthenticatable;
         UpdateAuthStatus();
+        UpdateQuotaStatus();
 
         CopyableSources.Clear();
 
@@ -490,6 +500,37 @@ public sealed partial class SourceSettingsViewModel : ObservableObject, IDialogV
             IsAuthenticated = false;
             AuthStatusText = "Статус неизвестен";
         }
+    }
+
+    private void UpdateQuotaStatus()
+    {
+        QuotaSnapshot? snapshot = null;
+
+        if (_plugin is IReportsQuota reporter)
+        {
+            try
+            {
+                snapshot = reporter.GetQuota(BuildSettingsDictionary());
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Не удалось прочитать квоту источника");
+            }
+        }
+
+        if (snapshot is null)
+        {
+            IsQuotaSupported = false;
+            IsQuotaExhausted = false;
+            QuotaStatusText = string.Empty;
+            return;
+        }
+
+        IsQuotaSupported = true;
+        IsQuotaExhausted = snapshot.ExhaustedUntil is { } until && until > DateTimeOffset.Now;
+        QuotaStatusText = IsQuotaExhausted
+            ? $"Исчерпана до {snapshot.ExhaustedUntil!.Value.ToLocalTime():dd MMM, HH:mm}"
+            : $"≈ {snapshot.UsedUnits:N0} / {snapshot.DailyLimit:N0} ед.";
     }
 
     private Dictionary<string, string> BuildSettingsDictionary()
