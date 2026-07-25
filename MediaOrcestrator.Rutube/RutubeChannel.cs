@@ -160,10 +160,10 @@ public sealed class RutubeChannel(
         logger.TempDirectoryCreated(Path.GetDirectoryName(finalPath));
 
         var ytDlpPath = toolPathProvider.GetToolPath(WellKnownTools.YtDlp)
-                        ?? throw new InvalidOperationException("yt-dlp не установлен. Установите через панель управления инструментами.");
+                        ?? throw new NonRetriableException("yt-dlp не установлен. Установите через панель управления инструментами.");
 
         var ffmpegPath = toolPathProvider.GetToolPath(WellKnownTools.FFmpeg)
-                         ?? throw new InvalidOperationException("ffmpeg не установлен. Установите через панель управления инструментами.");
+                         ?? throw new NonRetriableException("ffmpeg не установлен. Установите через панель управления инструментами.");
 
         var authStatePath = GetAuthStatePath(settings);
         var netscapeCookiePath = "";
@@ -851,7 +851,7 @@ public sealed class RutubeChannel(
         var studioCsrf = studioCsrfToken ?? rutubeCsrfToken;
         if (string.IsNullOrEmpty(studioCsrf))
         {
-            throw new InvalidOperationException("CSRF токен не найден в файле аутентификации RuTube. Убедитесь, что вы авторизованы в RuTube Studio.");
+            throw new NonRetriableException("CSRF токен не найден в файле аутентификации RuTube. Убедитесь, что вы авторизованы в RuTube Studio.");
         }
 
         var playerCsrf = rutubeCsrfToken ?? studioCsrfToken!;

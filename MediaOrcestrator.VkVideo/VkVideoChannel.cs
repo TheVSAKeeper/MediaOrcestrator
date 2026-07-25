@@ -340,10 +340,10 @@ public sealed class VkVideoChannel(
         var (ownerId, vid) = ParseExternalId(videoId);
 
         var video = await service.GetVideoByIdAsync(ownerId, vid, cancellationToken)
-                    ?? throw new InvalidOperationException($"Видео {videoId} не найдено");
+                    ?? throw new NonRetriableException($"Видео {videoId} не найдено");
 
         var downloadUrl = video.Files?.GetBestQualityUrl()
-                          ?? throw new InvalidOperationException($"Нет доступных URL для скачивания видео {videoId}");
+                          ?? throw new NonRetriableException($"Нет доступных URL для скачивания видео {videoId}");
 
         var tempPath = settings["_system_temp_path"];
         var guid = Guid.NewGuid().ToString();

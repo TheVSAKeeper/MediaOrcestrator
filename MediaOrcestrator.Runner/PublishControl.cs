@@ -432,10 +432,10 @@ public partial class PublishControl : UserControl
             ResetForm();
             MediaPublished?.Invoke(this, EventArgs.Empty);
         }
-        catch (OperationCanceledException exception)
+        catch (OperationCanceledException)
         {
             pubAction?.MarkCancelled("Публикация отменена");
-            _logger.LogInformation(exception, "Публикация «{Title}» в {Source} отменена пользователем", title, source.TitleFull);
+            _logger.LogInformation("Публикация «{Title}» в {Source} отменена пользователем", title, source.TitleFull);
             SetStatus("Публикация отменена.", false);
         }
         catch (Exception exception)
