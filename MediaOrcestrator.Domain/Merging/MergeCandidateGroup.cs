@@ -1,4 +1,4 @@
-namespace MediaOrcestrator.Domain.Merging;
+﻿namespace MediaOrcestrator.Domain.Merging;
 
 public sealed class MergeCandidateGroup
 {
@@ -9,4 +9,16 @@ public sealed class MergeCandidateGroup
     public required Media SuggestedTarget { get; init; }
 
     public int TotalMediaCount => Medias.Count;
+
+    public bool HasSourceCollision
+    {
+        get
+        {
+            var seen = new HashSet<string>();
+
+            return Medias
+                .SelectMany(m => m.Sources ?? [])
+                .Any(link => !seen.Add(link.SourceId));
+        }
+    }
 }

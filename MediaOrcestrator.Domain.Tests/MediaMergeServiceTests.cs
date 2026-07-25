@@ -56,6 +56,52 @@ public sealed class MediaMergeServiceTests
     }
 
     [Test]
+    public void Ручной_выбор_ссылки_переопределяет_статусный_рейтинг()
+    {
+        using var bed = TestBed.Create();
+
+        var target = bed.AddMedia("Урок", ("yt", "live", MediaStatus.Ok));
+        var donor = bed.AddMedia("Урок", ("yt", "gone", MediaStatus.Missing));
+
+        var winners = new Dictionary<string, string> { ["yt"] = "gone" };
+        var preview = bed.Service.BuildPreview([target, donor], target, winners);
+
+        var ytLink = preview.ResultingSources.Single(s => s.SourceId == "yt");
+
+        Assert.That(ytLink.ExternalId, Is.EqualTo("gone"),
+            "Ручной выбор ссылки должен победить автоматический StatusRank");
+    }
+
+    [Test]
+    public void Конфликт_источника_без_согласия_бросает_исключение_а_не_сливает_молча()
+    {
+        using var bed = TestBed.Create();
+
+        var target = bed.AddMedia("Урок", ("vk", "v1", MediaStatus.Ok));
+        var donor = bed.AddMedia("Урок", ("vk", "v2", MediaStatus.Ok));
+
+        var preview = bed.Service.BuildPreview([target, donor], target);
+
+        Assert.That(preview.HasConflicts, Is.True);
+
+        MergeConflictException? thrown = null;
+        try
+        {
+            bed.Service.Apply(preview);
+        }
+        catch (MergeConflictException ex)
+        {
+            thrown = ex;
+        }
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(thrown, Is.Not.Null, "Конфликт источника без acceptConflicts обязан явно падать");
+            Assert.That(bed.GetMedia(donor.Id), Is.Not.Null, "Без согласия на конфликт донор не удаляется");
+        }
+    }
+
+    [Test]
     public void Непересекающаяся_пропавшая_ссылка_переживает_объединение_как_есть()
     {
         using var bed = TestBed.Create();
