@@ -13,7 +13,9 @@ public class Orcestrator(
     ActionHolder actionHolder,
     ILogger<Orcestrator> logger)
 {
-    private int _syncGate;
+    private readonly object _syncCoordLock = new();
+    private readonly HashSet<string> _runningSourceIds = new(StringComparer.OrdinalIgnoreCase);
+    private bool _bulkSyncRunning;
 
     public Dictionary<string, ISourceType> GetSourceTypes()
     {
@@ -24,14 +26,62 @@ public class Orcestrator(
     {
         pluginManager.Init();
         var sources = GetSourceTypes();
+        MigrateMediaLinkFieldsFromParent();
     }
 
-    public async Task GetStorageFullInfo(bool isFull, Source? filterSource = null, bool onlyNew = false, IProgress<string>? progress = null)
+    private void MigrateMediaLinkFieldsFromParent()
     {
-        if (Interlocked.CompareExchange(ref _syncGate, 1, 0) != 0)
+        var collection = db.GetCollection<Media>("medias");
+        var medias = collection.FindAll().ToList();
+        var migrated = 0;
+
+        foreach (var media in medias)
         {
-            logger.LogWarning("Синхронизация уже выполняется, запуск пропущен");
-            progress?.Report("Синхронизация уже идёт");
+            var dirty = false;
+
+            foreach (var link in media.Sources)
+            {
+                if (link.Description is null)
+                {
+                    link.Description = media.Description;
+                    dirty = true;
+                }
+
+                if (link.Title is null)
+                {
+                    link.Title = media.Title;
+                    dirty = true;
+                }
+            }
+
+            if (dirty)
+            {
+                collection.Update(media);
+                migrated++;
+            }
+        }
+
+        if (migrated > 0)
+        {
+            logger.LogInformation("Миграция MediaLink: проставлены Title/Description из родителя для {Count} медиа", migrated);
+        }
+    }
+
+    public async Task GetStorageFullInfo(bool isFull, Source? filterSource = null, bool onlyNew = false, IProgress<string>? progress = null, IReadOnlyDictionary<string, IProgress<string>>? sourceProgress = null, CancellationToken cancellationToken = default)
+    {
+        if (!TryEnterSync(filterSource))
+        {
+            if (filterSource == null)
+            {
+                logger.LogWarning("Полная синхронизация заблокирована: уже выполняется bulk или есть активные per-source");
+                progress?.Report("Синхронизация уже идёт");
+            }
+            else
+            {
+                logger.LogWarning("Синхронизация источника {Source} заблокирована: bulk или этот же источник уже выполняются", filterSource.TitleFull);
+                progress?.Report($"«{filterSource.TitleFull}» уже синхронизируется");
+            }
+
             return;
         }
 
@@ -74,18 +124,17 @@ public class Orcestrator(
                 sources = sources.Where(x => x.Id == filterSource.Id).ToList();
             }
 
-            var parentCts = new CancellationTokenSource();
+            var parentCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             var syncModeText = onlyNew ? "Только новые" : isFull ? "Полная синхронизация" : "Обновление";
-            var parentName = filterSource != null
-                ? $"Синхронизация: {filterSource.TitleFull}"
-                : "Синхронизация источников";
 
-            var parentAction = actionHolder.Register(parentName,
-                $"0 / {sources.Count} источников",
-                sources.Count,
-                parentCts,
-                syncModeText,
-                ActionKind.Sync);
+            ActionHolder.RunningAction? parentAction = filterSource != null
+                ? null
+                : actionHolder.Register("Синхронизация источников",
+                    $"0 / {sources.Count} источников",
+                    sources.Count,
+                    parentCts,
+                    syncModeText,
+                    ActionKind.Sync);
 
             var failedSources = new ConcurrentBag<string>();
             var syncCancelled = false;
@@ -103,6 +152,10 @@ public class Orcestrator(
                     var subtitle = $"{mediaSource.TypeId} · {lastSync}";
                     var action = actionHolder.Register("Синхронизация: " + mediaSource.TitleFull, syncMode, 0, ctx, subtitle, ActionKind.Sync, parentAction);
 
+                    IProgress<string>? perSource = null;
+                    sourceProgress?.TryGetValue(mediaSource.Id, out perSource);
+                    perSource?.Report("Старт…");
+
                     try
                     {
                         var plugin = sourceTypes.Values.FirstOrDefault(x => x.Name == mediaSource.TypeId);
@@ -111,12 +164,14 @@ public class Orcestrator(
                         {
                             logger.LogError("Плагин для типа {TypeId} не найден.", mediaSource.TypeId);
                             progress?.Report($"Плагин для {mediaSource.TypeId} не найден");
+                            perSource?.Report($"Плагин «{mediaSource.TypeId}» не найден");
                             failedSources.Add(mediaSource.TitleFull);
                             action.Fail($"Плагин «{mediaSource.TypeId}» не найден");
                             return;
                         }
 
                         progress?.Report($"Сбор медиа из «{mediaSource.TitleFull}»...");
+                        perSource?.Report("Сбор медиа…");
                         var syncMedia = plugin.GetMedia(mediaSource.Settings, isFull, ctx.Token);
                         var mediaList = new List<MediaDto>();
                         var foundIds = new List<string>();
@@ -126,6 +181,7 @@ public class Orcestrator(
                             if (foundIds.Count % 25 == 0)
                             {
                                 progress?.Report($"«{mediaSource.TitleFull}»: получено {foundIds.Count}");
+                                perSource?.Report($"Получено {foundIds.Count}");
                             }
 
                             if (foundIds.Count % 10 == 0)
@@ -272,6 +328,11 @@ public class Orcestrator(
                             saved++;
                             action.SetProgress(saved);
                             action.Status = $"Сохранение {saved} / {mediaList.Count}";
+
+                            if (saved == 1 || saved == mediaList.Count || saved % 10 == 0)
+                            {
+                                perSource?.Report($"Сохранение {saved} / {mediaList.Count}");
+                            }
                         }
 
                         if (!onlyNew)
@@ -307,24 +368,29 @@ public class Orcestrator(
                             sourcesCol.Update(dbSource);
                         }
 
+                        perSource?.Report("Готово");
                         action.Finish("Готово");
                     }
                     catch (OperationCanceledException)
                     {
+                        perSource?.Report("Отменено");
                         action.MarkCancelled();
                     }
                     catch (Exception exception)
                     {
                         logger.LogError(exception, "Ошибка синхронизации источника {Source}", mediaSource.TitleFull);
                         progress?.Report($"Ошибка «{mediaSource.TitleFull}»: {exception.Message}");
+                        perSource?.Report($"Ошибка: {exception.Message}");
                         failedSources.Add(mediaSource.TitleFull);
                         action.Fail("Ошибка: " + exception.Message, exception);
                     }
                     finally
                     {
-                        // Каждый источник, чем бы ни кончился, двигает счётчик родителя.
-                        parentAction.ProgressPlus();
-                        parentAction.Status = $"{parentAction.ProgressValue} / {sources.Count} источников";
+                        if (parentAction != null)
+                        {
+                            parentAction.ProgressPlus();
+                            parentAction.Status = $"{parentAction.ProgressValue} / {sources.Count} источников";
+                        }
                     }
                 });
 
@@ -338,92 +404,151 @@ public class Orcestrator(
             }
             finally
             {
-                if (syncCancelled || parentCts.IsCancellationRequested)
+                if (parentAction != null)
                 {
-                    parentAction.MarkCancelled($"Отменено: {parentAction.ProgressValue} из {sources.Count} источников");
-                }
-                else if (!failedSources.IsEmpty)
-                {
-                    var summary = string.Join(", ", failedSources);
-                    parentAction.Fail($"Сбой источников ({failedSources.Count}): {summary}");
-                }
-                else
-                {
-                    parentAction.Finish($"Готово: {parentAction.ProgressValue} из {sources.Count} источников");
+                    if (syncCancelled || parentCts.IsCancellationRequested)
+                    {
+                        parentAction.MarkCancelled($"Отменено: {parentAction.ProgressValue} из {sources.Count} источников");
+                    }
+                    else if (!failedSources.IsEmpty)
+                    {
+                        var summary = string.Join(", ", failedSources);
+                        parentAction.Fail($"Сбой источников ({failedSources.Count}): {summary}");
+                    }
+                    else
+                    {
+                        parentAction.Finish($"Готово: {parentAction.ProgressValue} из {sources.Count} источников");
+                    }
                 }
             }
         }
         finally
         {
-            Interlocked.Exchange(ref _syncGate, 0);
+            ExitSync(filterSource);
+        }
+    }
+
+    private bool TryEnterSync(Source? filterSource)
+    {
+        lock (_syncCoordLock)
+        {
+            if (_bulkSyncRunning)
+            {
+                return false;
+            }
+
+            if (filterSource == null)
+            {
+                if (_runningSourceIds.Count > 0)
+                {
+                    return false;
+                }
+
+                _bulkSyncRunning = true;
+                return true;
+            }
+
+            return _runningSourceIds.Add(filterSource.Id);
+        }
+    }
+
+    private void ExitSync(Source? filterSource)
+    {
+        lock (_syncCoordLock)
+        {
+            if (filterSource == null)
+            {
+                _bulkSyncRunning = false;
+            }
+            else
+            {
+                _runningSourceIds.Remove(filterSource.Id);
+            }
         }
     }
 
     public List<Media> GetMedias()
     {
-        // TODO: System.InvalidOperationException: Collection was modified; enumeration operation may not execute.
-        var medias = db.GetCollection<Media>("medias").FindAll().ToList();
-        //foreach (var media in medias) // времяночка для очистки
-        //{
-        //    var gr = media.Sources.GroupBy(x => x.SourceId).Where(x => x.Count() > 1).ToArray();
-        //    foreach (var source in gr)
-        //    {
-        //        for (var i = 1; i < source.Count(); i++)
-        //        {
-        //            media.Sources.Remove(source.Skip(i).First());
-        //            db.GetCollection<Media>("medias").Update(media);
-        //        }
-        //    }
-        //    //if (media.Sources.Any(x => x.ExternalId == null))
-        //    //{
-        //    //    db.GetCollection<Media>("medias").Delete(media.Id);
-        //    //}
-        //}
-        //medias = db.GetCollection<Media>("medias").FindAll().ToList();
-        // foreach (var media in medias) // времяночка для очистки
-        // {
-        //     foreach (var source in media.Sources)
-        //   {
-        //     if (source.Status == MediaStatus.Missing)
-        //   {
-        //     source.Status = MediaStatus.Ok;
-        // }
-        //
-        //              db.GetCollection<Media>("medias").Update(media);
-        //        }
-        //if (media.Sources.Any(x => x.ExternalId == null))
-        //{
-        //    db.GetCollection<Media>("medias").Delete(media.Id);
-        //}
-        // }
-
-        foreach (var media in medias)
-        {
-            foreach (var mediaLink in media.Sources)
-            {
-                if (mediaLink.Description == null || mediaLink.Title == null)
-                {
-                    if (mediaLink.Description == null)
-                    {
-                        mediaLink.Description = media.Description;
-                    }
-
-                    if (mediaLink.Title == null)
-                    {
-                        mediaLink.Title = media.Title;
-                    }
-
-                    db.GetCollection<Media>("medias").Update(media);
-                }
-            }
-        }
-
-        return medias;
+        return db.GetCollection<Media>("medias").FindAll().ToList();
     }
 
     public void UpdateMedia(Media media)
     {
         db.GetCollection<Media>("medias").Update(media);
+    }
+
+    public async Task<ChronologyPlan> BuildChronologyAsync(
+        IReadOnlyCollection<string> sourceIds,
+        bool backfillMissingDates = false,
+        int backfillParallelism = 1,
+        IProgress<string>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        var sources = GetSources()
+            .Where(s => sourceIds.Contains(s.Id))
+            .ToDictionary(s => s.Id, StringComparer.OrdinalIgnoreCase);
+
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var action = actionHolder.Register(
+            backfillMissingDates ? "Хронология: построение и дополнение дат" : "Хронология: построение ленты",
+            "Анализ медиа",
+            0,
+            cts);
+
+        try
+        {
+            if (backfillMissingDates)
+            {
+                var dateless = GetMedias()
+                    .Where(m => m.Sources.Any(s => sources.ContainsKey(s.SourceId))
+                                && m.Sources
+                                    .Where(s => sources.ContainsKey(s.SourceId))
+                                    .All(s => ChronologyPlanner.ExtractDate(m.Metadata, s.SourceId) is null))
+                    .ToList();
+
+                action.ProgressMax = dateless.Count;
+                var done = 0;
+                action.Status = $"Дополняю даты: 0 из {dateless.Count}";
+
+                await Parallel.ForEachAsync(dateless,
+                    new ParallelOptions
+                    {
+                        MaxDegreeOfParallelism = Math.Max(1, backfillParallelism),
+                        CancellationToken = cts.Token,
+                    },
+                    async (media, ct) =>
+                    {
+                        var link = media.Sources.First(s => sources.ContainsKey(s.SourceId));
+                        progress?.Report($"Дополняю дату: {media.Title}");
+                        await BackfillSourceMetadataAsync(media, link.SourceId, ct);
+                        var processed = Interlocked.Increment(ref done);
+                        action.SetProgress(processed);
+                        action.Status = $"Дополняю даты: {processed} из {dateless.Count}";
+                    });
+            }
+
+            action.Status = "Сортировка";
+            var plan = ChronologyPlanner.Plan(GetMedias(), sourceIds, ResolveUrl);
+            action.Finish($"Готово: {plan.Items.Count} видео");
+            return plan;
+        }
+        catch (OperationCanceledException)
+        {
+            action.MarkCancelled();
+            throw;
+        }
+        catch (Exception exception)
+        {
+            action.Fail("Ошибка: " + exception.Message, exception);
+            throw;
+        }
+
+        string? ResolveUrl(string sourceId, string externalId, IReadOnlyList<MetadataItem>? metadata)
+        {
+            return sources.TryGetValue(sourceId, out var source) && source.Type is not null
+                ? source.Type.GetExternalUri(externalId, source.Settings, metadata)?.ToString()
+                : null;
+        }
     }
 
     public async Task ForceUpdateMetadataAsync(Media media, CancellationToken ct = default)
@@ -450,6 +575,14 @@ public class Orcestrator(
         SyncMediaTitleFromSingleSource(media);
         UpdateMedia(media);
         logger.LogInformation("Обновлены метаданные источника {SourceId} для {MediaTitle}", sourceId, media.Title);
+    }
+
+    private async Task BackfillSourceMetadataAsync(Media media, string sourceId, CancellationToken ct)
+    {
+        media.Metadata.RemoveAll(m => m.SourceId == sourceId);
+        await UpdateSourceMetadataAsync(media, sourceId, ct, preferQuotaFree: true);
+        SyncMediaTitleFromSingleSource(media);
+        UpdateMedia(media);
     }
 
     public void ClearSourceMetadata(Media media, string sourceId)
@@ -1173,7 +1306,7 @@ public class Orcestrator(
         }
     }
 
-    private async Task UpdateSourceMetadataAsync(Media media, string sourceId, CancellationToken ct)
+    private async Task UpdateSourceMetadataAsync(Media media, string sourceId, CancellationToken ct, bool preferQuotaFree = false)
     {
         var source = GetSources().FirstOrDefault(s => s.Id == sourceId);
         if (source == null || source.IsDisable)
@@ -1195,7 +1328,10 @@ public class Orcestrator(
 
         try
         {
-            var dto = await plugin.GetMediaByIdAsync(sourceLink.ExternalId, source.Settings, ct);
+            var dto = preferQuotaFree && plugin is ISupportsQuotaFreeMetadata quotaFree
+                ? await quotaFree.GetMediaByIdQuotaFreeAsync(sourceLink.ExternalId, source.Settings, ct)
+                : await plugin.GetMediaByIdAsync(sourceLink.ExternalId, source.Settings, ct);
+
             if (dto is null)
             {
                 return;
