@@ -1,6 +1,8 @@
-﻿using Google.Apis.Auth.OAuth2;
+﻿using Google;
+using Google.Apis.Auth.OAuth2;
 using Google.Apis.Util.Store;
 using Google.Apis.YouTube.v3;
+using Google.Apis.YouTube.v3.Data;
 using MediaOrcestrator.Modules;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
@@ -20,9 +22,10 @@ internal sealed class YoutubeChannel(
     YoutubeCommentsReadService commentsReadService,
     YoutubeYtDlpCommentsReadService ytDlpCommentsReadService,
     YoutubeUploadService uploadService)
-    : ISourceType, IAuthenticatable, IToolConsumer, ISupportsComments
+    : ISourceType, IAuthenticatable, IToolConsumer, ISupportsComments, ISupportsPlaylists, ISupportsQuotaFreeMetadata
 {
     internal const string VideoUrlTemplate = "https://www.youtube.com/watch?v={0}";
+    internal const string PlaylistUrlTemplate = "https://www.youtube.com/playlist?list={0}";
 
     private static readonly string[] OAuthScopes =
     [
@@ -293,6 +296,23 @@ internal sealed class YoutubeChannel(
         Dictionary<string, string> settings,
         CancellationToken cancellationToken = default)
     {
+        return await TryExplodeVideoAsync(externalId, cancellationToken)
+               ?? await TryApiVideoAsync(externalId, settings, cancellationToken)
+               ?? await TryYtDlpVideoAsync(externalId, settings, cancellationToken);
+    }
+
+    public async Task<MediaDto?> GetMediaByIdQuotaFreeAsync(
+        string externalId,
+        Dictionary<string, string> settings,
+        CancellationToken cancellationToken = default)
+    {
+        return await TryExplodeVideoAsync(externalId, cancellationToken)
+               ?? await TryYtDlpVideoAsync(externalId, settings, cancellationToken)
+               ?? await TryApiVideoAsync(externalId, settings, cancellationToken);
+    }
+
+    private async Task<MediaDto?> TryExplodeVideoAsync(string externalId, CancellationToken cancellationToken)
+    {
         try
         {
             return await explodeService.GetVideoByIdAsync(externalId, cancellationToken);
@@ -304,34 +324,36 @@ internal sealed class YoutubeChannel(
         catch (Exception ex)
         {
             logger.ExplodeVideoFallback(externalId, ex);
+            return null;
         }
+    }
 
-        if (IsOAuthConfigured(settings))
-        {
-            try
-            {
-                using var lease = await AcquireServiceLeaseAsync(settings, cancellationToken);
-                var apiResult = await apiReadService.GetVideoByIdAsync(lease.Service, externalId, cancellationToken);
-
-                if (apiResult is not null)
-                {
-                    return apiResult;
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
-            catch (Exception ex)
-            {
-                logger.ApiVideoFallback(externalId, ex);
-            }
-        }
-        else
+    private async Task<MediaDto?> TryApiVideoAsync(string externalId, Dictionary<string, string> settings, CancellationToken cancellationToken)
+    {
+        if (!IsOAuthConfigured(settings))
         {
             logger.ApiNotConfiguredFallback(externalId);
+            return null;
         }
 
+        try
+        {
+            using var lease = await AcquireServiceLeaseAsync(settings, cancellationToken);
+            return await apiReadService.GetVideoByIdAsync(lease.Service, externalId, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.ApiVideoFallback(externalId, ex);
+            return null;
+        }
+    }
+
+    private async Task<MediaDto?> TryYtDlpVideoAsync(string externalId, Dictionary<string, string> settings, CancellationToken cancellationToken)
+    {
         try
         {
             var ytDlp = BuildYtDlp(settings);
@@ -344,9 +366,193 @@ internal sealed class YoutubeChannel(
         catch (Exception ex)
         {
             logger.YtDlpMetadataFailed(externalId, ex);
+            return null;
+        }
+    }
+
+    public async Task<IReadOnlyList<PlaylistInfo>> GetPlaylistsAsync(
+        Dictionary<string, string> settings,
+        CancellationToken cancellationToken = default)
+    {
+        if (!IsOAuthConfigured(settings))
+        {
+            throw new NonRetriableException("Для списка плейлистов нужен OAuth: задайте client_id и client_secret (см. docs/google-cloud-setup.md).");
         }
 
-        return null;
+        using var lease = await AcquireServiceLeaseAsync(settings, cancellationToken);
+
+        var playlists = new List<PlaylistInfo>();
+        string? pageToken = null;
+
+        do
+        {
+            var request = lease.Service.Playlists.List("snippet,contentDetails");
+            request.Mine = true;
+            request.MaxResults = 50;
+            request.PageToken = pageToken;
+
+            var response = await request.ExecuteAsync(cancellationToken);
+
+            foreach (var playlist in response.Items ?? [])
+            {
+                playlists.Add(new(playlist.Id, playlist.Snippet?.Title ?? "(без названия)", (int)(playlist.ContentDetails?.ItemCount ?? 0)));
+            }
+
+            pageToken = response.NextPageToken;
+        }
+        while (pageToken is not null);
+
+        return playlists;
+    }
+
+    public async Task<PlaylistCreationResult> CreatePlaylistAsync(
+        string title,
+        PlaylistPrivacy privacy,
+        IReadOnlyList<string> videoExternalIds,
+        Dictionary<string, string> settings,
+        IProgress<int>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (!IsOAuthConfigured(settings))
+        {
+            throw new NonRetriableException("Для создания плейлиста нужен OAuth: задайте client_id и client_secret (см. docs/google-cloud-setup.md).");
+        }
+
+        using var lease = await AcquireServiceLeaseAsync(settings, cancellationToken);
+
+        var playlist = await lease.Service.Playlists.Insert(
+            new Playlist
+            {
+                Snippet = new() { Title = title },
+                Status = new() { PrivacyStatus = ToPrivacyStatus(privacy) },
+            },
+            "snippet,status").ExecuteAsync(cancellationToken);
+
+        var (added, _, quotaExhausted) = await InsertVideosAsync(lease.Service, playlist.Id, videoExternalIds, new HashSet<string>(), progress, cancellationToken);
+
+        return new(playlist.Id, string.Format(PlaylistUrlTemplate, playlist.Id), added, videoExternalIds.Count, quotaExhausted);
+    }
+
+    public async Task<PlaylistCreationResult> AddToPlaylistAsync(
+        string playlistId,
+        IReadOnlyList<string> videoExternalIds,
+        Dictionary<string, string> settings,
+        IProgress<int>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (!IsOAuthConfigured(settings))
+        {
+            throw new NonRetriableException("Для дозалива в плейлист нужен OAuth: задайте client_id и client_secret (см. docs/google-cloud-setup.md).");
+        }
+
+        using var lease = await AcquireServiceLeaseAsync(settings, cancellationToken);
+
+        var existing = await GetExistingVideoIdsAsync(lease.Service, playlistId, cancellationToken);
+        var (added, skipped, quotaExhausted) = await InsertVideosAsync(lease.Service, playlistId, videoExternalIds, existing, progress, cancellationToken);
+
+        return new(playlistId, string.Format(PlaylistUrlTemplate, playlistId), added, videoExternalIds.Count, quotaExhausted)
+        {
+            AlreadyPresentCount = skipped,
+        };
+    }
+
+    private async Task<(int Added, int Skipped, bool QuotaExhausted)> InsertVideosAsync(
+        YouTubeService service,
+        string playlistId,
+        IReadOnlyList<string> videoExternalIds,
+        ISet<string> existing,
+        IProgress<int>? progress,
+        CancellationToken cancellationToken)
+    {
+        var added = 0;
+        var skipped = 0;
+        var processed = 0;
+
+        foreach (var videoId in videoExternalIds)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (existing.Contains(videoId))
+            {
+                skipped++;
+                progress?.Report(++processed);
+                continue;
+            }
+
+            try
+            {
+                await service.PlaylistItems.Insert(
+                    new PlaylistItem
+                    {
+                        Snippet = new()
+                        {
+                            PlaylistId = playlistId,
+                            ResourceId = new() { Kind = "youtube#video", VideoId = videoId },
+                        },
+                    },
+                    "snippet").ExecuteAsync(cancellationToken);
+
+                added++;
+            }
+            catch (GoogleApiException ex) when (IsQuotaError(ex))
+            {
+                logger.LogWarning("Квота YouTube исчерпана при наполнении плейлиста: добавлено {Added} из {Total}", added, videoExternalIds.Count);
+                return (added, skipped, true);
+            }
+
+            progress?.Report(++processed);
+        }
+
+        return (added, skipped, false);
+    }
+
+    private static async Task<HashSet<string>> GetExistingVideoIdsAsync(
+        YouTubeService service,
+        string playlistId,
+        CancellationToken cancellationToken)
+    {
+        var ids = new HashSet<string>();
+        string? pageToken = null;
+
+        do
+        {
+            var request = service.PlaylistItems.List("contentDetails");
+            request.PlaylistId = playlistId;
+            request.MaxResults = 50;
+            request.PageToken = pageToken;
+
+            var response = await request.ExecuteAsync(cancellationToken);
+
+            foreach (var item in response.Items ?? [])
+            {
+                if (item.ContentDetails?.VideoId is { } videoId)
+                {
+                    ids.Add(videoId);
+                }
+            }
+
+            pageToken = response.NextPageToken;
+        }
+        while (pageToken is not null);
+
+        return ids;
+    }
+
+    private static string ToPrivacyStatus(PlaylistPrivacy privacy)
+    {
+        return privacy switch
+        {
+            PlaylistPrivacy.Public => "public",
+            PlaylistPrivacy.Unlisted => "unlisted",
+            _ => "private",
+        };
+    }
+
+    private static bool IsQuotaError(GoogleApiException ex)
+    {
+        return ex.HttpStatusCode == System.Net.HttpStatusCode.Forbidden
+               && ex.Error?.Errors is { } errors
+               && errors.Any(e => e.Reason is "quotaExceeded" or "dailyLimitExceeded" or "rateLimitExceeded");
     }
 
     public async Task<MediaDto> DownloadAsync(
@@ -610,7 +816,7 @@ internal sealed class YoutubeChannel(
         }
         catch (JsonException ex)
         {
-            throw new InvalidOperationException($"Файл cookies от браузера повреждён или не дочитан: {playwrightJsonPath}", ex);
+            throw new NonRetriableException($"Файл cookies от браузера повреждён или не дочитан: {playwrightJsonPath}", ex);
         }
 
         await using var output = File.Create(netscapePath);
@@ -699,10 +905,10 @@ internal sealed class YoutubeChannel(
         CancellationToken cancellationToken)
     {
         var clientId = settings.GetValueOrDefault("client_id")
-                       ?? throw new InvalidOperationException("Настройка 'client_id' не задана. Укажите OAuth Client ID из Google Cloud Console.");
+                       ?? throw new NonRetriableException("Настройка 'client_id' не задана. Укажите OAuth Client ID из Google Cloud Console.");
 
         var clientSecret = settings.GetValueOrDefault("client_secret")
-                           ?? throw new InvalidOperationException("Настройка 'client_secret' не задана. Укажите OAuth Client Secret из Google Cloud Console.");
+                           ?? throw new NonRetriableException("Настройка 'client_secret' не задана. Укажите OAuth Client Secret из Google Cloud Console.");
 
         var tokenDir = GetTokenDir(settings);
         Directory.CreateDirectory(tokenDir);
@@ -766,7 +972,7 @@ internal sealed class YoutubeChannel(
 
             if (!refreshed)
             {
-                throw new InvalidOperationException("Не удалось обновить OAuth-токен. Удалите файл токена и авторизуйтесь заново.");
+                throw new NonRetriableException("Не удалось обновить OAuth-токен. Удалите файл токена и авторизуйтесь заново.");
             }
 
             logger.OAuthTokenRefreshed();
@@ -778,10 +984,10 @@ internal sealed class YoutubeChannel(
     private YtDlp BuildYtDlp(Dictionary<string, string> settings)
     {
         var ytDlpPath = toolPathProvider.GetToolPath(WellKnownTools.YtDlp)
-                        ?? throw new InvalidOperationException("yt-dlp не установлен. Установите через панель управления инструментами.");
+                        ?? throw new NonRetriableException("yt-dlp не установлен. Установите через панель управления инструментами.");
 
         var ffmpegPath = toolPathProvider.GetToolPath(WellKnownTools.FFmpeg)
-                         ?? throw new InvalidOperationException("ffmpeg не установлен. Установите через панель управления инструментами.");
+                         ?? throw new NonRetriableException("ffmpeg не установлен. Установите через панель управления инструментами.");
 
         var jsRuntime = settings.GetValueOrDefault("js_runtime", "none");
         var denoPath = toolPathProvider.GetToolPath(WellKnownTools.Deno);
