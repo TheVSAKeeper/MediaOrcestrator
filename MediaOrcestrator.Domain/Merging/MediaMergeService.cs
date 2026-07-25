@@ -13,7 +13,10 @@ public sealed class MediaMergeService(Orcestrator orcestrator, ILogger<MediaMerg
             .First();
     }
 
-    public MergePreview BuildPreview(IReadOnlyList<Media> selectedMedia, Media? explicitTarget = null)
+    public MergePreview BuildPreview(
+        IReadOnlyList<Media> selectedMedia,
+        Media? explicitTarget = null,
+        IReadOnlyDictionary<string, string>? winningExternalIdBySource = null)
     {
         if (selectedMedia.Count < 2)
         {
@@ -47,6 +50,17 @@ public sealed class MediaMergeService(Orcestrator orcestrator, ILogger<MediaMerg
                     var source = allSources.FirstOrDefault(s => s.Id == sourceLink.SourceId);
                     var sourceName = source?.TitleFull ?? sourceLink.SourceId;
                     conflicts.Add($"Источник '{sourceName}' присутствует в нескольких медиа");
+
+                    if (winningExternalIdBySource != null
+                        && winningExternalIdBySource.TryGetValue(sourceLink.SourceId, out var winnerExternalId))
+                    {
+                        if (string.Equals(sourceLink.ExternalId, winnerExternalId, StringComparison.Ordinal))
+                        {
+                            sourceDict[sourceLink.SourceId] = sourceLink;
+                        }
+
+                        continue;
+                    }
 
                     if (StatusRank(sourceLink.Status) > StatusRank(kept.Status))
                     {

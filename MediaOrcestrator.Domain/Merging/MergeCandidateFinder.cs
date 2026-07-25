@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text;
 
 namespace MediaOrcestrator.Domain.Merging;
@@ -44,11 +44,6 @@ public static class MergeCandidateFinder
         foreach (var (key, bucket) in buckets)
         {
             if (bucket.Count < 2)
-            {
-                continue;
-            }
-
-            if (HasSourceCollision(bucket))
             {
                 continue;
             }
@@ -114,14 +109,5 @@ public static class MergeCandidateFinder
     private static bool MatchesScope(Media media, IReadOnlySet<string> sourceScope)
     {
         return media.Sources?.Any(link => sourceScope.Contains(link.SourceId)) == true;
-    }
-
-    private static bool HasSourceCollision(IReadOnlyList<Media> medias)
-    {
-        var seen = new HashSet<string>();
-
-        return medias
-            .SelectMany(m => m.Sources ?? [])
-            .Any(link => !seen.Add(link.SourceId));
     }
 }
