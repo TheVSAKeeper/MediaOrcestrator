@@ -7,6 +7,7 @@ namespace MediaOrcestrator.Youtube;
 [JsonSerializable(typeof(YtDlpCommentJson))]
 [JsonSerializable(typeof(YtDlpPlaylistJson))]
 [JsonSerializable(typeof(PlaywrightAuthState))]
+[JsonSerializable(typeof(QuotaState))]
 internal sealed partial class YoutubeJsonContext : JsonSerializerContext
 {
 }

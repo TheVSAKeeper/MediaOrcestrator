@@ -28,6 +28,7 @@ public sealed class YoutubeModule : IPluginModule
         services.AddSingleton<YoutubeUploadService>();
         services.AddSingleton<YoutubeVideoKindStore>();
         services.AddSingleton<YoutubeDownloadPolicy>();
+        services.AddSingleton<YoutubeQuotaTracker>();
         services.AddSingleton<ISourceType, YoutubeChannel>();
     }
 

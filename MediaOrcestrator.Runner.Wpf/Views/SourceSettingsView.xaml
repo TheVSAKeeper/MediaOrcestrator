@@ -236,6 +236,39 @@
                     </Grid>
                 </Border>
 
+                <Border Style="{StaticResource Card.Inset}"
+                        Margin="0,0,0,10"
+                        Visibility="{Binding IsQuotaSupported, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel Orientation="Horizontal">
+                        <iconPacks:PackIconLucide Kind="Gauge"
+                                                  Width="16"
+                                                  Height="16"
+                                                  VerticalAlignment="Center"
+                                                  Margin="0,0,8,0"
+                                                  Foreground="{DynamicResource Fg.Muted}" />
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="Квота YouTube API (оценка)"
+                                       FontWeight="SemiBold" />
+                            <TextBlock Text="{Binding QuotaStatusText}"
+                                       Margin="0,2,0,0">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground"
+                                                Value="{DynamicResource Fg.Muted}" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsQuotaExhausted}"
+                                                         Value="True">
+                                                <Setter Property="Foreground"
+                                                        Value="{DynamicResource State.Error}" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
                 <ItemsControl ItemsSource="{Binding Fields}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="{x:Type vm:SettingFieldViewModel}">

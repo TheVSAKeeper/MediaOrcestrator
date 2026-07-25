@@ -7,7 +7,7 @@ using UploadProgress = MediaOrcestrator.Modules.UploadProgress;
 
 namespace MediaOrcestrator.Youtube;
 
-internal sealed class YoutubeUploadService(ILogger<YoutubeUploadService> logger)
+internal sealed class YoutubeUploadService(ILogger<YoutubeUploadService> logger, YoutubeQuotaTracker quota)
 {
     public async Task<UploadResult> UploadVideoAsync(
         YouTubeService service,
@@ -27,6 +27,7 @@ internal sealed class YoutubeUploadService(ILogger<YoutubeUploadService> logger)
             };
         }
 
+        var statePath = settings.GetValueOrDefault("_system_state_path");
         var video = CreateVideoResource(media, settings);
         var uploadBytesPerSecond = SpeedLimitHelper.ParseUploadBytesPerSecond(settings);
 
@@ -68,8 +69,9 @@ internal sealed class YoutubeUploadService(ILogger<YoutubeUploadService> logger)
             if (IsUploadLimitError(errorMessage))
             {
                 logger.QuotaExceeded();
+                quota.MarkExhausted(statePath);
 
-                throw new NonRetriableException("Превышена квота YouTube API (лимит ~6 видео/день)",
+                throw new NonRetriableException("Достигнут дневной лимит загрузки видео на YouTube (uploadLimitExceeded / quotaExceeded)",
                     response.Exception ?? new InvalidOperationException(errorMessage));
             }
 
@@ -84,10 +86,11 @@ internal sealed class YoutubeUploadService(ILogger<YoutubeUploadService> logger)
 
         var uploadedVideo = request.ResponseBody;
         logger.UploadCompleted(uploadedVideo.Id);
+        quota.Record(statePath, YoutubeQuotaTracker.UploadCost);
 
         if (!string.IsNullOrEmpty(media.TempPreviewPath) && File.Exists(media.TempPreviewPath))
         {
-            await UploadThumbnailAsync(service, uploadedVideo.Id, media.TempPreviewPath, cancellationToken);
+            await UploadThumbnailAsync(service, uploadedVideo.Id, media.TempPreviewPath, statePath, cancellationToken);
         }
 
         return new()
@@ -136,9 +139,12 @@ internal sealed class YoutubeUploadService(ILogger<YoutubeUploadService> logger)
 
         logger.UpdateCompleted(externalId);
 
+        var statePath = settings.GetValueOrDefault("_system_state_path");
+        quota.Record(statePath, YoutubeQuotaTracker.WriteCost);
+
         if (!string.IsNullOrEmpty(tempMedia.TempPreviewPath) && File.Exists(tempMedia.TempPreviewPath))
         {
-            await UploadThumbnailAsync(service, externalId, tempMedia.TempPreviewPath, cancellationToken);
+            await UploadThumbnailAsync(service, externalId, tempMedia.TempPreviewPath, statePath, cancellationToken);
         }
 
         return new()
@@ -228,6 +234,7 @@ internal sealed class YoutubeUploadService(ILogger<YoutubeUploadService> logger)
         YouTubeService service,
         string videoId,
         string thumbnailPath,
+        string? statePath,
         CancellationToken cancellationToken)
     {
         logger.ThumbnailUploadStart(videoId);
@@ -250,6 +257,7 @@ internal sealed class YoutubeUploadService(ILogger<YoutubeUploadService> logger)
         else
         {
             logger.ThumbnailUploaded(videoId);
+            quota.Record(statePath, YoutubeQuotaTracker.WriteCost);
         }
     }
 }
