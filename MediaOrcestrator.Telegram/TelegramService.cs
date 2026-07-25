@@ -35,7 +35,7 @@ public sealed class TelegramService : IDisposable
 
         if (_client.User == null)
         {
-            throw new InvalidOperationException("Не удалось подключиться к Telegram. Выполните авторизацию через настройки источника.");
+            throw new NonRetriableException("Не удалось подключиться к Telegram. Выполните авторизацию через настройки источника.");
         }
 
         _logger.ConnectedAs(_client.User.first_name, _client.User.id);
@@ -53,7 +53,7 @@ public sealed class TelegramService : IDisposable
             var chats = await _client.Messages_GetAllChats().WaitAsync(cancellationToken);
 
             var chat = chats.chats.Values.FirstOrDefault(c => c.ID == numericId)
-                       ?? throw new InvalidOperationException($"Канал с ID {numericId} не найден. Убедитесь, что аккаунт подписан на канал.");
+                       ?? throw new NonRetriableException($"Канал с ID {numericId} не найден. Убедитесь, что аккаунт подписан на канал.");
 
             return chat.ToInputPeer();
         }
@@ -64,7 +64,7 @@ public sealed class TelegramService : IDisposable
         return resolved.peer switch
         {
             PeerChannel pc => resolved.chats[pc.channel_id].ToInputPeer(),
-            _ => throw new InvalidOperationException($"@{trimmed} не является каналом"),
+            _ => throw new NonRetriableException($"@{trimmed} не является каналом"),
         };
     }
 

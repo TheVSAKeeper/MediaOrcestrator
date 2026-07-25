@@ -130,7 +130,7 @@ public sealed class HardDiskDriveChannel(
         if (file == null)
         {
             logger.FileNotFoundInDatabase(videoId);
-            throw new InvalidOperationException($"Файл с ID '{videoId}' не найден в базе данных");
+            throw new NonRetriableException($"Файл с ID '{videoId}' не найден в базе данных");
         }
 
         var fullPath = Path.Combine(basePath, file.Id, file.Path);
@@ -138,7 +138,7 @@ public sealed class HardDiskDriveChannel(
         if (!File.Exists(fullPath))
         {
             logger.PhysicalFileNotFound(fullPath);
-            throw new FileNotFoundException("Физический файл не найден", fullPath);
+            throw new NonRetriableException($"Физический файл не найден: {fullPath}");
         }
 
         var thumbnailFullPath = !string.IsNullOrEmpty(file.PreviewPath)
