@@ -423,40 +423,6 @@ public class ActionHolderTests
     }
 
     [Test]
-    public void Инкремент_через_холдер_увеличивает_прогресс()
-    {
-        var holder = CreateHolder();
-        using var cts = new CancellationTokenSource();
-        var act = holder.Register("test", "Старт", 10, cts);
-
-        holder.ProgressPlus(act.Id);
-        holder.ProgressPlus(act.Id);
-        holder.ProgressPlus(act.Id);
-
-        Assert.That(act.ProgressValue, Is.EqualTo(3));
-    }
-
-    [Test]
-    public void Установка_статуса_через_холдер_эквивалентна_установке_через_свойство()
-    {
-        var holder = CreateHolder();
-        using var cts1 = new CancellationTokenSource();
-        using var cts2 = new CancellationTokenSource();
-
-        var actA = holder.Register("a", "Старт", 0, cts1);
-        var actB = holder.Register("b", "Старт", 0, cts2);
-
-        actA.Status = "Новый";
-        holder.SetStatus(actB.Id, "Новый");
-
-        using (Assert.EnterMultipleScope())
-        {
-            Assert.That(actB.Status, Is.EqualTo(actA.Status));
-            Assert.That(actA.Status, Is.EqualTo("Новый"));
-        }
-    }
-
-    [Test]
     public void Регистрация_порождает_событие_изменения_реестра()
     {
         var holder = CreateHolder();

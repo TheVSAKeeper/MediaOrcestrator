@@ -1,4 +1,4 @@
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -49,6 +49,7 @@ public class GitHubReleaseProvider(IHttpClientFactory httpClientFactory, ILogger
                 AssetUrl = matchingAsset?.BrowserDownloadUrl,
                 AssetName = matchingAsset?.Name,
                 AssetSize = matchingAsset?.Size ?? 0,
+                AssetDigest = matchingAsset?.Digest,
                 PublishedAt = release.PublishedAt,
                 Body = release.Body,
             };
@@ -65,7 +66,12 @@ public class GitHubReleaseProvider(IHttpClientFactory httpClientFactory, ILogger
         }
     }
 
-    public async Task DownloadAssetAsync(string url, string targetPath, IProgress<double>? progress = null, CancellationToken cancellationToken = default)
+    public async Task DownloadAssetAsync(
+        string url,
+        string targetPath,
+        string? expectedDigest = null,
+        IProgress<double>? progress = null,
+        CancellationToken cancellationToken = default)
     {
         var client = httpClientFactory.CreateClient("GitHub");
 
@@ -76,20 +82,34 @@ public class GitHubReleaseProvider(IHttpClientFactory httpClientFactory, ILogger
         var buffer = new byte[81920];
         long bytesRead = 0;
 
-        await using var contentStream = await response.Content.ReadAsStreamAsync(cancellationToken);
-        await using var fileStream = File.Create(targetPath);
-
-        int read;
-
-        while ((read = await contentStream.ReadAsync(buffer, cancellationToken)) > 0)
+        await using (var contentStream = await response.Content.ReadAsStreamAsync(cancellationToken))
+        await using (var fileStream = File.Create(targetPath))
         {
-            await fileStream.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
-            bytesRead += read;
+            int read;
 
-            if (totalBytes > 0)
+            while ((read = await contentStream.ReadAsync(buffer, cancellationToken)) > 0)
             {
-                progress?.Report((double)bytesRead / totalBytes);
+                await fileStream.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
+                bytesRead += read;
+
+                if (totalBytes > 0)
+                {
+                    progress?.Report((double)bytesRead / totalBytes);
+                }
             }
+        }
+
+        try
+        {
+            if (!FileIntegrity.EnsureMatches(targetPath, expectedDigest))
+            {
+                logger.LogWarning("Контрольная сумма для {Url} недоступна, файл принят без проверки", url);
+            }
+        }
+        catch (InvalidDataException)
+        {
+            File.Delete(targetPath);
+            throw;
         }
     }
 
@@ -130,6 +150,9 @@ public class GitHubReleaseProvider(IHttpClientFactory httpClientFactory, ILogger
 
         [JsonPropertyName("size")]
         public long Size { get; init; }
+
+        [JsonPropertyName("digest")]
+        public string? Digest { get; init; }
 
         [JsonPropertyName("browser_download_url")]
         public string BrowserDownloadUrl { get; init; } = string.Empty;

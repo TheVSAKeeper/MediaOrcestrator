@@ -5,10 +5,10 @@
 /// </summary>
 public sealed class SyncIntent
 {
-    public Media Media { get; set; }
-    public Source From { get; set; }
-    public Source To { get; set; }
-    public SourceSyncRelation Relation { get; set; }
+    public required Media Media { get; set; }
+    public required Source From { get; set; }
+    public required Source To { get; set; }
+    public required SourceSyncRelation Relation { get; set; }
 
     public List<SyncIntent> NextIntents { get; set; } = [];
 

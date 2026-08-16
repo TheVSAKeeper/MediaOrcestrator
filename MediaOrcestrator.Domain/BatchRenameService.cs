@@ -6,8 +6,9 @@ namespace MediaOrcestrator.Domain;
 
 public enum BatchRenameMode
 {
-    Plain = 0,
-    Regex = 1,
+    None = 0,
+    Plain = 1,
+    Regex = 2,
 }
 
 public sealed record BatchRenameOptions(
@@ -19,12 +20,13 @@ public sealed record BatchRenameOptions(
 
 public enum BatchRenameSourceOutcome
 {
-    Updated = 0,
-    Skipped = 1,
-    NotSupported = 2,
-    Failed = 3,
-    VerificationFailed = 4,
-    AlreadyUpToDate = 5,
+    None = 0,
+    Updated = 1,
+    Skipped = 2,
+    NotSupported = 3,
+    Failed = 4,
+    VerificationFailed = 5,
+    AlreadyUpToDate = 6,
 }
 
 public sealed record BatchRenameSourcePreview(
@@ -483,7 +485,7 @@ public sealed class BatchRenameService(Orcestrator orcestrator, ActionHolder act
                 if (statusId == MediaStatus.Ok)
                 {
                     var previousTitle = link.Title ?? string.Empty;
-                    var titleChanged = await VerifyTitleChangedAsync(link, source, previousTitle, request.NewTitle, uploadResult.ConfirmedTitle, cancellationToken);
+                    var titleChanged = await VerifyTitleChangedAsync(link, source, previousTitle, request.NewTitle, uploadResult!.ConfirmedTitle, cancellationToken);
 
                     if (titleChanged == false)
                     {

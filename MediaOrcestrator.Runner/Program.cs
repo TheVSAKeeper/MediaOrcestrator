@@ -525,9 +525,10 @@ file static class Program
         services.AddSingleton<AppUpdateManager>(sp =>
         {
             var settingsManager = sp.GetRequiredService<SettingsManager>();
-            var updateRepo = settingsManager.GetStringValue("update_repo") ?? BuildConstants.DefaultUpdateRepo;
+
             return new(sp.GetRequiredService<IReleaseProvider>(),
-                updateRepo,
+                () => settingsManager.GetStringValue("update_repo") ?? BuildConstants.DefaultUpdateRepo,
+                "MediaOrcestrator",
                 sp.GetRequiredService<ILogger<AppUpdateManager>>());
         });
 

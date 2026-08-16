@@ -10,9 +10,9 @@ public class MediaSourceLink
     /// <summary>
     /// Идентификатор источника.
     /// </summary>
-    public string SourceId { get; set; }
+    public string SourceId { get; set; } = string.Empty;
 
-    public string Status { get; set; }
+    public string Status { get; set; } = string.Empty;
 
     public string? StatusMessage { get; set; }
 
@@ -24,19 +24,19 @@ public class MediaSourceLink
     /// <remarks>
     /// В каждом источники свой айди.
     /// </remarks>
-    public string ExternalId { get; set; }
+    public string ExternalId { get; set; } = string.Empty;
 
-    public string Title { get; set; }
+    public string Title { get; set; } = string.Empty;
 
-    public string Description { get; set; }
+    public string Description { get; set; } = string.Empty;
 
     /// <summary>
     /// Внутренний идентификатор медии.
     /// </summary>
-    public string MediaId { get; set; }
+    public string MediaId { get; set; } = string.Empty;
 
     [BsonIgnore]
-    public Media Media { get; set; }
+    public Media Media { get; set; } = null!;
 
     public override string ToString()
     {

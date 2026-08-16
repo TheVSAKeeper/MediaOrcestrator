@@ -1,4 +1,4 @@
-namespace MediaOrcestrator.Domain;
+﻿namespace MediaOrcestrator.Domain;
 
 public record ReleaseInfo
 {
@@ -6,6 +6,7 @@ public record ReleaseInfo
     public string? AssetUrl { get; init; }
     public string? AssetName { get; init; }
     public long AssetSize { get; init; }
+    public string? AssetDigest { get; init; }
     public DateTimeOffset PublishedAt { get; init; }
     public string? Body { get; init; }
 }

@@ -2,16 +2,16 @@
 
 public class MediaDto
 {
-    public string Id { get; set; }
-    public string Title { get; set; }
-    public string Description { get; set; }
-    public string DataPath { get; set; }
-    public string PreviewPath { get; set; }
+    public string Id { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string DataPath { get; set; } = string.Empty;
+    public string PreviewPath { get; set; } = string.Empty;
 
     public List<MetadataItem>? Metadata { get; set; }
 
-    public string TempDataPath { get; set; } // todo это отсюда уберём
-    public string TempPreviewPath { get; set; }
+    public string TempDataPath { get; set; } = string.Empty; // todo это отсюда уберём
+    public string TempPreviewPath { get; set; } = string.Empty;
 
     public bool IsExcluded { get; set; }
 }
