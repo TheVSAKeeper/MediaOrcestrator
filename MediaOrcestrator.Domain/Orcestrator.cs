@@ -17,6 +17,9 @@ public class Orcestrator(
     private readonly HashSet<string> _runningSourceIds = new(StringComparer.OrdinalIgnoreCase);
     private bool _bulkSyncRunning;
 
+    // TODO: единая блокировка записи в БД на время синхронизации; при росте объёма – батч-запись после параллельного сбора
+    private readonly object _dbWriteLock = new();
+
     public Dictionary<string, ISourceType> GetSourceTypes()
     {
         return pluginManager.MediaSources;
@@ -233,17 +236,17 @@ public class Orcestrator(
                                 hasChange = true;
                             }
 
-                            if (foundMediaSource.Media.Sources.Count == 1)
+                            if (foundMediaSource.Media is { } ownerMedia && ownerMedia.Sources.Count == 1)
                             {
-                                if (foundMediaSource.Media.Title != s.Title)
+                                if (ownerMedia.Title != s.Title)
                                 {
-                                    foundMediaSource.Media.Title = s.Title;
+                                    ownerMedia.Title = s.Title;
                                     hasChange = true;
                                 }
 
-                                if (foundMediaSource.Media.Description != s.Description)
+                                if (ownerMedia.Description != s.Description)
                                 {
-                                    foundMediaSource.Media.Description = s.Description;
+                                    ownerMedia.Description = s.Description;
                                     hasChange = true;
                                 }
                             }
@@ -266,9 +269,12 @@ public class Orcestrator(
                                 hasChange = true;
                             }
 
-                            if (hasChange)
+                            if (hasChange && foundMediaSource.Media is { } changedMedia)
                             {
-                                mediaCol.Update(foundMediaSource!.Media);
+                                lock (_dbWriteLock)
+                                {
+                                    mediaCol.Update(changedMedia);
+                                }
                             }
                         }
 
@@ -315,9 +321,13 @@ public class Orcestrator(
                             sortNumber++;
 
                             myMedia.Sources.Add(newMediaSource);
+
                             // поправить циклический зависимость
-                            mediaCol.Insert(myMedia);
-                            mediaAll.Add(myMedia);
+                            lock (_dbWriteLock)
+                            {
+                                mediaCol.Insert(myMedia);
+                            }
+
                             cache.GetMedia(mediaSource.Id).Add(newMediaSource);
 
                             saved++;
@@ -345,7 +355,11 @@ public class Orcestrator(
                                     if (!foundIds.Contains(existsVideo.ExternalId))
                                     {
                                         existsVideo.Status = MediaStatus.Missing;
-                                        mediaCol.Update(existsVideo.Media);
+
+                                        lock (_dbWriteLock)
+                                        {
+                                            mediaCol.Update(existsVideo.Media);
+                                        }
                                     }
                                 }
                             }
@@ -356,11 +370,16 @@ public class Orcestrator(
                         }
 
                         var sourcesCol = db.GetCollection<Source>("sources");
-                        var dbSource = sourcesCol.FindById(mediaSource.Id);
-                        if (dbSource != null)
+
+                        lock (_dbWriteLock)
                         {
-                            dbSource.LastSyncedAt = DateTime.UtcNow;
-                            sourcesCol.Update(dbSource);
+                            var dbSource = sourcesCol.FindById(mediaSource.Id);
+
+                            if (dbSource != null)
+                            {
+                                dbSource.LastSyncedAt = DateTime.UtcNow;
+                                sourcesCol.Update(dbSource);
+                            }
                         }
 
                         perSource?.Report("Готово");
@@ -749,11 +768,20 @@ public class Orcestrator(
             //item.From.Type = sourceTypes.Values.First(x => x.Name == item.From.TypeId);
             var fromSource = sources.FirstOrDefault(x => x.Id == item.FromId);
             var toSource = sources.FirstOrDefault(x => x.Id == item.ToId);
-            item.From = fromSource;
-            item.To = toSource;
+
             if (fromSource == null || toSource == null || fromSource.IsDisable || toSource.IsDisable)
             {
                 item.IsDisable = true;
+            }
+
+            if (fromSource != null)
+            {
+                item.From = fromSource;
+            }
+
+            if (toSource != null)
+            {
+                item.To = toSource;
             }
         }
 
@@ -1416,19 +1444,8 @@ public class Orcestrator(
 
     public class MediaSourceCache
     {
-        private readonly Dictionary<string, List<MediaSourceLink>> _holder = new();
+        private readonly ConcurrentDictionary<string, List<MediaSourceLink>> _holder = new();
 
-        public List<MediaSourceLink> GetMedia(string sourceId)
-        {
-            if (_holder.TryGetValue(sourceId, out var value))
-            {
-                return value;
-            }
-
-            value = [];
-            _holder[sourceId] = value;
-
-            return value;
-        }
+        public List<MediaSourceLink> GetMedia(string sourceId) => _holder.GetOrAdd(sourceId, _ => []);
     }
 }

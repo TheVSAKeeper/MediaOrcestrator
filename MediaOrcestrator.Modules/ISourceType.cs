@@ -295,7 +295,7 @@ public enum SettingType
 public sealed class UploadResult
 {
     /// <summary>Статус операции.</summary>
-    public MediaStatus Status { get; set; }
+    public required MediaStatus Status { get; set; }
 
     /// <summary>Дополнительное сообщение (причина частичного успеха, текст ошибки и т.д.).</summary>
     public string? Message { get; set; }

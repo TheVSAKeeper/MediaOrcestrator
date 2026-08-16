@@ -240,7 +240,7 @@ public class ActionHolder(ILogger<ActionHolder> logger)
         public event EventHandler? Changed;
 
         public Guid Id { get; set; }
-        public string Name { get; set; }
+        public required string Name { get; set; }
 
         public string Subtitle
         {
@@ -304,8 +304,8 @@ public class ActionHolder(ILogger<ActionHolder> logger)
             }
         }
 
-        public CancellationTokenSource CancellationTokenSource { get; set; }
-        public ActionHolder Holder { get; internal set; }
+        public required CancellationTokenSource CancellationTokenSource { get; set; }
+        public ActionHolder Holder { get; internal set; } = null!;
 
         public TimeSpan Duration
         {

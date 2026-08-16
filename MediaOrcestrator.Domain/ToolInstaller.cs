@@ -70,7 +70,7 @@ public class ToolInstaller(IReleaseProvider releaseProvider, ILogger<ToolInstall
 
             logger.LogInformation("Скачивание {Tool} из {Url}...", toolName, release.AssetUrl);
 
-            await releaseProvider.DownloadAssetAsync(release.AssetUrl, downloadPath, progress, cancellationToken);
+            await releaseProvider.DownloadAssetAsync(release.AssetUrl, downloadPath, release.AssetDigest, progress, cancellationToken);
 
             SwapDirectories(toolDir, backupDir, tempDir, downloadPath, descriptor);
 
