@@ -1,5 +1,5 @@
 ﻿# Определяем пути
-$sourcePath = "E:\bobgroup\projects\mediaOrcestrator\repo\MediaOrcestrator\classic\MediaOrcestrator.Runner\bin\Debug\net8.0-windows"
+$sourcePath = "E:\bobgroup\projects\mediaOrcestrator\repo\MediaOrcestrator\classic\MediaOrcestrator.Runner\bin\Debug\net10.0-windows"
 $moduleBuildsPath = "E:\bobgroup\projects\mediaOrcestrator\repo\MediaOrcestrator\ModuleBuilds"
 $targetPath = "E:\bobgroup\projects\mediaOrcestrator\Production\App"
 $backupBasePath = "E:\bobgroup\projects\mediaOrcestrator\Production\App_backup"

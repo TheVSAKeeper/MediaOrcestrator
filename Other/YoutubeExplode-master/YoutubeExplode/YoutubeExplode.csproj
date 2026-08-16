@@ -9,7 +9,7 @@
       Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net7.0'))"
       >true</IsAotCompatible
     >
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
   </PropertyGroup>
   <PropertyGroup>
     <PackageIcon>favicon.png</PackageIcon>
@@ -27,7 +27,11 @@
       Version="9.0.1"
       Condition="!$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'netstandard2.1'))"
     />
-    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="all" />
+    <PackageReference
+      Include="Microsoft.SourceLink.GitHub"
+      Version="10.0.404"
+      PrivateAssets="all"
+    />
     <PackageReference Include="PolyShim" Version="1.15.0" PrivateAssets="all" />
     <PackageReference
       Include="System.Text.Json"

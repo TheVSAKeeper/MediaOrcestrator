@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <TargetFramework>net10.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -27,13 +27,13 @@
 
   <ItemGroup>
     <PackageReference Include="LiteDB" Version="5.0.21" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
-    <PackageReference Include="Microsoft.Extensions.Logging" Version="8.0.1" />
-    <PackageReference Include="Serilog" Version="4.2.0" />
-    <PackageReference Include="Serilog.Extensions.Logging" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.15" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.15" />
+    <PackageReference Include="Serilog" Version="4.4.0" />
+    <PackageReference Include="Serilog.Extensions.Logging" Version="10.0.0" />
     <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
-    <PackageReference Include="Serilog.Sinks.Debug" Version="2.0.0" />
-    <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
+    <PackageReference Include="Serilog.Sinks.Debug" Version="3.0.0" />
+    <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
     <PackageReference Include="Serilog.Sinks.RichTextBox.WinForms.Colored" Version="3.2.0" />
     <PackageReference Include="Serilog.Sinks.WinForms.Core" Version="2.0.0" />
     <PackageReference Include="Microsoft.Playwright" Version="1.57.0" />
@@ -67,7 +67,7 @@
     <MSBuild Projects="..\..\MediaOrcestrator.VkVideo\MediaOrcestrator.VkVideo.csproj" Targets="Restore;Build" Properties="Configuration=$(Configuration)" RemoveProperties="RuntimeIdentifier" />
     <MSBuild Projects="..\..\MediaOrcestrator.Telegram\MediaOrcestrator.Telegram.csproj" Targets="Restore;Build" Properties="Configuration=$(Configuration)" RemoveProperties="RuntimeIdentifier" />
     <MSBuild Projects="..\..\MediaOrcestrator.Updater\MediaOrcestrator.Updater.csproj" Targets="Restore;Build" Properties="Configuration=$(Configuration)" RemoveProperties="RuntimeIdentifier" />
-    <Copy SourceFiles="..\..\MediaOrcestrator.Updater\bin\$(Configuration)\net8.0-windows\Updater.exe;..\..\MediaOrcestrator.Updater\bin\$(Configuration)\net8.0-windows\Updater.dll;..\..\MediaOrcestrator.Updater\bin\$(Configuration)\net8.0-windows\Updater.runtimeconfig.json;..\..\MediaOrcestrator.Updater\bin\$(Configuration)\net8.0-windows\Updater.deps.json"
+    <Copy SourceFiles="..\..\MediaOrcestrator.Updater\bin\$(Configuration)\net10.0-windows\Updater.exe;..\..\MediaOrcestrator.Updater\bin\$(Configuration)\net10.0-windows\Updater.dll;..\..\MediaOrcestrator.Updater\bin\$(Configuration)\net10.0-windows\Updater.runtimeconfig.json;..\..\MediaOrcestrator.Updater\bin\$(Configuration)\net10.0-windows\Updater.deps.json"
           DestinationFolder="$(OutputPath)"
           SkipUnchangedFiles="true" />
   </Target>
