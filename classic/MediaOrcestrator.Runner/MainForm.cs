@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Playwright;
 using Serilog.Events;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 
@@ -55,6 +56,7 @@ public partial class MainForm : Form
         _taskbarButtonCreatedMessage = RegisterWindowMessage("TaskbarButtonCreated");
     }
 
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public Action? StartupCompleted { get; set; }
 
     public void AttachLogControl(LogViewContext context)

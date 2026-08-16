@@ -1,6 +1,7 @@
 ﻿using MediaOrcestrator.Domain;
 using MediaOrcestrator.Domain.Comments;
 using MediaOrcestrator.Modules;
+using System.ComponentModel;
 using System.Globalization;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -86,6 +87,7 @@ public sealed partial class CommentsBrowserView : UserControl
 
     public event EventHandler<CommentsBrowserFetchRequest>? OpenExternalRequested;
 
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public CommentAuthorsResolver? AuthorsResolver { get; set; }
 
     public static string BuildGroupKey(Media? media, string sourceId, string externalMediaId)

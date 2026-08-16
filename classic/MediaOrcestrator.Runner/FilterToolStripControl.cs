@@ -1,5 +1,6 @@
 ﻿using MediaOrcestrator.Domain;
 using MediaOrcestrator.Modules;
+using System.ComponentModel;
 
 namespace MediaOrcestrator.Runner;
 
@@ -51,6 +52,7 @@ public partial class FilterToolStripControl : UserControl
 
     public event EventHandler? FilterChanged;
 
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public bool ShowStatusFilter
     {
         get => uiStatusLabel.Visible;

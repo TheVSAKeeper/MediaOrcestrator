@@ -1,4 +1,4 @@
-using Microsoft.Msagl.GraphViewerGdi;
+﻿using Microsoft.Msagl.GraphViewerGdi;
 
 namespace MediaOrcestrator.Runner;
 

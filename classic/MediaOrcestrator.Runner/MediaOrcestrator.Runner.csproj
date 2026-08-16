@@ -21,8 +21,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\MediaOrcestrator.Domain\MediaOrcestrator.Domain.csproj" />
-    <ProjectReference Include="..\MediaOrcestrator.Modules\MediaOrcestrator.Modules.csproj" />
+    <ProjectReference Include="..\..\MediaOrcestrator.Domain\MediaOrcestrator.Domain.csproj" />
+    <ProjectReference Include="..\..\MediaOrcestrator.Modules\MediaOrcestrator.Modules.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -61,13 +61,13 @@
   </Target>
 
   <Target Name="BuildModules" AfterTargets="Build">
-    <MSBuild Projects="..\MediaOrcestrator.Youtube\MediaOrcestrator.Youtube.csproj" Targets="Restore;Build" Properties="Configuration=$(Configuration)" RemoveProperties="RuntimeIdentifier" />
-    <MSBuild Projects="..\MediaOrcestrator.Rutube\MediaOrcestrator.Rutube.csproj" Targets="Restore;Build" Properties="Configuration=$(Configuration)" RemoveProperties="RuntimeIdentifier" />
-    <MSBuild Projects="..\MediaOrcestrator.HardDiskDrive\MediaOrcestrator.HardDiskDrive.csproj" Targets="Restore;Build" Properties="Configuration=$(Configuration)" RemoveProperties="RuntimeIdentifier" />
-    <MSBuild Projects="..\MediaOrcestrator.VkVideo\MediaOrcestrator.VkVideo.csproj" Targets="Restore;Build" Properties="Configuration=$(Configuration)" RemoveProperties="RuntimeIdentifier" />
-    <MSBuild Projects="..\MediaOrcestrator.Telegram\MediaOrcestrator.Telegram.csproj" Targets="Restore;Build" Properties="Configuration=$(Configuration)" RemoveProperties="RuntimeIdentifier" />
-    <MSBuild Projects="..\MediaOrcestrator.Updater\MediaOrcestrator.Updater.csproj" Targets="Restore;Build" Properties="Configuration=$(Configuration)" RemoveProperties="RuntimeIdentifier" />
-    <Copy SourceFiles="..\MediaOrcestrator.Updater\bin\$(Configuration)\net8.0-windows\Updater.exe;..\MediaOrcestrator.Updater\bin\$(Configuration)\net8.0-windows\Updater.dll;..\MediaOrcestrator.Updater\bin\$(Configuration)\net8.0-windows\Updater.runtimeconfig.json;..\MediaOrcestrator.Updater\bin\$(Configuration)\net8.0-windows\Updater.deps.json"
+    <MSBuild Projects="..\..\MediaOrcestrator.Youtube\MediaOrcestrator.Youtube.csproj" Targets="Restore;Build" Properties="Configuration=$(Configuration)" RemoveProperties="RuntimeIdentifier" />
+    <MSBuild Projects="..\..\MediaOrcestrator.Rutube\MediaOrcestrator.Rutube.csproj" Targets="Restore;Build" Properties="Configuration=$(Configuration)" RemoveProperties="RuntimeIdentifier" />
+    <MSBuild Projects="..\..\MediaOrcestrator.HardDiskDrive\MediaOrcestrator.HardDiskDrive.csproj" Targets="Restore;Build" Properties="Configuration=$(Configuration)" RemoveProperties="RuntimeIdentifier" />
+    <MSBuild Projects="..\..\MediaOrcestrator.VkVideo\MediaOrcestrator.VkVideo.csproj" Targets="Restore;Build" Properties="Configuration=$(Configuration)" RemoveProperties="RuntimeIdentifier" />
+    <MSBuild Projects="..\..\MediaOrcestrator.Telegram\MediaOrcestrator.Telegram.csproj" Targets="Restore;Build" Properties="Configuration=$(Configuration)" RemoveProperties="RuntimeIdentifier" />
+    <MSBuild Projects="..\..\MediaOrcestrator.Updater\MediaOrcestrator.Updater.csproj" Targets="Restore;Build" Properties="Configuration=$(Configuration)" RemoveProperties="RuntimeIdentifier" />
+    <Copy SourceFiles="..\..\MediaOrcestrator.Updater\bin\$(Configuration)\net8.0-windows\Updater.exe;..\..\MediaOrcestrator.Updater\bin\$(Configuration)\net8.0-windows\Updater.dll;..\..\MediaOrcestrator.Updater\bin\$(Configuration)\net8.0-windows\Updater.runtimeconfig.json;..\..\MediaOrcestrator.Updater\bin\$(Configuration)\net8.0-windows\Updater.deps.json"
           DestinationFolder="$(OutputPath)"
           SkipUnchangedFiles="true" />
   </Target>
