@@ -36,6 +36,8 @@
             uiStopButton = new Button();
             uiTopPanel = new Panel();
             uiStopIfErrorCheckBox = new CheckBox();
+            uiUploadIntervalCheckBox = new CheckBox();
+            uiUploadIntervalTextBox = new TextBox();
             uiDeselectAllButton = new Button();
             uiSelectAllButton = new Button();
             uiStatusStrip = new StatusStrip();
@@ -98,6 +100,8 @@
             // uiTopPanel
             // 
             uiTopPanel.Controls.Add(uiConstructButton);
+            uiTopPanel.Controls.Add(uiUploadIntervalTextBox);
+            uiTopPanel.Controls.Add(uiUploadIntervalCheckBox);
             uiTopPanel.Controls.Add(uiStopIfErrorCheckBox);
             uiTopPanel.Controls.Add(uiDeselectAllButton);
             uiTopPanel.Controls.Add(uiSelectAllButton);
@@ -119,6 +123,27 @@
             uiStopIfErrorCheckBox.TabIndex = 2;
             uiStopIfErrorCheckBox.Text = "Прервать синхронизацию в случае ошибки";
             uiStopIfErrorCheckBox.UseVisualStyleBackColor = true;
+            //
+            // uiUploadIntervalCheckBox
+            //
+            uiUploadIntervalCheckBox.AutoSize = true;
+            uiUploadIntervalCheckBox.Location = new Point(263, 11);
+            uiUploadIntervalCheckBox.Name = "uiUploadIntervalCheckBox";
+            uiUploadIntervalCheckBox.Size = new Size(104, 19);
+            uiUploadIntervalCheckBox.TabIndex = 3;
+            uiUploadIntervalCheckBox.Text = "Интервал (мин)";
+            uiUploadIntervalCheckBox.UseVisualStyleBackColor = true;
+            uiUploadIntervalCheckBox.CheckedChanged += uiUploadIntervalCheckBox_CheckedChanged;
+            //
+            // uiUploadIntervalTextBox
+            //
+            uiUploadIntervalTextBox.Enabled = false;
+            uiUploadIntervalTextBox.Location = new Point(370, 8);
+            uiUploadIntervalTextBox.Name = "uiUploadIntervalTextBox";
+            uiUploadIntervalTextBox.Size = new Size(38, 23);
+            uiUploadIntervalTextBox.TabIndex = 4;
+            uiUploadIntervalTextBox.Text = "5";
+            uiUploadIntervalTextBox.TextAlign = HorizontalAlignment.Right;
             // 
             // uiDeselectAllButton
             // 
@@ -209,7 +234,7 @@
             // 
             // uiConstructButton
             // 
-            uiConstructButton.Location = new Point(398, 8);
+            uiConstructButton.Location = new Point(414, 8);
             uiConstructButton.Name = "uiConstructButton";
             uiConstructButton.Size = new Size(94, 23);
             uiConstructButton.TabIndex = 3;
@@ -257,6 +282,8 @@
         private Panel uiBottomPanel;
         private FilterToolStripControl uiFilterControl;
         private CheckBox uiStopIfErrorCheckBox;
+        private CheckBox uiUploadIntervalCheckBox;
+        private TextBox uiUploadIntervalTextBox;
         private Button uiConstructButton;
     }
 }

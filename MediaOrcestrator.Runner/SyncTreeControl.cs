@@ -178,9 +178,20 @@ public partial class SyncTreeControl : UserControl
             return;
         }
 
+        if (!TryGetUploadInterval(out var uploadInterval))
+        {
+            MessageBox.Show("Интервал должен быть целым положительным числом минут.",
+                "Некорректный интервал", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            uiUploadIntervalTextBox.Focus();
+            uiUploadIntervalTextBox.SelectAll();
+            return;
+        }
+
         uiExecuteButton.Enabled = false;
         uiStopButton.Enabled = true;
         uiTreeView.Enabled = false;
+        uiUploadIntervalCheckBox.Enabled = false;
+        uiUploadIntervalTextBox.Enabled = false;
 
         _cts = new();
 
@@ -205,6 +216,14 @@ public partial class SyncTreeControl : UserControl
                     var progress = new Progress<SyncAttemptStatus>(status => ApplyAttemptStatusToNode(intent, node, status));
 
                     await _retryRunner!.RunAsync(intent.Media, intent.Relation, progress, cancellationToken: _cts!.Token);
+
+                    if (uploadInterval is { } interval)
+                    {
+                        UpdateStatusLabel($"Ожидание {interval.TotalMinutes:F0} мин после успешной загрузки");
+                        LogToUi($"«{intent.Media.Title}» успешно загружено. Ожидание {interval.TotalMinutes:F0} мин...", Color.Orange);
+                        await Task.Delay(interval, _cts.Token);
+                    }
+
                     processed++;
                     action.ProgressPlus();
                 }, _cts.Token, (intent, ex) =>
@@ -260,9 +279,33 @@ public partial class SyncTreeControl : UserControl
             uiExecuteButton.Enabled = true;
             uiStopButton.Enabled = false;
             uiTreeView.Enabled = true;
+            uiUploadIntervalCheckBox.Enabled = true;
+            uiUploadIntervalTextBox.Enabled = uiUploadIntervalCheckBox.Checked;
             _cts?.Dispose();
             _cts = null;
         }
+    }
+
+    private void uiUploadIntervalCheckBox_CheckedChanged(object? sender, EventArgs e)
+    {
+        uiUploadIntervalTextBox.Enabled = uiUploadIntervalCheckBox.Checked && _cts == null;
+    }
+
+    private bool TryGetUploadInterval(out TimeSpan? interval)
+    {
+        interval = null;
+        if (!uiUploadIntervalCheckBox.Checked || string.IsNullOrWhiteSpace(uiUploadIntervalTextBox.Text))
+        {
+            return true;
+        }
+
+        if (!int.TryParse(uiUploadIntervalTextBox.Text, out var minutes) || minutes <= 0)
+        {
+            return false;
+        }
+
+        interval = TimeSpan.FromMinutes(minutes);
+        return true;
     }
 
     private void uiStopButton_Click(object sender, EventArgs e)
