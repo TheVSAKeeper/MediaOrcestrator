@@ -1,0 +1,73 @@
+﻿<UserControl x:Class="MediaOrcestrator.Runner.Wpf.Views.Controls.BatchMediaToolbar"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:iconPacks="http://metro.mahapps.com/winfx/xaml/iconpacks"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             x:Name="Root"
+             mc:Ignorable="d"
+             d:DesignWidth="800">
+    
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+
+        <StackPanel Grid.Column="0"
+                    Orientation="Horizontal"
+                    VerticalAlignment="Center">
+            <iconPacks:PackIconLucide Kind="Layers"
+                                      Width="16"
+                                      Height="16"
+                                      VerticalAlignment="Center"
+                                      Foreground="{DynamicResource Fg.Secondary}"
+                                      Margin="0,0,6,0" />
+            <TextBlock Text="{Binding MediasSummary, ElementName=Root}"
+                       FontWeight="{DynamicResource Font.Weight.SemiBold}"
+                       Foreground="{DynamicResource Fg.Primary}"
+                       VerticalAlignment="Center"
+                       Margin="0,0,14,0" />
+            
+            <Button Style="{StaticResource Button.Ghost}"
+                    Command="{Binding LoadAllMediaCommand, ElementName=Root}"
+                    IsEnabled="{Binding CanEditParameters, ElementName=Root}"
+                    Padding="{DynamicResource Padding.Control.Compact}"
+                    Margin="0,0,4,0"
+                    ToolTip="Загрузить в набор все медиа из хранилища"
+                    AutomationProperties.Name="Загрузить всё хранилище">
+                <StackPanel Orientation="Horizontal">
+                    <iconPacks:PackIconLucide Kind="Plus"
+                                              Width="14"
+                                              Height="14"
+                                              VerticalAlignment="Center"
+                                              Margin="0,0,6,0" />
+                    <TextBlock Text="Загрузить всё хранилище"
+                               VerticalAlignment="Center" />
+                </StackPanel>
+            </Button>
+            <Button Style="{StaticResource Button.Ghost}"
+                    Command="{Binding ClearMediaCommand, ElementName=Root}"
+                    IsEnabled="{Binding HasMedias, ElementName=Root}"
+                    Padding="{DynamicResource Padding.Control.Compact}"
+                    ToolTip="Очистить набор"
+                    AutomationProperties.Name="Очистить набор">
+                <StackPanel Orientation="Horizontal">
+                    <iconPacks:PackIconLucide Kind="X"
+                                              Width="14"
+                                              Height="14"
+                                              VerticalAlignment="Center"
+                                              Margin="0,0,6,0" />
+                    <TextBlock Text="Очистить"
+                               VerticalAlignment="Center" />
+                </StackPanel>
+            </Button>
+        </StackPanel>
+
+        <CheckBox Grid.Column="1"
+                  IsChecked="{Binding StopOnError, ElementName=Root}"
+                  IsEnabled="{Binding CanEditParameters, ElementName=Root}"
+                  VerticalAlignment="Center"
+                  Content="Прервать при ошибке" />
+    </Grid>
+</UserControl>

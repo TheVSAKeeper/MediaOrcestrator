@@ -276,6 +276,7 @@ public partial class App : Application
         var actionHolder = _host.Services.GetRequiredService<ActionHolder>();
         var sources = _host.Services.GetRequiredService<SourcesRelationsViewModel>();
         var audit = _host.Services.GetRequiredService<AuditViewModel>();
+        var transfers = _host.Services.GetRequiredService<TransfersViewModel>();
         var tools = _host.Services.GetRequiredService<ToolsViewModel>();
         var updateManager = _host.Services.GetRequiredService<AppUpdateManager>();
         var appUpdate = _host.Services.GetRequiredService<AppUpdateViewModel>();
@@ -287,6 +288,7 @@ public partial class App : Application
         {
             new("Источники и связи", _ => sources.EnsureLoadedAsync()),
             new("Аудит источников", _ => audit.EnsureLoadedAsync()),
+            new("План передач", _ => transfers.EnsureLoadedAsync()),
         };
 
         var ioSteps = new PreloadStep[]
@@ -553,6 +555,7 @@ public partial class App : Application
 
         services.AddSingleton<ActionHolder>();
         services.AddSingleton<Orcestrator>();
+        services.AddSingleton<PlaylistPublisher>();
 
         services.AddSingleton<CommentsRepository>();
         services.AddSingleton<CommentsService>();
@@ -560,6 +563,7 @@ public partial class App : Application
         services.AddSingleton<SyncRetryRunner>();
         services.AddSingleton<BatchRenameService>();
         services.AddSingleton<CoverGenerator>();
+        services.AddSingleton<CoverTemplateStore>();
         services.AddSingleton<BatchPreviewService>();
         services.AddSingleton<SyncPlanner>();
         services.AddSingleton<DatabaseMaintenanceService>(sp =>
@@ -612,14 +616,22 @@ public partial class App : Application
         services.AddSingleton<UpdatePreferences>();
         services.AddSingleton<ThemeViewModel>();
         services.AddSingleton<AuditViewModel>();
+        services.AddSingleton<TransfersViewModel>();
+        services.AddSingleton<PublishViewModel>();
         services.AddSingleton<SettingsViewModel>();
         services.AddSingleton<TasksViewModel>();
         services.AddSingleton<ToolsViewModel>();
         services.AddSingleton<LogsViewModel>();
         services.AddSingleton<SystemViewModel>();
         services.AddSingleton<SourcesRelationsViewModel>();
+        services.AddSingleton<BatchRenameSubViewModel>();
+        services.AddSingleton<BatchPreviewSubViewModel>();
+        services.AddSingleton<MergeDuplicatesSubViewModel>();
+        services.AddSingleton<ResolveConflictsSubViewModel>();
+        services.AddSingleton<OperationsViewModel>();
         services.AddSingleton<MaintenanceViewModel>();
         services.AddSingleton<DatabaseCleanupViewModel>();
+        services.AddSingleton<ChronologyViewModel>();
         services.AddSingleton<AboutViewModel>();
         services.AddSingleton<AppUpdateViewModel>();
         services.AddTransient<SourceSettingsViewModel>();

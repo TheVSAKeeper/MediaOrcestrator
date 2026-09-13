@@ -52,12 +52,16 @@ public sealed partial class ShellViewModel : ShellViewModelBase
         ThemeViewModel theme,
         SourcesRelationsViewModel sources,
         AuditViewModel audit,
+        TransfersViewModel transfers,
+        PublishViewModel publish,
+        ChronologyViewModel chronology,
         SystemViewModel system,
         TasksViewModel tasks,
         ModalHostViewModel modal,
         ActionHolder actionHolder,
         IDialogService dialogs,
         ISettingsStore settings,
+        OperationsViewModel operations,
         ShellPreferences preferences,
         AppUpdateViewModel appUpdate,
         ILogger<ShellViewModel> logger)
@@ -84,9 +88,49 @@ public sealed partial class ShellViewModel : ShellViewModelBase
 
         Sections.Add(new("Источники и связи", PackIconLucideKind.Link, sources, key: "sources"));
         Sections.Add(new("Досинк источников", PackIconLucideKind.RefreshCw, audit, key: "audit"));
+        Sections.Add(new("Передачи", PackIconLucideKind.ArrowLeftRight, transfers, key: "transfers"));
+        Sections.Add(new("Хронология", PackIconLucideKind.Film, chronology, key: "chronology"));
+        Sections.Add(new("Публикация", PackIconLucideKind.Upload, publish, key: "publish"));
+        Sections.Add(BuildOperationsGroup(operations, IsOperationsExpandedPersisted()));
         Sections.Add(new("Система", PackIconLucideKind.Settings, system, key: "system"));
 
         Selected = Sections[0];
+    }
+
+    private NavigationItem BuildOperationsGroup(OperationsViewModel operations, bool isExpanded)
+    {
+        NavigationItem Leaf(string title, PackIconLucideKind icon, OperationsSubsection subsection, string key) =>
+            new(title, icon, operations, activate: () => operations.Selected = subsection, key: key);
+
+        var group = new NavigationItem("Операции", PackIconLucideKind.Wrench, children:
+        [
+            Leaf("Переименование", PackIconLucideKind.Pencil, OperationsSubsection.Rename, "rename"),
+            Leaf("Обложки и превью", PackIconLucideKind.Image, OperationsSubsection.Preview, "preview"),
+            Leaf("Слияние дубликатов", PackIconLucideKind.Merge, OperationsSubsection.Merge, "merge"),
+            Leaf("Разбор конфликтов", PackIconLucideKind.TriangleAlert, OperationsSubsection.Conflicts, "conflicts"),
+        ], key: "operations")
+        {
+            IsExpanded = isExpanded,
+        };
+
+        group.PropertyChanged += OnNavigationGroupPropertyChanged;
+
+        return group;
+    }
+
+    private bool IsOperationsExpandedPersisted() =>
+        bool.TryParse(_settings.GetStringValue(NavOperationsExpandedKey), out var expanded) && expanded;
+
+    private void OnNavigationGroupPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (_suppressPersist
+            || e.PropertyName != nameof(NavigationItem.IsExpanded)
+            || sender is not NavigationItem group)
+        {
+            return;
+        }
+
+        _settings.SetValue(NavOperationsExpandedKey, group.IsExpanded ? "true" : "false");
     }
 
     private void ExpandOwningGroup(NavigationItem? item)

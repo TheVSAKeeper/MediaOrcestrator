@@ -1,0 +1,225 @@
+﻿<UserControl x:Class="MediaOrcestrator.Runner.Wpf.Views.MergeDuplicatesSubView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:MediaOrcestrator.Runner.Wpf.ViewModels"
+             xmlns:controls="clr-namespace:MediaOrcestrator.Runner.Wpf.Views.Controls"
+             xmlns:keepshell="https://schemas.keepshell.dev/wpf"
+             xmlns:iconPacks="http://metro.mahapps.com/winfx/xaml/iconpacks"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vm:MergeDuplicatesSubViewModel}"
+             d:DesignHeight="600"
+             d:DesignWidth="1100"
+             Loaded="OnLoaded">
+
+    <UserControl.Resources>
+        
+        <DataTemplate x:Key="MergeGroupCardTemplate"
+                      DataType="{x:Type vm:MergeGroupRowViewModel}">
+            <Border x:Name="CardRoot"
+                    Style="{StaticResource Card.Inset}"
+                    Margin="{DynamicResource Margin.StackItem}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <CheckBox Grid.Column="0"
+                              IsChecked="{Binding IsMergeChecked}"
+                              VerticalAlignment="Top"
+                              Margin="0,0,10,0"
+                              ToolTip="Включить группу в пакетное объединение"
+                              AutomationProperties.Name="Включить группу в объединение" />
+
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="{Binding TargetTitle}"
+                                   FontWeight="{DynamicResource Font.Weight.SemiBold}"
+                                   Foreground="{DynamicResource Fg.Primary}"
+                                   TextTrimming="CharacterEllipsis"
+                                   ToolTip="Целевое медиа – к нему присоединятся остальные" />
+                        <TextBlock Text="{Binding NormalizedKey}"
+                                   Style="{StaticResource TextBlock.Subtle}"
+                                   FontSize="{DynamicResource Font.Size.Caption}"
+                                   TextTrimming="CharacterEllipsis" />
+
+                        <StackPanel x:Name="MembersBlock"
+                                    Orientation="Horizontal"
+                                    Margin="0,6,0,0">
+                            <iconPacks:PackIconLucide Kind="Merge"
+                                                      Width="13"
+                                                      Height="13"
+                                                      VerticalAlignment="Top"
+                                                      Foreground="{DynamicResource Fg.Muted}"
+                                                      Margin="0,2,6,0" />
+                            <TextBlock Text="{Binding MergingMembers}"
+                                       Style="{StaticResource TextBlock.Subtle}"
+                                       TextWrapping="Wrap"
+                                       ToolTip="{Binding MergingMembers}" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="2"
+                                VerticalAlignment="Top"
+                                Margin="10,0,0,0"
+                                HorizontalAlignment="Right">
+                        <StackPanel Orientation="Horizontal"
+                                    HorizontalAlignment="Right">
+                            <Border Style="{StaticResource Badge.Warning}"
+                                    ToolTip="Сколько медиа будет удалено при объединении">
+                                <TextBlock>
+                                    <Run Text="−" /><Run Text="{Binding ToBeRemoved, Mode=OneWay}" /><Run Text=" медиа" />
+                                </TextBlock>
+                            </Border>
+                            <Border Style="{StaticResource Badge.Count}"
+                                    Margin="4,0,0,0"
+                                    ToolTip="Всего площадок в группе">
+                                <TextBlock>
+                                    <Run Text="{Binding TotalSourcesCount, Mode=OneWay}" /><Run Text=" источн." />
+                                </TextBlock>
+                            </Border>
+                        </StackPanel>
+
+                        <Border Style="{StaticResource Badge.RowStatus}"
+                                HorizontalAlignment="Right"
+                                Margin="0,6,0,0"
+                                ToolTip="{Binding ResultTooltip}"
+                                Visibility="{Binding IsApplied, Converter={StaticResource BoolToVisibility}}">
+                            <StackPanel Orientation="Horizontal">
+                                <iconPacks:PackIconLucide Kind="{Binding Status, Converter={StaticResource OperationRowStatusToIcon}}"
+                                                          Width="12"
+                                                          Height="12"
+                                                          VerticalAlignment="Center"
+                                                          Margin="0,0,3,0" />
+                                <TextBlock Text="{Binding ResultText}"
+                                           VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <DataTemplate.Triggers>
+                
+                <DataTrigger Binding="{Binding IsCompact, RelativeSource={RelativeSource AncestorType={x:Type controls:OperationResultPanel}}}"
+                             Value="True">
+                    <Setter TargetName="CardRoot"
+                            Property="Padding"
+                            Value="{DynamicResource Padding.Panel.Dense}" />
+                    <Setter TargetName="MembersBlock"
+                            Property="Visibility"
+                            Value="Collapsed" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0"
+                Style="{StaticResource Card.Inset}"
+                Margin="{DynamicResource Margin.StackItem}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <controls:SourceFilterDropDown Grid.Column="0"
+                                               Label="Источники"
+                                               ItemsSource="{Binding Scope}"
+                                               CanEdit="{Binding CanEditParameters}"
+                                               SelectAllCommand="{Binding SelectAllScopeCommand}"
+                                               SelectNoneCommand="{Binding SelectNoScopeCommand}"
+                                               VerticalAlignment="Center" />
+
+                <Button Grid.Column="1"
+                        Style="{StaticResource Button.Primary}"
+                        Command="{Binding FindCandidatesCommand}"
+                        Padding="{DynamicResource Padding.Control}"
+                        Margin="10,0,0,0"
+                        VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal">
+                        <iconPacks:PackIconLucide Kind="RotateCw"
+                                          Width="14"
+                                          Height="14"
+                                          VerticalAlignment="Center"
+                                          Margin="0,0,6,0" />
+                        <TextBlock Text="Найти кандидатов"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+
+                <CheckBox Grid.Column="3"
+                          IsChecked="{Binding StopOnError}"
+                          IsEnabled="{Binding CanEditParameters}"
+                          VerticalAlignment="Center"
+                          Content="Прервать при ошибке" />
+            </Grid>
+        </Border>
+
+        <controls:OperationResultPanel Grid.Row="1"
+                                       SelectAllCommand="{Binding SelectAllGroupsCommand}"
+                                       SelectNoneCommand="{Binding SelectNoGroupsCommand}"
+                                       CanSelect="{Binding CanEditParameters}"
+                                       JournalSource="{Binding Journal}"
+                                       ClearJournalCommand="{Binding ClearJournalCommand}"
+                                       IsJournalOpen="{Binding IsJournalOpen}"
+                                       IsEmpty="{Binding IsResultEmpty}"
+                                       IsLoading="{Binding IsSearching}"
+                                       LoadingText="Поиск кандидатов…"
+                                       IsCompact="{Binding IsCompact, Mode=TwoWay}">
+            <controls:OperationResultPanel.HeaderLeft>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Style="{StaticResource TextBlock.Subtle}"
+                               VerticalAlignment="Center">
+                        <Run Text="{Binding StatusText, Mode=OneWay}" />
+                    </TextBlock>
+                </StackPanel>
+            </controls:OperationResultPanel.HeaderLeft>
+
+            <controls:OperationResultPanel.EmptyContent>
+                <keepshell:EmptyState VerticalAlignment="Center"
+                                     Icon="Search"
+                                     Heading="Кандидатов нет"
+                                     Description="Отметьте источники выше и нажмите «Найти кандидатов». Объединяются группы, где разные медиа несут одинаковое нормализованное название."
+                                     DescriptionMaxWidth="460" />
+            </controls:OperationResultPanel.EmptyContent>
+
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <ItemsControl ItemsSource="{Binding Groups}"
+                              ItemTemplate="{StaticResource MergeGroupCardTemplate}" />
+            </ScrollViewer>
+        </controls:OperationResultPanel>
+
+        <Border Grid.Row="2"
+                Style="{StaticResource Card.Inset}"
+                Margin="0,8,0,0">
+            
+            <controls:OperationActionBar ApplyText="{Binding ApplyButtonText}"
+                                         ApplyCommand="{Binding ApplyCommand}"
+                                         CancelCommand="{Binding CancelCommand}"
+                                         IsBusy="{Binding IsApplying}"
+                                         ProgressValue="{Binding ProgressValue}"
+                                         ProgressMax="{Binding ProgressMax}"
+                                         ToggleJournalCommand="{Binding ToggleJournalCommand}">
+                <TextBlock Style="{StaticResource TextBlock.Subtle}"
+                           VerticalAlignment="Center">
+                    <Run Text="Отмечено групп: " />
+                    <Run Text="{Binding CheckedGroups, Mode=OneWay}" />
+                    <Run Text=" · к удалению: " />
+                    <Run Text="{Binding MediasToRemove, Mode=OneWay}" />
+                </TextBlock>
+            </controls:OperationActionBar>
+        </Border>
+    </Grid>
+</UserControl>

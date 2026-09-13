@@ -3,6 +3,9 @@
                     xmlns:conv="clr-namespace:MediaOrcestrator.Runner.Wpf.Converters">
 
     <conv:StringToImageSourceConverter x:Key="StringToImageSource" />
+    <conv:JournalLevelToBrushConverter x:Key="JournalLevelToBrush" />
+    <conv:OperationRowStatusToIconConverter x:Key="OperationRowStatusToIcon" />
+    <conv:OperationSourceChipStateToIconConverter x:Key="OperationSourceChipStateToIcon" />
     <conv:BoolToVisibilityHiddenConverter x:Key="BoolToVisibilityHidden" />
 
 </ResourceDictionary>

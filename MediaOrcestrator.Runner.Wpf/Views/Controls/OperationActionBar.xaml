@@ -1,0 +1,74 @@
+﻿<UserControl x:Class="MediaOrcestrator.Runner.Wpf.Views.Controls.OperationActionBar"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:iconPacks="http://metro.mahapps.com/winfx/xaml/iconpacks"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             x:Name="Root"
+             mc:Ignorable="d"
+             d:DesignWidth="800">
+    
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <ProgressBar Grid.Row="0"
+                     Height="6"
+                     Minimum="0"
+                     Maximum="{Binding ProgressMax, ElementName=Root}"
+                     Value="{Binding ProgressValue, ElementName=Root}"
+                     Margin="{DynamicResource Margin.RowGap}"
+                     Visibility="{Binding IsBusy, ElementName=Root, Converter={StaticResource BoolToVisibility}}" />
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <ContentPresenter Grid.Column="0"
+                              Content="{Binding LeftContent, ElementName=Root}"
+                              VerticalAlignment="Center" />
+
+            <StackPanel Grid.Column="1"
+                        Orientation="Horizontal">
+                <Button Style="{StaticResource Button.Ghost}"
+                        Command="{Binding ToggleJournalCommand, ElementName=Root}"
+                        Padding="{DynamicResource Padding.Control}"
+                        Margin="{DynamicResource Margin.InlineGap}">
+                    <StackPanel Orientation="Horizontal">
+                        <iconPacks:PackIconLucide Kind="ScrollText"
+                                                  Width="16"
+                                                  Height="16"
+                                                  VerticalAlignment="Center"
+                                                  Margin="0,0,6,0" />
+                        <TextBlock Text="Журнал"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+                <Button Style="{StaticResource Button.Secondary}"
+                        Command="{Binding CancelCommand, ElementName=Root}"
+                        Padding="{DynamicResource Padding.Control.Large}"
+                        AutomationProperties.Name="Отменить прогон"
+                        Visibility="{Binding IsBusy, ElementName=Root, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel Orientation="Horizontal">
+                        <iconPacks:PackIconLucide Kind="X"
+                                                  Width="14"
+                                                  Height="14"
+                                                  VerticalAlignment="Center"
+                                                  Margin="0,0,6,0" />
+                        <TextBlock Text="Отмена"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+                <Button Style="{StaticResource Button.Primary}"
+                        Content="{Binding ApplyText, ElementName=Root}"
+                        Command="{Binding ApplyCommand, ElementName=Root}"
+                        Padding="{DynamicResource Padding.Control.Large}"
+                        Visibility="{Binding IsBusy, ElementName=Root, Converter={StaticResource InverseBoolToVisibility}}" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+</UserControl>

@@ -7,11 +7,13 @@ namespace MediaOrcestrator.Runner.Wpf.Services;
 public sealed class NavigationService : INavigationService
 {
     private readonly Lazy<ShellViewModel> _shell;
+    private readonly Lazy<OperationsViewModel> _operations;
     private readonly IDialogService _dialogs;
 
     public NavigationService(IServiceProvider sp, IDialogService dialogs)
     {
         _shell = new(sp.GetRequiredService<ShellViewModel>);
+        _operations = new(sp.GetRequiredService<OperationsViewModel>);
         _dialogs = dialogs;
     }
 
@@ -38,5 +40,7 @@ public sealed class NavigationService : INavigationService
 
     public void OpenOperations(OperationsTab tab, IReadOnlyList<Media> selection)
     {
+        _shell.Value.NavigateToOperations(tab);
+        _operations.Value.ApplyExternalSelection(tab, selection);
     }
 }
