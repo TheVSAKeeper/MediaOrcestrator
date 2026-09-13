@@ -25,6 +25,7 @@
     <PackageReference Include="KeepShell" Version="0.1.273" />
     <PackageReference Include="KeepShell.Themes.Tarkov" Version="0.1.273" />
     <PackageReference Include="KeepShell.Automation" Version="0.1.273" />
+    <PackageReference Include="KeepShell.Mcp" Version="0.1.273" />
   </ItemGroup>
 
   <ItemGroup>

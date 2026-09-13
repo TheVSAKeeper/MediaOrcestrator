@@ -1,5 +1,6 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using KeepShell.Mcp;
 using KeepShell.Services.Platform;
 using MahApps.Metro.IconPacks;
 using MediaOrcestrator.Runner.Wpf.Bootstrap;
@@ -22,6 +23,7 @@ public partial class SettingsViewModel : ObservableObject
     private readonly ILogger<SettingsViewModel> _logger;
     private readonly IClipboardService _clipboard;
     private readonly IShellLauncher _shellLauncher;
+    private readonly McpServerOptions _mcpOptions;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSavedRecently))]
@@ -40,6 +42,9 @@ public partial class SettingsViewModel : ObservableObject
         ThemeViewModel theme,
         UpdatePreferences updates,
         AppUpdateViewModel appUpdate,
+        McpPreferences mcp,
+        McpServerHost mcpServer,
+        McpServerOptions mcpOptions,
         IClipboardService clipboard,
         IShellLauncher shellLauncher,
         IFilePicker filePicker)
@@ -50,10 +55,13 @@ public partial class SettingsViewModel : ObservableObject
         _logger = logger;
         _clipboard = clipboard;
         _shellLauncher = shellLauncher;
+        _mcpOptions = mcpOptions;
         Preferences = preferences;
         Theme = theme;
         Updates = updates;
         AppUpdate = appUpdate;
+        Mcp = mcp;
+        McpServer = mcpServer;
         SettingsFilePath = store.FilePath;
 
         Paths = new ObservableCollection<PathSettingViewModel>
@@ -76,9 +84,10 @@ public partial class SettingsViewModel : ObservableObject
             new(SettingsSectionKeys.Paths, "Пути", PackIconLucideKind.FolderTree, "база плагины папка temp"),
             new(SettingsSectionKeys.Appearance, "Интерфейс", PackIconLucideKind.Palette, "тема шрифт масштаб mica"),
             new(SettingsSectionKeys.Notifications, "Уведомления", PackIconLucideKind.Bell, "тосты toast"),
-            new(SettingsSectionKeys.Updates, "Обновления", PackIconLucideKind.Download, "github релиз версия"));
+            new(SettingsSectionKeys.Updates, "Обновления", PackIconLucideKind.Download, "github релиз версия"),
+            new(SettingsSectionKeys.Mcp, "Управление через ИИ (MCP)", PackIconLucideKind.Bot, "mcp ии управление автоматизация"));
 
-        Reset = new(Paths, preferences, theme, updates);
+        Reset = new(Paths, preferences, theme, updates, mcp, mcpOptions);
 
 #if DEBUG
         // TODO: перенести в тест, когда появится проект на KeepShell.Testing
@@ -88,6 +97,8 @@ public partial class SettingsViewModel : ObservableObject
         Sections.Restore(store.GetStringValue(SelectedSectionKey));
         Sections.PropertyChanged += OnSectionsPropertyChanged;
 
+        Mcp.PropertyChanged += OnMcpPropertyChanged;
+        McpServer.PropertyChanged += OnMcpServerPropertyChanged;
         Preferences.PropertyChanged += OnHolderPropertyChanged;
         Theme.PropertyChanged += OnHolderPropertyChanged;
         Updates.PropertyChanged += OnHolderPropertyChanged;
@@ -113,7 +124,21 @@ public partial class SettingsViewModel : ObservableObject
 
     public AppUpdateViewModel AppUpdate { get; }
 
+    public McpPreferences Mcp { get; }
+
+    public McpServerHost McpServer { get; }
+
     public string SettingsFilePath { get; }
+
+    public string McpUrl => $"http://127.0.0.1:{Mcp.Port}{_mcpOptions.EndpointPath}";
+
+    public string McpConnectSnippet => McpConnectSnippets.For(0, McpUrl, Mcp.Token, _mcpOptions.ServerName);
+
+    public string McpStatusText => McpServer.Endpoint is { } endpoint
+        ? $"Сервер слушает {endpoint}"
+        : Mcp.Enabled
+            ? "Сервер включён, но не поднялся"
+            : "Сервер выключен – подключиться к приложению снаружи не выйдет";
 
     public bool HasUnsavedChanges => Paths.Any(p => p.IsDirty);
 
@@ -201,6 +226,22 @@ public partial class SettingsViewModel : ObservableObject
             : "Буфер обмена занят другим приложением – путь скопировать не удалось.";
     }
 
+    [RelayCommand]
+    private void CopyMcpToken()
+    {
+        StatusMessage = _clipboard.TrySetText(Mcp.Token)
+            ? "Токен MCP скопирован в буфер обмена."
+            : "Буфер обмена занят другим приложением – токен скопировать не удалось.";
+    }
+
+    [RelayCommand]
+    private void CopyMcpConnectSnippet()
+    {
+        StatusMessage = _clipboard.TrySetText(McpConnectSnippet)
+            ? "Строка подключения скопирована – вставьте её в настройки своего ИИ-помощника."
+            : "Буфер обмена занят другим приложением – строку подключения скопировать не удалось.";
+    }
+
     private void OnSectionsPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(SettingsSectionList.Selected) && Sections.Selected is { } section)
@@ -212,6 +253,30 @@ public partial class SettingsViewModel : ObservableObject
     private void OnHolderPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         RefreshResetState();
+    }
+
+    private void OnMcpPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(McpPreferences.Port) or nameof(McpPreferences.Token))
+        {
+            OnPropertyChanged(nameof(McpUrl));
+            OnPropertyChanged(nameof(McpConnectSnippet));
+        }
+
+        if (e.PropertyName is nameof(McpPreferences.Enabled))
+        {
+            OnPropertyChanged(nameof(McpStatusText));
+        }
+
+        RefreshResetState();
+    }
+
+    private void OnMcpServerPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(McpServerHost.Endpoint))
+        {
+            OnPropertyChanged(nameof(McpStatusText));
+        }
     }
 
     private void RefreshResetState()

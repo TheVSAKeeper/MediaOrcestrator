@@ -1,4 +1,5 @@
 ﻿using KeepShell.Automation;
+using KeepShell.Mcp;
 using LiteDB;
 using MediaOrcestrator.Domain;
 using MediaOrcestrator.Domain.Comments;
@@ -6,6 +7,7 @@ using MediaOrcestrator.Domain.Merging;
 using MediaOrcestrator.Modules;
 using MediaOrcestrator.Runner.Wpf.Bootstrap;
 using MediaOrcestrator.Runner.Wpf.Bootstrap.Gallery;
+using MediaOrcestrator.Runner.Wpf.Mcp;
 using MediaOrcestrator.Runner.Wpf.MediaContextMenu;
 using MediaOrcestrator.Runner.Wpf.MediaContextMenu.Actions;
 using MediaOrcestrator.Runner.Wpf.Services;
@@ -161,6 +163,8 @@ public partial class App : Application
             _splash = null;
 
             JumpListBuilder.Apply();
+
+            _host.Services.GetRequiredService<McpServerHost>().Apply();
 
             if (_startupCommand is not null)
             {
@@ -677,6 +681,17 @@ public partial class App : Application
         services.AddSingleton<ISettingsStore>(_ => new SettingsStore(settingsPath));
 
         services.AddKeepShell();
+        services.AddSingleton<MediaOrcestratorAutomation>();
+        services.AddKeepShellMcp<ShellViewModel>(new McpServerOptions
+        {
+            ServerName = "mediaorcestrator",
+            AppName = "MediaOrcestrator",
+            AppVersion = ResolveAppVersion(),
+            DefaultPort = 7655,
+            ShotsDirectory = Path.Combine(AppContext.BaseDirectory, "shots"),
+            ToolTypes = [typeof(MediaOrcestratorTools)],
+            ConfigureTools = static (provider, tools) => tools.AddSingleton(provider.GetRequiredService<MediaOrcestratorAutomation>()),
+        });
         services.AddSingleton<IAuthUI, WpfAuthUI>();
         services.AddSingleton<INavigationService, NavigationService>();
         services.AddSingleton<IAppLifetime, AppLifetime>();

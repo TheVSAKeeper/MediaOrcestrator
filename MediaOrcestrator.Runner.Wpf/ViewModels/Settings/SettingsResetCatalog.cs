@@ -1,4 +1,5 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
+using KeepShell.Mcp;
 using MediaOrcestrator.Runner.Wpf.Bootstrap;
 using System.IO;
 using System.Text;
@@ -11,6 +12,7 @@ public static class SettingsSectionKeys
     public const string Appearance = "appearance";
     public const string Notifications = "notifications";
     public const string Updates = "updates";
+    public const string Mcp = "mcp";
 }
 
 public sealed class SettingsResetField(string key, string caption, string factoryLabel, Func<bool> isFactory, Action apply)
@@ -100,7 +102,9 @@ public sealed class SettingsResetCatalog
         IReadOnlyList<PathSettingViewModel> paths,
         ShellPreferences shell,
         ThemeViewModel theme,
-        UpdatePreferences updates)
+        UpdatePreferences updates,
+        McpPreferences mcp,
+        McpServerOptions mcpOptions)
     {
         var baseDirectory = AppContext.BaseDirectory;
 
@@ -139,6 +143,18 @@ public sealed class SettingsResetCatalog
                 new SettingsResetField(UpdatePreferences.RepoKey, "Репозиторий релизов", UpdatePreferences.FactoryRepo,
                     () => updates.IsFactoryRepo,
                     updates.ResetRepo)),
+
+            [SettingsSectionKeys.Mcp] = new(SettingsSectionKeys.Mcp,
+                "Токен останется прежним – для него своя кнопка.",
+                new(McpPreferences.EnabledKey, "Сервер", "выключен",
+                    () => !mcp.Enabled,
+                    () => mcp.Enabled = false),
+                new(McpPreferences.PortKey, "Порт", mcpOptions.DefaultPort.ToString(),
+                    () => mcp.Port == mcpOptions.DefaultPort,
+                    () => mcp.Port = mcpOptions.DefaultPort),
+                new(McpPreferences.AllowMutationsKey, "Изменяющие операции", "запрещены",
+                    () => !mcp.AllowMutations,
+                    () => mcp.AllowMutations = false)),
         };
     }
 
