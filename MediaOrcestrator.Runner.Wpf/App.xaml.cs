@@ -274,6 +274,8 @@ public partial class App : Application
         }
 
         var actionHolder = _host.Services.GetRequiredService<ActionHolder>();
+        var sources = _host.Services.GetRequiredService<SourcesRelationsViewModel>();
+        var audit = _host.Services.GetRequiredService<AuditViewModel>();
         var tools = _host.Services.GetRequiredService<ToolsViewModel>();
         var updateManager = _host.Services.GetRequiredService<AppUpdateManager>();
         var appUpdate = _host.Services.GetRequiredService<AppUpdateViewModel>();
@@ -283,6 +285,8 @@ public partial class App : Application
 
         var dbSteps = new PreloadStep[]
         {
+            new("Источники и связи", _ => sources.EnsureLoadedAsync()),
+            new("Аудит источников", _ => audit.EnsureLoadedAsync()),
         };
 
         var ioSteps = new PreloadStep[]
@@ -607,15 +611,18 @@ public partial class App : Application
         services.AddSingleton<ShellPreferences>();
         services.AddSingleton<UpdatePreferences>();
         services.AddSingleton<ThemeViewModel>();
+        services.AddSingleton<AuditViewModel>();
         services.AddSingleton<SettingsViewModel>();
         services.AddSingleton<TasksViewModel>();
         services.AddSingleton<ToolsViewModel>();
         services.AddSingleton<LogsViewModel>();
         services.AddSingleton<SystemViewModel>();
+        services.AddSingleton<SourcesRelationsViewModel>();
         services.AddSingleton<MaintenanceViewModel>();
         services.AddSingleton<DatabaseCleanupViewModel>();
         services.AddSingleton<AboutViewModel>();
         services.AddSingleton<AppUpdateViewModel>();
+        services.AddTransient<SourceSettingsViewModel>();
         services.AddSingleton<ShellViewModel>();
         services.AddSingleton<MainWindow>();
 

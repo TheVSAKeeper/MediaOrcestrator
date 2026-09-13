@@ -50,6 +50,8 @@ public sealed partial class ShellViewModel : ShellViewModelBase
 
     public ShellViewModel(
         ThemeViewModel theme,
+        SourcesRelationsViewModel sources,
+        AuditViewModel audit,
         SystemViewModel system,
         TasksViewModel tasks,
         ModalHostViewModel modal,
@@ -80,6 +82,8 @@ public sealed partial class ShellViewModel : ShellViewModelBase
         IsTasksDrawerOpen = bool.TryParse(_settings.GetStringValue(TasksDrawerOpenKey), out var drawerOpen) && drawerOpen;
         _suppressPersist = false;
 
+        Sections.Add(new("Источники и связи", PackIconLucideKind.Link, sources, key: "sources"));
+        Sections.Add(new("Досинк источников", PackIconLucideKind.RefreshCw, audit, key: "audit"));
         Sections.Add(new("Система", PackIconLucideKind.Settings, system, key: "system"));
 
         Selected = Sections[0];
