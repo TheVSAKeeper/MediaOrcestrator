@@ -1,9 +1,11 @@
-﻿using LiteDB;
+﻿using KeepShell.Automation;
+using LiteDB;
 using MediaOrcestrator.Domain;
 using MediaOrcestrator.Domain.Comments;
 using MediaOrcestrator.Domain.Merging;
 using MediaOrcestrator.Modules;
 using MediaOrcestrator.Runner.Wpf.Bootstrap;
+using MediaOrcestrator.Runner.Wpf.Bootstrap.Gallery;
 using MediaOrcestrator.Runner.Wpf.MediaContextMenu;
 using MediaOrcestrator.Runner.Wpf.MediaContextMenu.Actions;
 using MediaOrcestrator.Runner.Wpf.Services;
@@ -44,6 +46,13 @@ public partial class App : Application
 
         StyledMessageBox.DefaultTitle = "MediaOrcestrator";
 
+        var galleryIndex = Array.FindIndex(e.Args, static arg => string.Equals(arg, GalleryOptions.Argument, StringComparison.OrdinalIgnoreCase));
+
+        if (galleryIndex >= 0)
+        {
+            await RunGalleryAsync(e.Args.Skip(galleryIndex + 1));
+            return;
+        }
 
         _startupCommand = StartupCommandLine.ToCommand(e.Args);
         _singleInstanceGuard = SingleInstanceGuard.Acquire("MediaOrcestrator");
@@ -506,6 +515,43 @@ public partial class App : Application
         {
             configuration.MinimumLevel.Override(source, level);
         }
+    }
+
+    private async Task RunGalleryAsync(IEnumerable<string> args)
+    {
+        ShutdownMode = ShutdownMode.OnExplicitShutdown;
+        AppThemes.Register();
+
+        var exitCode = 1;
+
+        try
+        {
+            var options = GalleryOptions.Parse(args, Path.Combine(AppContext.BaseDirectory, GalleryRunner.FolderName));
+            var fixture = GalleryFixture.Create(options);
+            var loggingOptions = BuildLoggingOptions(Path.Combine(fixture.Root, "logs"));
+
+            _host = Host.CreateDefaultBuilder()
+                .UseSerilog((_, _, configuration) => ConfigureSerilog(configuration, loggingOptions))
+                .ConfigureServices(services => ConfigureServices(services, fixture.Paths, fixture.SettingsPath, _logSink, loggingOptions))
+                .Build();
+
+            ThemeManager.Apply(AppThemes.LightKey);
+            FontScaleManager.Initialize(options.Arguments.FontScale);
+            ViewLocator.InstallIntoApplication();
+
+            await Task.Run(_host.Services.GetRequiredService<Orcestrator>().Init);
+
+            var logger = _host.Services.GetRequiredService<ILogger<App>>();
+            var host = GalleryHost.Create(_host.Services, options);
+
+            exitCode = await GalleryRunner.RunAsync(host, options.Arguments, new GalleryJournal(logger));
+        }
+        catch (Exception ex)
+        {
+            Log.Fatal(ex, "Галерея не отрисована");
+        }
+
+        Shutdown(exitCode);
     }
 
     internal static string ResolveAppVersion()

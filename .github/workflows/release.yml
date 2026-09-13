@@ -1,4 +1,4 @@
-name: Release
+﻿name: Release
 
 on:
   push:
@@ -63,7 +63,7 @@ jobs:
           toTag: v${{ steps.version.outputs.VERSION }}
           configurationJson: |
             {
-              "template": "## What's Changed\n#{{UNCATEGORIZED}}",
+              "template": "Нужен .NET 10 Desktop Runtime. Версия WinForms больше не выпускается: установленная остаётся на своей последней версии, WPF ставится в отдельную папку.\n\n## What's Changed\n#{{UNCATEGORIZED}}",
               "commit_template": "- #{{TITLE}} by @#{{AUTHOR}}",
               "tag_resolver": {
                 "method": "sort"
@@ -84,14 +84,17 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: '10.0.x'
 
       - name: Restore packages
         run: dotnet restore MediaOrcestrator.sln
 
-      - name: Publish Runner
+      - name: Build plugins
+        run: dotnet build MediaOrcestrator.sln -c Release --no-restore /p:Version=${{ needs.prepare.outputs.version }}
+
+      - name: Publish Runner.Wpf
         run: >
-          dotnet publish MediaOrcestrator.Runner/MediaOrcestrator.Runner.csproj
+          dotnet publish MediaOrcestrator.Runner.Wpf/MediaOrcestrator.Runner.Wpf.csproj
           -c Release
           -r win-x64
           --self-contained false
@@ -118,23 +121,17 @@ jobs:
 
       - name: Copy ModuleBuilds
         shell: bash
-        run: |
-          if [ -d "publish/app/ModuleBuilds" ]; then
-            echo "ModuleBuilds already present from build"
-          else
-            echo "ModuleBuilds not found in publish output, checking build output..."
-            cp -r ModuleBuilds publish/app/ModuleBuilds 2>/dev/null || echo "No ModuleBuilds to copy"
-          fi
+        run: cp -r ModuleBuilds publish/app/ModuleBuilds
 
       - name: Create zip
         shell: bash
         run: |
           cd publish/app
-          7z a -tzip "../../MediaOrcestrator-v${{ needs.prepare.outputs.version }}.zip" .
+          7z a -tzip "../../MediaOrcestrator-Wpf-v${{ needs.prepare.outputs.version }}.zip" .
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ needs.prepare.outputs.version }}
-          files: MediaOrcestrator-v${{ needs.prepare.outputs.version }}.zip
+          files: MediaOrcestrator-Wpf-v${{ needs.prepare.outputs.version }}.zip
           body: ${{ needs.prepare.outputs.changelog }}
