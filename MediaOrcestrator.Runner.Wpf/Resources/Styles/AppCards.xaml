@@ -1,0 +1,114 @@
+﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:vm="clr-namespace:MediaOrcestrator.Runner.Wpf.ViewModels">
+
+    <Style x:Key="Badge.RowStatus"
+           TargetType="Border"
+           BasedOn="{StaticResource Badge}">
+        <Setter Property="Padding"
+                Value="4,1" />
+        <Setter Property="Background"
+                Value="{DynamicResource Bg.SurfaceMute}" />
+        <Setter Property="BorderBrush"
+                Value="{DynamicResource Border.Subtle}" />
+        <Setter Property="TextElement.Foreground"
+                Value="{DynamicResource Fg.Secondary}" />
+        <Setter Property="TextElement.FontSize"
+                Value="{DynamicResource Font.Size.Caption}" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding Status}"
+                         Value="{x:Static vm:OperationRowStatus.Applied}">
+                <Setter Property="Background"
+                        Value="{DynamicResource State.SuccessSoft}" />
+                <Setter Property="BorderBrush"
+                        Value="{DynamicResource State.Success}" />
+                <Setter Property="TextElement.Foreground"
+                        Value="{DynamicResource State.Success}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Status}"
+                         Value="{x:Static vm:OperationRowStatus.Failed}">
+                <Setter Property="Background"
+                        Value="{DynamicResource State.ErrorSoft}" />
+                <Setter Property="BorderBrush"
+                        Value="{DynamicResource State.Error}" />
+                <Setter Property="TextElement.Foreground"
+                        Value="{DynamicResource State.Error}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Status}"
+                         Value="{x:Static vm:OperationRowStatus.Pending}">
+                <Setter Property="Background"
+                        Value="{DynamicResource State.InfoSoft}" />
+                <Setter Property="BorderBrush"
+                        Value="{DynamicResource State.Info}" />
+                <Setter Property="TextElement.Foreground"
+                        Value="{DynamicResource State.Info}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Status}"
+                         Value="{x:Static vm:OperationRowStatus.Skipped}">
+                <Setter Property="TextElement.Foreground"
+                        Value="{DynamicResource Fg.Muted}" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="Rect.ActionAccent"
+           TargetType="Rectangle">
+        <Setter Property="Fill"
+                Value="{DynamicResource Accent.Primary}" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding Accent}"
+                         Value="{x:Static vm:ActionAccentKind.Succeeded}">
+                <Setter Property="Fill"
+                        Value="{DynamicResource State.Success}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Accent}"
+                         Value="{x:Static vm:ActionAccentKind.Failed}">
+                <Setter Property="Fill"
+                        Value="{DynamicResource State.Error}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Accent}"
+                         Value="{x:Static vm:ActionAccentKind.Cancelled}">
+                <Setter Property="Fill"
+                        Value="{DynamicResource Border.Strong}" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="Chip.Source"
+           TargetType="Border"
+           BasedOn="{StaticResource Badge}">
+        <Setter Property="Padding"
+                Value="6,1" />
+        <Setter Property="Margin"
+                Value="0,0,4,2" />
+        <Setter Property="Background"
+                Value="{DynamicResource Bg.SurfaceMute}" />
+        <Setter Property="BorderBrush"
+                Value="{DynamicResource Border.Subtle}" />
+        <Setter Property="TextElement.Foreground"
+                Value="{DynamicResource Fg.Secondary}" />
+        <Setter Property="TextElement.FontSize"
+                Value="{DynamicResource Font.Size.Caption}" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding State}"
+                         Value="{x:Static vm:OperationSourceChipState.Synced}">
+                <Setter Property="Background"
+                        Value="{DynamicResource State.SuccessSoft}" />
+                <Setter Property="BorderBrush"
+                        Value="{DynamicResource State.Success}" />
+                <Setter Property="TextElement.Foreground"
+                        Value="{DynamicResource State.Success}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding State}"
+                         Value="{x:Static vm:OperationSourceChipState.OutOfSync}">
+                <Setter Property="Background"
+                        Value="{DynamicResource State.WarningSoft}" />
+                <Setter Property="BorderBrush"
+                        Value="{DynamicResource State.Warning}" />
+                <Setter Property="TextElement.Foreground"
+                        Value="{DynamicResource State.Warning}" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+</ResourceDictionary>

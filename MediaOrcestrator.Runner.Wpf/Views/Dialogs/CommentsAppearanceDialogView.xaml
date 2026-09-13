@@ -1,0 +1,197 @@
+﻿<UserControl x:Class="MediaOrcestrator.Runner.Wpf.Views.Dialogs.CommentsAppearanceDialogView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:MediaOrcestrator.Runner.Wpf.ViewModels.Comments"
+             xmlns:keepshell="https://schemas.keepshell.dev/wpf"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vm:CommentsAppearanceDialogViewModel}"
+             Width="{DynamicResource Dialog.Width.Medium}"
+             MinHeight="560">
+
+    <UserControl.Resources>
+
+        <Style x:Key="LabelMuted"
+               TargetType="TextBlock"
+               BasedOn="{StaticResource TextBlock.Subtle}">
+            <Setter Property="VerticalAlignment"
+                    Value="Center" />
+            <Setter Property="Margin"
+                    Value="0,0,12,0" />
+        </Style>
+
+    </UserControl.Resources>
+
+    <Grid Margin="22">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0"
+                   Text="Внешний вид комментариев"
+                   Style="{StaticResource TextBlock.Heading}"
+                   Margin="0,0,0,4" />
+
+        <TextBlock Grid.Row="1"
+                   Style="{StaticResource TextBlock.Subtle}"
+                   TextWrapping="Wrap"
+                   Margin="0,0,0,16"
+                   Text="Режим отображения, размеры шрифтов и междустрочный интервал." />
+
+        <TabControl Grid.Row="2"
+                    SelectedIndex="{Binding SelectedLayoutTabIndex, Mode=TwoWay}">
+
+            <TabItem Header="Лента">
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource TextBlock.Subtle}"
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,0,12"
+                                   Text="Плоский список комментариев со всех выбранных источников, отсортированный по дате. Каждая строка – корневой комментарий и его ответы." />
+
+                        <TextBlock Text="Размеры шрифтов"
+                                   FontWeight="SemiBold"
+                                   Margin="0,4,0,8" />
+
+                        <keepshell:NumericSettingField Margin="{DynamicResource Margin.StackItem}"
+                                                     Label="Базовый размер"
+                                                     Value="{Binding BaseFontSize, UpdateSourceTrigger=PropertyChanged}"
+                                                     IncreaseCommand="{Binding IncreaseBaseFontSizeCommand}"
+                                                     DecreaseCommand="{Binding DecreaseBaseFontSizeCommand}"
+                                                     IncreaseAutomationName="Увеличить базовый размер"
+                                                     DecreaseAutomationName="Уменьшить базовый размер" />
+
+                        <keepshell:NumericSettingField Margin="{DynamicResource Margin.StackItem}"
+                                                     Label="Текст комментария"
+                                                     Value="{Binding CommentFontSize, UpdateSourceTrigger=PropertyChanged}"
+                                                     IncreaseCommand="{Binding IncreaseCommentFontSizeCommand}"
+                                                     DecreaseCommand="{Binding DecreaseCommentFontSizeCommand}"
+                                                     IncreaseAutomationName="Увеличить размер текста"
+                                                     DecreaseAutomationName="Уменьшить размер текста" />
+
+                        <keepshell:NumericSettingField Margin="{DynamicResource Margin.StackItem}"
+                                                     Label="Имя автора"
+                                                     Value="{Binding AuthorFontSize, UpdateSourceTrigger=PropertyChanged}"
+                                                     IncreaseCommand="{Binding IncreaseAuthorFontSizeCommand}"
+                                                     DecreaseCommand="{Binding DecreaseAuthorFontSizeCommand}"
+                                                     IncreaseAutomationName="Увеличить размер имени"
+                                                     DecreaseAutomationName="Уменьшить размер имени" />
+
+                        <keepshell:NumericSettingField Margin="{DynamicResource Margin.StackItem}"
+                                                     Label="Дата и метаданные"
+                                                     Value="{Binding MetaFontSize, UpdateSourceTrigger=PropertyChanged}"
+                                                     IncreaseCommand="{Binding IncreaseMetaFontSizeCommand}"
+                                                     DecreaseCommand="{Binding DecreaseMetaFontSizeCommand}"
+                                                     IncreaseAutomationName="Увеличить размер метаданных"
+                                                     DecreaseAutomationName="Уменьшить размер метаданных" />
+
+                        <keepshell:NumericSettingField Margin="{DynamicResource Margin.StackItem}"
+                                                     Label="Бейджи и плашки"
+                                                     Value="{Binding BadgeFontSize, UpdateSourceTrigger=PropertyChanged}"
+                                                     IncreaseCommand="{Binding IncreaseBadgeFontSizeCommand}"
+                                                     DecreaseCommand="{Binding DecreaseBadgeFontSizeCommand}"
+                                                     IncreaseAutomationName="Увеличить размер бейджей"
+                                                     DecreaseAutomationName="Уменьшить размер бейджей" />
+
+                        <keepshell:NumericSettingField Margin="0,0,0,16"
+                                                     Label="Междустрочный интервал"
+                                                     Value="{Binding LineHeight, UpdateSourceTrigger=PropertyChanged}"
+                                                     ValueStringFormat="{}{0:0.##}"
+                                                     IncreaseCommand="{Binding IncreaseLineHeightCommand}"
+                                                     DecreaseCommand="{Binding DecreaseLineHeightCommand}"
+                                                     IncreaseAutomationName="Увеличить интервал"
+                                                     DecreaseAutomationName="Уменьшить интервал" />
+
+                        <TextBlock Text="Префикс ответа"
+                                   FontWeight="SemiBold"
+                                   Margin="0,8,0,8" />
+
+                        <Grid Margin="{DynamicResource Margin.StackItem}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="200" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Style="{StaticResource LabelMuted}"
+                                       Text="Шаблон" />
+                            <ComboBox Grid.Column="1"
+                                      ItemsSource="{Binding Presets}"
+                                      SelectedItem="{Binding SelectedPreset, Mode=TwoWay}" />
+                        </Grid>
+
+                        <Grid Margin="0,0,0,8"
+                              Visibility="{Binding IsCustomReply, Converter={StaticResource BoolToVisibility}}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="200" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Style="{StaticResource LabelMuted}"
+                                       Text="Свой префикс" />
+                            <TextBox Grid.Column="1"
+                                     Text="{Binding CustomReplyPrefix, UpdateSourceTrigger=PropertyChanged}"
+                                     ToolTip="{}{name} будет заменён на имя автора, на которого отвечают." />
+                        </Grid>
+
+                        <TextBlock Style="{StaticResource TextBlock.Subtle}"
+                                   TextWrapping="Wrap"
+                                   Margin="0,12,0,0"
+                                   Text="Размеры применяются ко всем строкам списка комментариев." />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="Группировка">
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource TextBlock.Subtle}"
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,0,12"
+                                   Text="Комментарии сгруппированы по медиа: каждая группа открывается своим заголовком, под ним – комментарии этого медиа. Внутри группы – обычное дерево с ответами." />
+
+                        <TextBlock Style="{StaticResource TextBlock.Subtle}"
+                                   TextWrapping="Wrap"
+                                   Text="Настройки шрифтов и префикса ответа применяются к обоим режимам. Откройте вкладку «Лента», чтобы их поменять." />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
+
+        <Grid Grid.Row="3"
+              Margin="0,16,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <Button Grid.Column="0"
+                    Style="{StaticResource Button.Ghost}"
+                    Command="{Binding ResetCommand}"
+                    Content="Сбросить"
+                    Padding="14,6"
+                    MinHeight="{DynamicResource Control.Height.Default}" />
+
+            <StackPanel Grid.Column="2"
+                        Orientation="Horizontal">
+                <Button Style="{StaticResource Button.Ghost}"
+                        Command="{Binding CancelCommand}"
+                        Content="Отмена"
+                        Margin="0,0,8,0"
+                        Padding="14,6"
+                        MinHeight="{DynamicResource Control.Height.Default}"
+                        IsCancel="True" />
+                <Button Style="{StaticResource Button.Primary}"
+                        Command="{Binding SaveCommand}"
+                        Content="Сохранить"
+                        Padding="14,6"
+                        MinHeight="{DynamicResource Control.Height.Default}"
+                        IsDefault="True" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+</UserControl>

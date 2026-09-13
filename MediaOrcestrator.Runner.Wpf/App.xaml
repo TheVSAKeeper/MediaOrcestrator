@@ -1,0 +1,23 @@
+﻿<Application x:Class="MediaOrcestrator.Runner.Wpf.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:MediaOrcestrator.Runner.Wpf.ViewModels"
+             xmlns:dialogs="clr-namespace:MediaOrcestrator.Runner.Wpf.Views.Dialogs">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="pack://application:,,,/KeepShell;component/Resources/Themes/Light.xaml" />
+                <ResourceDictionary Source="pack://application:,,,/KeepShell;component/Resources/Themes/Tokens.xaml" />
+                <ResourceDictionary Source="pack://application:,,,/KeepShell;component/Resources/Converters.xaml" />
+                <ResourceDictionary Source="pack://application:,,,/KeepShell;component/Resources/Styles/Controls.xaml" />
+                
+                <ResourceDictionary Source="Resources/Converters.xaml" />
+                <ResourceDictionary Source="Resources/Styles/AppCards.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <DataTemplate DataType="{x:Type vm:SourceSettingsViewModel}">
+                <dialogs:SourceSettingsHost />
+            </DataTemplate>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

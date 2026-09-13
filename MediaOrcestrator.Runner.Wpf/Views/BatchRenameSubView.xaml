@@ -1,0 +1,373 @@
+﻿<UserControl x:Class="MediaOrcestrator.Runner.Wpf.Views.BatchRenameSubView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:MediaOrcestrator.Runner.Wpf.ViewModels"
+             xmlns:controls="clr-namespace:MediaOrcestrator.Runner.Wpf.Views.Controls"
+             xmlns:keepshell="https://schemas.keepshell.dev/wpf"
+             xmlns:iconPacks="http://metro.mahapps.com/winfx/xaml/iconpacks"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vm:BatchRenameSubViewModel}"
+             d:DesignHeight="600"
+             d:DesignWidth="1100">
+    <UserControl.Resources>
+
+        <Style x:Key="FieldLabel"
+               TargetType="TextBlock"
+               BasedOn="{StaticResource TextBlock.Subtle}">
+            <Setter Property="Margin"
+                    Value="{DynamicResource Margin.InlineGap}" />
+            <Setter Property="VerticalAlignment"
+                    Value="Center" />
+            <Setter Property="MinWidth"
+                    Value="78" />
+        </Style>
+
+        <DataTemplate x:Key="SourceChipTemplate"
+                      DataType="{x:Type vm:OperationSourceChipViewModel}">
+            <Border Style="{StaticResource Chip.Source}"
+                    ToolTip="{Binding Tooltip}">
+                <StackPanel Orientation="Horizontal">
+                    <iconPacks:PackIconLucide Kind="{Binding State, Converter={StaticResource OperationSourceChipStateToIcon}}"
+                                              Width="12"
+                                              Height="12"
+                                              VerticalAlignment="Center"
+                                              Margin="0,0,3,0" />
+                    <TextBlock Text="{Binding Text}"
+                               VerticalAlignment="Center" />
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+
+        <Style x:Key="OperationRowItem"
+               TargetType="ListBoxItem">
+            <Setter Property="HorizontalContentAlignment"
+                    Value="Stretch" />
+            <Setter Property="Padding"
+                    Value="0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="Bd"
+                                Background="Transparent"
+                                BorderBrush="{DynamicResource Border.Subtle}"
+                                BorderThickness="0,0,0,1"
+                                Padding="6,6">
+                            <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver"
+                                     Value="True">
+                                <Setter TargetName="Bd"
+                                        Property="Background"
+                                        Value="{DynamicResource Bg.SurfaceAlt}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <DataTemplate x:Key="RenameRowTemplate"
+                      DataType="{x:Type vm:BatchRenameRowViewModel}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <CheckBox Grid.Column="0"
+                          IsChecked="{Binding IsApplyChecked}"
+                          VerticalAlignment="Center"
+                          Margin="0,0,10,0"
+                          ToolTip="Применить к этому видео"
+                          AutomationProperties.Name="Применить к видео" />
+
+                <Grid Grid.Column="1"
+                      VerticalAlignment="Center">
+                    
+                    <StackPanel x:Name="ComfortableTitles">
+                        <TextBlock Text="{Binding OldTitle}"
+                                   Foreground="{DynamicResource Fg.Muted}"
+                                   FontSize="{DynamicResource Font.Size.Caption}"
+                                   TextTrimming="CharacterEllipsis"
+                                   Visibility="{Binding HasChange, Converter={StaticResource BoolToVisibility}}" />
+                        <TextBlock Text="{Binding NewTitle}"
+                                   Foreground="{DynamicResource Fg.Primary}"
+                                   FontWeight="{DynamicResource Font.Weight.SemiBold}"
+                                   TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="без изменений"
+                                   Style="{StaticResource TextBlock.Subtle}"
+                                   FontSize="{DynamicResource Font.Size.Caption}"
+                                   Visibility="{Binding HasChange, Converter={StaticResource InverseBoolToVisibility}}" />
+                    </StackPanel>
+
+                    <Grid x:Name="CompactTitles"
+                          Visibility="Collapsed">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock x:Name="CompactOld"
+                                   Grid.Column="0"
+                                   HorizontalAlignment="Right"
+                                   Text="{Binding OldTitle}"
+                                   Foreground="{DynamicResource Fg.Muted}"
+                                   TextTrimming="CharacterEllipsis" />
+                        <iconPacks:PackIconLucide x:Name="CompactArrow"
+                                                  Grid.Column="1"
+                                                  Kind="ArrowRight"
+                                                  Width="13"
+                                                  Height="13"
+                                                  VerticalAlignment="Center"
+                                                  Foreground="{DynamicResource Fg.Muted}"
+                                                  Margin="6,0" />
+                        <TextBlock x:Name="CompactNew"
+                                   Grid.Column="2"
+                                   Text="{Binding NewTitle}"
+                                   Foreground="{DynamicResource Fg.Primary}"
+                                   FontWeight="{DynamicResource Font.Weight.SemiBold}"
+                                   TextTrimming="CharacterEllipsis" />
+                    </Grid>
+                </Grid>
+
+                <StackPanel Grid.Column="2"
+                            Orientation="Horizontal"
+                            VerticalAlignment="Center"
+                            Margin="10,0,0,0">
+                    <ItemsControl ItemsSource="{Binding SourceChips}"
+                                  ItemTemplate="{StaticResource SourceChipTemplate}"
+                                  VerticalAlignment="Center"
+                                  Margin="0,0,6,0">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel Orientation="Horizontal" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                    </ItemsControl>
+
+                    <Border Style="{StaticResource Badge.RowStatus}"
+                            VerticalAlignment="Center"
+                            ToolTip="{Binding ResultTooltip}">
+                        <StackPanel Orientation="Horizontal">
+                            <iconPacks:PackIconLucide Kind="{Binding Status, Converter={StaticResource OperationRowStatusToIcon}}"
+                                                      Width="12"
+                                                      Height="12"
+                                                      VerticalAlignment="Center"
+                                                      Margin="0,0,3,0" />
+                            <TextBlock Text="{Binding StatusText}"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Grid>
+
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsCompact, RelativeSource={RelativeSource AncestorType={x:Type controls:OperationResultPanel}}}"
+                             Value="True">
+                    <Setter TargetName="ComfortableTitles"
+                            Property="Visibility"
+                            Value="Collapsed" />
+                    <Setter TargetName="CompactTitles"
+                            Property="Visibility"
+                            Value="Visible" />
+                </DataTrigger>
+                
+                <DataTrigger Binding="{Binding HasChange}"
+                             Value="False">
+                    <Setter TargetName="CompactOld"
+                            Property="Visibility"
+                            Value="Collapsed" />
+                    <Setter TargetName="CompactArrow"
+                            Property="Visibility"
+                            Value="Collapsed" />
+                    <Setter TargetName="CompactNew"
+                            Property="Grid.Column"
+                            Value="0" />
+                    <Setter TargetName="CompactNew"
+                            Property="Grid.ColumnSpan"
+                            Value="3" />
+                    <Setter TargetName="CompactNew"
+                            Property="Foreground"
+                            Value="{DynamicResource Fg.Muted}" />
+                    <Setter TargetName="CompactNew"
+                            Property="FontWeight"
+                            Value="{DynamicResource Font.Weight.Regular}" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0"
+                Style="{StaticResource Card.Inset}"
+                Margin="{DynamicResource Margin.StackItem}">
+            <StackPanel>
+                <controls:BatchMediaToolbar Margin="{DynamicResource Margin.RowGap}"
+                                            MediasSummary="{Binding MediasSummary}"
+                                            LoadAllMediaCommand="{Binding LoadAllMediaCommand}"
+                                            ClearMediaCommand="{Binding ClearMediaCommand}"
+                                            HasMedias="{Binding HasMedias}"
+                                            CanEditParameters="{Binding CanEditParameters}"
+                                            StopOnError="{Binding StopOnError}" />
+
+                <Grid Margin="0,4,0,0">
+                    
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Grid.Row="0"
+                               Grid.Column="0"
+                               Style="{StaticResource FieldLabel}"
+                               Text="Найти:" />
+                    <TextBox Grid.Row="0"
+                             Grid.Column="1"
+                             Style="{StaticResource TextBox.Toolbar}"
+                             Text="{Binding Find, UpdateSourceTrigger=PropertyChanged}"
+                             IsEnabled="{Binding CanEditParameters}"
+                             Margin="0,0,12,4" />
+                    <TextBlock Grid.Row="0"
+                               Grid.Column="2"
+                               Style="{StaticResource FieldLabel}"
+                               Text="Режим:" />
+                    <ComboBox Grid.Row="0"
+                              Grid.Column="3"
+                              Style="{StaticResource ComboBox.Toolbar}"
+                              ItemsSource="{Binding ModeOptions}"
+                              DisplayMemberPath="Label"
+                              SelectedValuePath="Value"
+                              SelectedValue="{Binding Mode}"
+                              IsEnabled="{Binding CanEditParameters}"
+                              AutomationProperties.Name="Режим замены"
+                              MinWidth="180"
+                              Margin="0,0,0,4" />
+
+                    <TextBlock Grid.Row="1"
+                               Grid.Column="0"
+                               Style="{StaticResource FieldLabel}"
+                               Text="Заменить:" />
+                    <TextBox Grid.Row="1"
+                             Grid.Column="1"
+                             Style="{StaticResource TextBox.Toolbar}"
+                             Text="{Binding Replace, UpdateSourceTrigger=PropertyChanged}"
+                             IsEnabled="{Binding CanEditParameters}"
+                             Margin="0,0,12,4" />
+                    <StackPanel Grid.Row="1"
+                                Grid.Column="2"
+                                Grid.ColumnSpan="2"
+                                Orientation="Horizontal"
+                                VerticalAlignment="Center"
+                                Margin="0,0,0,4">
+                        <CheckBox IsChecked="{Binding IgnoreCase}"
+                                  IsEnabled="{Binding CanEditParameters}"
+                                  VerticalAlignment="Center"
+                                  Content="Без учёта регистра" />
+                        <controls:SourceFilterDropDown Label="Площадки"
+                                                       ItemsSource="{Binding Sources}"
+                                                       CanEdit="{Binding CanEditParameters}"
+                                                       SelectAllCommand="{Binding SelectAllSourcesCommand}"
+                                                       SelectNoneCommand="{Binding SelectNoSourcesCommand}"
+                                                       VerticalAlignment="Center"
+                                                       Margin="14,0,0,0" />
+                    </StackPanel>
+                </Grid>
+
+                <Border Background="{DynamicResource State.ErrorSoft}"
+                        BorderBrush="{DynamicResource State.Error}"
+                        BorderThickness="1"
+                        CornerRadius="{DynamicResource Radius.S}"
+                        Padding="{DynamicResource Padding.Control.Compact}"
+                        Margin="0,6,0,0"
+                        Visibility="{Binding RegexError, Converter={StaticResource NullToVisibility}}">
+                    
+                    <StackPanel Orientation="Horizontal">
+                        <iconPacks:PackIconLucide Kind="TriangleAlert"
+                                                  Width="14"
+                                                  Height="14"
+                                                  VerticalAlignment="Center"
+                                                  Foreground="{DynamicResource State.Error}"
+                                                  Margin="0,0,6,0" />
+                        <TextBlock Text="{Binding RegexError}"
+                                   Foreground="{DynamicResource Fg.Primary}"
+                                   TextWrapping="Wrap"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </Border>
+
+        <controls:OperationResultPanel Grid.Row="1"
+                                       SelectAllCommand="{Binding SelectAllRowsCommand}"
+                                       SelectNoneCommand="{Binding SelectNoRowsCommand}"
+                                       CanSelect="{Binding CanEditParameters}"
+                                       JournalSource="{Binding Journal}"
+                                       ClearJournalCommand="{Binding ClearJournalCommand}"
+                                       IsJournalOpen="{Binding IsJournalOpen}"
+                                       IsEmpty="{Binding IsSetEmpty}"
+                                       IsCompact="{Binding IsCompact, Mode=TwoWay}">
+            <controls:OperationResultPanel.HeaderLeft>
+                <TextBlock Text="{Binding StatusText}"
+                           Style="{StaticResource TextBlock.Subtle}"
+                           VerticalAlignment="Center" />
+            </controls:OperationResultPanel.HeaderLeft>
+
+            <controls:OperationResultPanel.EmptyContent>
+                <keepshell:EmptyState VerticalAlignment="Center"
+                                     Icon="Layers"
+                                     Heading="Набор пуст"
+                                     Description="Загрузите все медиа из хранилища или откройте набор из раздела «Медиа» (контекстное меню → «Открыть в Операциях»)."
+                                     DescriptionMaxWidth="420"
+                                     ActionText="Загрузить всё хранилище"
+                                     ActionCommand="{Binding LoadAllMediaCommand}" />
+            </controls:OperationResultPanel.EmptyContent>
+
+            <ListBox ItemsSource="{Binding Rows}"
+                     ItemTemplate="{StaticResource RenameRowTemplate}"
+                     ItemContainerStyle="{StaticResource OperationRowItem}"
+                     Background="{DynamicResource Bg.Surface}"
+                     BorderThickness="0"
+                     HorizontalContentAlignment="Stretch"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                     VirtualizingStackPanel.IsVirtualizing="True"
+                     VirtualizingStackPanel.VirtualizationMode="Recycling" />
+        </controls:OperationResultPanel>
+
+        <Border Grid.Row="2"
+                Style="{StaticResource Card.Inset}"
+                Margin="0,8,0,0">
+            
+            <controls:OperationActionBar ApplyText="{Binding ApplyButtonText}"
+                                         ApplyCommand="{Binding ApplyCommand}"
+                                         CancelCommand="{Binding CancelCommand}"
+                                         IsBusy="{Binding IsApplying}"
+                                         ProgressValue="{Binding ProgressValue}"
+                                         ProgressMax="{Binding ProgressMax}"
+                                         ToggleJournalCommand="{Binding ToggleJournalCommand}">
+                <TextBlock Style="{StaticResource TextBlock.Subtle}"
+                           VerticalAlignment="Center">
+                    <Run Text="К применению: " />
+                    <Run Text="{Binding ActionableCount, Mode=OneWay}" />
+                    <Run Text=" из " />
+                    <Run Text="{Binding MediasCount, Mode=OneWay}" />
+                </TextBlock>
+            </controls:OperationActionBar>
+        </Border>
+    </Grid>
+</UserControl>

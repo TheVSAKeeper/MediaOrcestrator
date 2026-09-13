@@ -1,0 +1,67 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>MediaOrcestrator.Runner.Wpf</RootNamespace>
+    <ApplicationIcon>icon.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="icon.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MediaOrcestrator.Domain\MediaOrcestrator.Domain.csproj" />
+    <ProjectReference Include="..\MediaOrcestrator.Modules\MediaOrcestrator.Modules.csproj" />
+    <!-- Общий WPF-каркас – локальные NuGet-пакеты из ./packages (см. nuget.config). Source-generator
+         авторегистрации View↔ViewModel едет ВНУТРИ пакета KeepShell как analyzer и применяется
+         транзитивно – отдельная ссылка не нужна. Разворот: ViewLocator.InstallIntoApplication(). -->
+    <PackageReference Include="KeepShell" Version="0.1.273" />
+    <PackageReference Include="KeepShell.Themes.Tarkov" Version="0.1.273" />
+    <PackageReference Include="KeepShell.Automation" Version="0.1.273" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="MahApps.Metro.IconPacks.Lucide" Version="6.2.1" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.15" />
+    <PackageReference Include="Microsoft.Playwright" Version="1.57.0" />
+    <PackageReference Include="Microsoft.Toolkit.Uwp.Notifications" Version="7.1.3" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.15" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.15" />
+    <PackageReference Include="Serilog" Version="4.4.0" />
+    <PackageReference Include="Serilog.Extensions.Hosting" Version="10.0.0" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
+    <PackageReference Include="Serilog.Sinks.Debug" Version="3.0.0" />
+    <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
+    <PackageReference Include="AutomaticGraphLayout.WpfGraphControl" Version="1.1.12" />
+    <PackageReference Include="Tomlyn" Version="2.11.1" />
+    <PackageReference Include="WpfAnalyzers" Version="4.1.1">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <Target Name="GenerateUpdateRepo" BeforeTargets="CoreCompile">
+    <Exec Command="git remote get-url origin" ConsoleToMsBuild="true" StandardOutputImportance="low" Condition="'$(UpdateRepo)' == ''">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_GitRemoteUrl" />
+    </Exec>
+    <PropertyGroup>
+      <UpdateRepo Condition="'$(UpdateRepo)' == ''">$([System.Text.RegularExpressions.Regex]::Match('$(_GitRemoteUrl)', '(?:github\.com[:/])(.+?)(?:\.git)?$$').Groups[1].Value)</UpdateRepo>
+    </PropertyGroup>
+    <ItemGroup>
+      <CompilerVisibleProperty Include="UpdateRepo" />
+    </ItemGroup>
+    <WriteLinesToFile File="$(IntermediateOutputPath)UpdateRepo.g.cs" Lines="namespace MediaOrcestrator.Runner.Wpf%3B&#xA;&#xA;internal static partial class BuildConstants&#xA;{&#xA;    public const string DefaultUpdateRepo = &quot;$(UpdateRepo)&quot;%3B&#xA;}" Overwrite="true" />
+    <ItemGroup>
+      <Compile Include="$(IntermediateOutputPath)UpdateRepo.g.cs" />
+    </ItemGroup>
+  </Target>
+
+</Project>

@@ -1,0 +1,248 @@
+﻿<UserControl x:Class="MediaOrcestrator.Runner.Wpf.Views.StatusBarView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:MediaOrcestrator.Runner.Wpf.ViewModels"
+             xmlns:iconPacks="http://metro.mahapps.com/winfx/xaml/iconpacks"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vm:ShellViewModel}"
+             d:DesignHeight="32"
+             d:DesignWidth="1200">
+    
+    <UserControl.Resources>
+
+        <Style x:Key="Status.DrawerToggle"
+               TargetType="ToggleButton">
+            <Setter Property="Background"
+                    Value="Transparent" />
+            <Setter Property="BorderBrush"
+                    Value="Transparent" />
+            <Setter Property="BorderThickness"
+                    Value="1" />
+            <Setter Property="Foreground"
+                    Value="{DynamicResource Fg.Secondary}" />
+            <Setter Property="Padding"
+                    Value="10,4" />
+            <Setter Property="MinHeight"
+                    Value="{DynamicResource Control.Height.Compact}" />
+            <Setter Property="Cursor"
+                    Value="Hand" />
+            <Setter Property="FontFamily"
+                    Value="{DynamicResource Font.Sans}" />
+            <Setter Property="FontSize"
+                    Value="{DynamicResource Font.Size.M}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="Bd"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="{DynamicResource Radius.M}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              RecognizesAccessKey="True" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver"
+                                     Value="True">
+                                <Setter TargetName="Bd"
+                                        Property="Background"
+                                        Value="{DynamicResource Bg.SurfaceAlt}" />
+                            </Trigger>
+                            <Trigger Property="IsChecked"
+                                     Value="True">
+                                <Setter TargetName="Bd"
+                                        Property="Background"
+                                        Value="{DynamicResource Accent.Soft}" />
+                                <Setter TargetName="Bd"
+                                        Property="BorderBrush"
+                                        Value="{DynamicResource Accent.Primary}" />
+                                <Setter Property="Foreground"
+                                        Value="{DynamicResource Fg.Primary}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <Border Background="{DynamicResource Bg.Surface}"
+            BorderBrush="{DynamicResource Border.Subtle}"
+            BorderThickness="0,1,0,0">
+        <Grid Height="32">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="0"
+                        Orientation="Horizontal"
+                        VerticalAlignment="Center"
+                        Margin="14,0">
+                <TextBlock Text="{Binding StatusText}"
+                           Style="{StaticResource TextBlock.Subtle}"
+                           VerticalAlignment="Center" />
+
+                <Border Style="{StaticResource Badge}"
+                        Margin="14,0,0,0"
+                        Padding="8,2"
+                        Visibility="{Binding Tasks.HasActive, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="Задач:"
+                                   Style="{StaticResource TextBlock.Subtle}"
+                                   VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding Tasks.ActiveCount}"
+                                   Margin="6,0,0,0"
+                                   FontWeight="SemiBold"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
+                </Border>
+
+                <StackPanel Orientation="Horizontal"
+                            Margin="14,0,0,0"
+                            VerticalAlignment="Center"
+                            Visibility="{Binding Tasks.HasErrors, Converter={StaticResource BoolToVisibility}}">
+                    <iconPacks:PackIconLucide Kind="TriangleAlert"
+                                      Width="14"
+                                      Height="14"
+                                      Foreground="{DynamicResource State.Error}"
+                                      VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding Tasks.ErrorCount}"
+                               Margin="6,0,0,0"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource State.Error}"
+                               VerticalAlignment="Center" />
+                </StackPanel>
+            </StackPanel>
+
+            <StackPanel Grid.Column="1"
+                        Orientation="Horizontal"
+                        VerticalAlignment="Center"
+                        HorizontalAlignment="Right"
+                        Margin="14,0,14,0">
+                <Grid Margin="0,0,18,0"
+                      VerticalAlignment="Center"
+                      Visibility="{Binding PageRenderDurationText, Converter={StaticResource NullToVisibility}, FallbackValue=Collapsed, TargetNullValue=Collapsed}">
+                    <ToggleButton x:Name="RenderMetricToggle"
+                                  Style="{StaticResource Status.DrawerToggle}"
+                                  Padding="8,2"
+                                  MinHeight="22"
+                                  IsEnabled="{Binding HasPageRenderStages}"
+                                  ToolTip="Время от переключения страницы до её готовности. Кликните для разбивки по стадиям.">
+                        <StackPanel Orientation="Horizontal"
+                                    VerticalAlignment="Center">
+                            <iconPacks:PackIconLucide Kind="Timer"
+                                              Width="12"
+                                              Height="12"
+                                              Foreground="{DynamicResource Fg.Secondary}"
+                                              VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding PageRenderDurationText}"
+                                       Margin="6,0,0,0"
+                                       VerticalAlignment="Center" />
+                            <Path Margin="8,0,0,0"
+                                  VerticalAlignment="Center"
+                                  Style="{StaticResource Status.DrawerArrow}"
+                                  Visibility="{Binding HasPageRenderStages, Converter={StaticResource BoolToVisibility}}" />
+                        </StackPanel>
+                    </ToggleButton>
+
+                    <Popup IsOpen="{Binding IsChecked, ElementName=RenderMetricToggle}"
+                           PlacementTarget="{Binding ElementName=RenderMetricToggle}"
+                           Placement="Top"
+                           VerticalOffset="-6"
+                           StaysOpen="False"
+                           AllowsTransparency="True"
+                           PopupAnimation="Fade"
+                           Focusable="False">
+                        <Border Background="{DynamicResource Bg.Surface}"
+                                BorderBrush="{DynamicResource Border.Default}"
+                                BorderThickness="1"
+                                CornerRadius="{DynamicResource Radius.M}"
+                                Effect="{DynamicResource Card.Shadow}"
+                                Padding="14,10"
+                                MinWidth="240">
+                            <StackPanel>
+                                <TextBlock Text="Стадии отрисовки"
+                                           Style="{StaticResource TextBlock.Heading}"
+                                           Margin="0,0,0,6" />
+                                <ItemsControl ItemsSource="{Binding PageRenderStages}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid Margin="0,3">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0"
+                                                           Text="{Binding Name}"
+                                                           Style="{StaticResource TextBlock.Subtle}"
+                                                           VerticalAlignment="Center"
+                                                           Margin="0,0,18,0" />
+                                                <TextBlock Grid.Column="1"
+                                                           Text="{Binding Value}"
+                                                           FontWeight="SemiBold"
+                                                           VerticalAlignment="Center" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
+                    </Popup>
+                </Grid>
+
+                <StackPanel Orientation="Horizontal"
+                            VerticalAlignment="Center"
+                            Visibility="{Binding CurrentPageStatus.IsBusy, Converter={StaticResource BoolToVisibility}, FallbackValue=Collapsed, TargetNullValue=Collapsed}">
+                    <TextBlock Text="{Binding CurrentPageStatus.StatusCaption}"
+                               Style="{StaticResource TextBlock.Subtle}"
+                               VerticalAlignment="Center"
+                               Margin="0,0,10,0"
+                               TextTrimming="CharacterEllipsis"
+                               MaxWidth="360" />
+                    <ProgressBar Width="160"
+                                 Height="6"
+                                 Minimum="0"
+                                 Maximum="{Binding CurrentPageStatus.ProgressMax}"
+                                 Value="{Binding CurrentPageStatus.ProgressValue, Mode=OneWay}"
+                                 IsIndeterminate="{Binding CurrentPageStatus.IsIndeterminate}"
+                                 VerticalAlignment="Center" />
+                    <Button Style="{StaticResource Button.Ghost}"
+                            Command="{Binding CurrentPageStatus.CancelCommand}"
+                            Margin="8,0,0,0"
+                            Padding="6,2"
+                            MinHeight="22"
+                            VerticalAlignment="Center"
+                            ToolTip="Отменить операцию"
+                            AutomationProperties.Name="Отменить операцию"
+                            Visibility="{Binding CurrentPageStatus.CancelCommand, Converter={StaticResource NullToVisibility}, FallbackValue=Collapsed, TargetNullValue=Collapsed}">
+                        <iconPacks:PackIconLucide Kind="X"
+                                          Width="12"
+                                          Height="12" />
+                    </Button>
+                </StackPanel>
+            </StackPanel>
+
+            <ToggleButton Grid.Column="2"
+                          Style="{StaticResource Status.DrawerToggle}"
+                          IsChecked="{Binding IsTasksDrawerOpen, Mode=TwoWay}"
+                          Margin="0,2,8,2"
+                          ToolTip="Лента задач"
+                          AutomationProperties.Name="Лента задач">
+                <StackPanel Orientation="Horizontal"
+                            VerticalAlignment="Center">
+                    <TextBlock Text="Лента задач"
+                               VerticalAlignment="Center" />
+                    <Path Margin="10,0,0,0"
+                          VerticalAlignment="Center"
+                          Style="{StaticResource Status.DrawerArrow}" />
+                </StackPanel>
+            </ToggleButton>
+        </Grid>
+    </Border>
+</UserControl>

@@ -1,0 +1,103 @@
+﻿<UserControl x:Class="MediaOrcestrator.Runner.Wpf.Views.Controls.OperationResultPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:MediaOrcestrator.Runner.Wpf.Views.Controls"
+             xmlns:iconPacks="http://metro.mahapps.com/winfx/xaml/iconpacks"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             x:Name="Root"
+             mc:Ignorable="d"
+             d:DesignHeight="400"
+             d:DesignWidth="900">
+    
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+
+        <Border Grid.Column="0"
+                Style="{StaticResource Card}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <Grid Grid.Row="0"
+                      Margin="{DynamicResource Margin.RowGap}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <ContentPresenter Grid.Column="0"
+                                      Content="{Binding HeaderLeft, ElementName=Root}"
+                                      VerticalAlignment="Center" />
+                    <StackPanel Grid.Column="1"
+                                Orientation="Horizontal">
+                        <ToggleButton Style="{StaticResource ToggleButton.Toolbar}"
+                                      IsChecked="{Binding IsCompact, ElementName=Root, Mode=TwoWay}"
+                                      Margin="{DynamicResource Margin.InlineGap}"
+                                      Visibility="{Binding ShowCompactToggle, ElementName=Root, Converter={StaticResource BoolToVisibility}}"
+                                      ToolTip="Компактный режим – уплотнить строки"
+                                      AutomationProperties.Name="Компактный режим таблицы">
+                            <StackPanel Orientation="Horizontal">
+                                <iconPacks:PackIconLucide Kind="Rows3"
+                                                          Width="14"
+                                                          Height="14"
+                                                          VerticalAlignment="Center"
+                                                          Margin="0,0,6,0" />
+                                <TextBlock Text="Компактно"
+                                           VerticalAlignment="Center" />
+                            </StackPanel>
+                        </ToggleButton>
+                        <Button Style="{StaticResource Button.Ghost}"
+                                Content="Все"
+                                Command="{Binding SelectAllCommand, ElementName=Root}"
+                                IsEnabled="{Binding CanSelect, ElementName=Root}"
+                                Padding="{DynamicResource Padding.Control.Compact}"
+                                Margin="0,0,4,0" />
+                        <Button Style="{StaticResource Button.Ghost}"
+                                Content="Никто"
+                                Command="{Binding SelectNoneCommand, ElementName=Root}"
+                                IsEnabled="{Binding CanSelect, ElementName=Root}"
+                                Padding="{DynamicResource Padding.Control.Compact}" />
+                    </StackPanel>
+                </Grid>
+
+                <Grid Grid.Row="1">
+                    <ContentPresenter Content="{Binding GridContent, ElementName=Root}"
+                                      Visibility="{Binding IsEmpty, ElementName=Root, Converter={StaticResource InverseBoolToVisibility}}" />
+
+                    <ContentPresenter Content="{Binding EmptyContent, ElementName=Root}"
+                                      Visibility="{Binding IsEmpty, ElementName=Root, Converter={StaticResource BoolToVisibility}}" />
+
+                    <Border Style="{StaticResource Card.Loading}"
+                            Visibility="{Binding IsLoading, ElementName=Root, Converter={StaticResource BoolToVisibility}}">
+                        <StackPanel HorizontalAlignment="Center"
+                                    VerticalAlignment="Center">
+                            
+                            <ProgressBar IsIndeterminate="True"
+                                         Width="160"
+                                         Height="4" />
+                            <TextBlock Text="{Binding LoadingText, ElementName=Root}"
+                                       HorizontalAlignment="Center"
+                                       Margin="{DynamicResource Margin.RowGap}" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </Grid>
+        </Border>
+
+        <Border Grid.Column="1"
+                Style="{StaticResource Card.Inset}"
+                Margin="10,0,0,0"
+                MinWidth="{DynamicResource Control.Width.Inspector}"
+                MaxWidth="{DynamicResource Control.Width.Drawer}"
+                Visibility="{Binding IsJournalOpen, ElementName=Root, Converter={StaticResource BoolToVisibility}}">
+            
+            <controls:JournalPanel ItemsSource="{Binding JournalSource, ElementName=Root}"
+                                   ClearCommand="{Binding ClearJournalCommand, ElementName=Root}" />
+        </Border>
+    </Grid>
+</UserControl>

@@ -1,0 +1,34 @@
+﻿<UserControl x:Class="MediaOrcestrator.Runner.Wpf.Views.RelationsGraphPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:MediaOrcestrator.Runner.Wpf.ViewModels"
+             xmlns:iconPacks="http://metro.mahapps.com/winfx/xaml/iconpacks"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vm:SourcesRelationsViewModel}"
+             d:DesignHeight="480"
+             d:DesignWidth="900">
+    <Grid>
+        <DockPanel x:Name="GraphHost"
+                   LastChildFill="True"
+                   Background="{DynamicResource Bg.Surface}"
+                   ClipToBounds="True" />
+        <StackPanel x:Name="EmptyOverlay"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    MaxWidth="420"
+                    Visibility="Collapsed">
+            <iconPacks:PackIconLucide Kind="Diamond"
+                              Width="48"
+                              Height="48"
+                              HorizontalAlignment="Center"
+                              Foreground="{DynamicResource Fg.Muted}" />
+            <TextBlock Style="{StaticResource TextBlock.Subtle}"
+                       TextWrapping="Wrap"
+                       TextAlignment="Center"
+                       Margin="0,8,0,0"
+                       Text="Добавьте источники и связи, чтобы увидеть граф." />
+        </StackPanel>
+    </Grid>
+</UserControl>
