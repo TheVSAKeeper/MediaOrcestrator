@@ -1,0 +1,520 @@
+﻿<UserControl x:Class="MediaOrcestrator.Runner.Wpf.Views.Media.MediaFilterBar"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:MediaOrcestrator.Runner.Wpf.ViewModels"
+             xmlns:controls="clr-namespace:MediaOrcestrator.Runner.Wpf.Views.Controls"
+             xmlns:iconPacks="http://metro.mahapps.com/winfx/xaml/iconpacks"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vm:MediaViewModel}"
+             d:DesignWidth="1100">
+    
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+
+        <Style x:Key="FilterDropDownButton"
+               TargetType="ToggleButton">
+            <Setter Property="Background"
+                    Value="Transparent" />
+            <Setter Property="Foreground"
+                    Value="{DynamicResource Fg.Secondary}" />
+            <Setter Property="BorderBrush"
+                    Value="Transparent" />
+            <Setter Property="BorderThickness"
+                    Value="1" />
+            <Setter Property="Padding"
+                    Value="10,4" />
+            <Setter Property="MinHeight"
+                    Value="32" />
+            <Setter Property="Cursor"
+                    Value="Hand" />
+            <Setter Property="FocusVisualStyle"
+                    Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="Bd"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="{DynamicResource Radius.M}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              RecognizesAccessKey="True" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver"
+                                     Value="True">
+                                <Setter TargetName="Bd"
+                                        Property="Background"
+                                        Value="{DynamicResource Bg.SurfaceAlt}" />
+                            </Trigger>
+                            <Trigger Property="IsChecked"
+                                     Value="True">
+                                <Setter TargetName="Bd"
+                                        Property="Background"
+                                        Value="{DynamicResource Accent.Soft}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused"
+                                     Value="True">
+                                <Setter TargetName="Bd"
+                                        Property="BorderBrush"
+                                        Value="{DynamicResource Accent.Primary}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid Margin="{DynamicResource Margin.StackItem}">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+
+        <StackPanel Grid.Column="0"
+                    Orientation="Horizontal">
+            <ToggleButton x:Name="SourcesFilterButton"
+                          Style="{StaticResource FilterDropDownButton}"
+                          Margin="{DynamicResource Margin.InlineGap}">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="Источники"
+                               VerticalAlignment="Center" />
+                    <iconPacks:PackIconLucide Kind="ChevronDown"
+                                      Width="12"
+                                      Height="12"
+                                      Foreground="{DynamicResource Fg.Muted}"
+                                      VerticalAlignment="Center"
+                                      Margin="4,0,0,0" />
+                </StackPanel>
+            </ToggleButton>
+            <Popup IsOpen="{Binding ElementName=SourcesFilterButton, Path=IsChecked}"
+                   PlacementTarget="{Binding ElementName=SourcesFilterButton}"
+                   Placement="Bottom"
+                   StaysOpen="False"
+                   AllowsTransparency="True"
+                   PopupAnimation="Fade">
+                <controls:FilterChecklist ItemsSource="{Binding Filter.SourceFilters}"
+                                          MinWidth="220" />
+            </Popup>
+
+            <ToggleButton x:Name="StatusFilterButton"
+                          Style="{StaticResource FilterDropDownButton}"
+                          Margin="{DynamicResource Margin.InlineGap}">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="Статус"
+                               VerticalAlignment="Center" />
+                    <iconPacks:PackIconLucide Kind="ChevronDown"
+                                      Width="12"
+                                      Height="12"
+                                      Foreground="{DynamicResource Fg.Muted}"
+                                      VerticalAlignment="Center"
+                                      Margin="4,0,0,0" />
+                </StackPanel>
+            </ToggleButton>
+            <Popup IsOpen="{Binding ElementName=StatusFilterButton, Path=IsChecked}"
+                   PlacementTarget="{Binding ElementName=StatusFilterButton}"
+                   Placement="Bottom"
+                   StaysOpen="False"
+                   AllowsTransparency="True"
+                   PopupAnimation="Fade">
+                <controls:FilterChecklist ItemsSource="{Binding Filter.StatusFilters}"
+                                          MinWidth="180" />
+            </Popup>
+
+            <ToggleButton x:Name="RelationsFilterButton"
+                          Style="{StaticResource FilterDropDownButton}"
+                          Margin="{DynamicResource Margin.InlineGap}"
+                          ToolTip="Фильтр по связям синхронизации">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="Связи"
+                               VerticalAlignment="Center" />
+                    <iconPacks:PackIconLucide Kind="ChevronDown"
+                                      Width="12"
+                                      Height="12"
+                                      Foreground="{DynamicResource Fg.Muted}"
+                                      VerticalAlignment="Center"
+                                      Margin="4,0,0,0" />
+                </StackPanel>
+            </ToggleButton>
+            <Popup IsOpen="{Binding ElementName=RelationsFilterButton, Path=IsChecked}"
+                   PlacementTarget="{Binding ElementName=RelationsFilterButton}"
+                   Placement="Bottom"
+                   StaysOpen="False"
+                   AllowsTransparency="True"
+                   PopupAnimation="Fade">
+                <controls:FilterChecklist ItemsSource="{Binding Filter.RelationFilters}"
+                                          MinWidth="260"
+                                          EmptyHint="Нет связей. Создайте их в разделе «Источники и связи»."
+                                          EmptyHintVisibility="{Binding Filter.HasRelations, Converter={StaticResource InverseBoolToVisibility}}" />
+            </Popup>
+
+            <ToggleButton x:Name="ColumnsFilterButton"
+                          Style="{StaticResource FilterDropDownButton}"
+                          Margin="{DynamicResource Margin.InlineGap}"
+                          ToolTip="Колонки метаданных в таблице">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="Колонки"
+                               VerticalAlignment="Center" />
+                    <iconPacks:PackIconLucide Kind="ChevronDown"
+                                      Width="12"
+                                      Height="12"
+                                      Foreground="{DynamicResource Fg.Muted}"
+                                      VerticalAlignment="Center"
+                                      Margin="4,0,0,0" />
+                </StackPanel>
+            </ToggleButton>
+            <Popup IsOpen="{Binding ElementName=ColumnsFilterButton, Path=IsChecked}"
+                   PlacementTarget="{Binding ElementName=ColumnsFilterButton}"
+                   Placement="Bottom"
+                   StaysOpen="False"
+                   AllowsTransparency="True"
+                   PopupAnimation="Fade">
+                <Border Background="{DynamicResource Bg.Surface}"
+                        BorderBrush="{DynamicResource Border.Subtle}"
+                        BorderThickness="1"
+                        CornerRadius="{DynamicResource Radius.M}"
+                        Padding="6"
+                        MinWidth="240">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0"
+                                   Text="Столбцы метаданных"
+                                   Style="{StaticResource TextBlock.Subtle}"
+                                   Margin="6,2,6,6" />
+
+                        <Grid Grid.Row="1"
+                              Margin="6,0,6,4"
+                              Visibility="{Binding Filter.HasMetadataColumns, Converter={StaticResource BoolToVisibility}}">
+                            <TextBox Style="{StaticResource TextBox.Toolbar}"
+                                     Text="{Binding Filter.MetadataColumnSearch, UpdateSourceTrigger=PropertyChanged}"
+                                     Padding="30,0,30,0" />
+                            <iconPacks:PackIconLucide Kind="Search"
+                                              Width="14"
+                                              Height="14"
+                                              Foreground="{DynamicResource Fg.Muted}"
+                                              Margin="10,0,0,0"
+                                              VerticalAlignment="Center"
+                                              HorizontalAlignment="Left"
+                                              IsHitTestVisible="False" />
+                            <Button Style="{StaticResource Button.Ghost}"
+                                    Command="{Binding Filter.ClearMetadataColumnSearchCommand}"
+                                    HorizontalAlignment="Right"
+                                    VerticalAlignment="Center"
+                                    Margin="0,0,4,0"
+                                    Padding="5,2"
+                                    ToolTip="Очистить поиск"
+                                    AutomationProperties.Name="Очистить поиск по столбцам"
+                                    Visibility="{Binding Filter.MetadataColumnSearch, Converter={StaticResource NullToVisibility}}">
+                                <iconPacks:PackIconLucide Kind="X"
+                                                  Width="11"
+                                                  Height="11" />
+                            </Button>
+                        </Grid>
+
+                        <ScrollViewer Grid.Row="2"
+                                      MaxHeight="320">
+                            <Grid>
+                                <ItemsControl ItemsSource="{Binding Filter.MetadataColumnFiltersView}">
+                                    <ItemsControl.GroupStyle>
+                                        <GroupStyle>
+                                            <GroupStyle.HeaderTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding Name}"
+                                                               Style="{StaticResource TextBlock.Subtle}"
+                                                               FontWeight="SemiBold"
+                                                               Margin="6,8,6,2" />
+                                                </DataTemplate>
+                                            </GroupStyle.HeaderTemplate>
+                                        </GroupStyle>
+                                    </ItemsControl.GroupStyle>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <CheckBox IsChecked="{Binding IsChecked, Mode=TwoWay}"
+                                                      Content="{Binding Title}"
+                                                      Margin="6,4" />
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock Text="Нет метаданных по загруженным медиа."
+                                           Style="{StaticResource TextBlock.Subtle}"
+                                           TextWrapping="Wrap"
+                                           Margin="6"
+                                           MaxWidth="220"
+                                           Visibility="{Binding Filter.HasMetadataColumns, Converter={StaticResource InverseBoolToVisibility}}" />
+                                <TextBlock Text="Ничего не найдено."
+                                           Style="{StaticResource TextBlock.Subtle}"
+                                           TextWrapping="Wrap"
+                                           Margin="6"
+                                           MaxWidth="220"
+                                           Visibility="{Binding Filter.HasNoMatchingMetadataColumns, Converter={StaticResource BoolToVisibility}}" />
+                            </Grid>
+                        </ScrollViewer>
+                    </Grid>
+                </Border>
+            </Popup>
+        </StackPanel>
+
+        <StackPanel Grid.Column="1"
+                    Orientation="Horizontal"
+                    VerticalAlignment="Center">
+            
+            <Border Background="{DynamicResource Bg.SurfaceMute}"
+                    CornerRadius="{DynamicResource Radius.Pill}"
+                    Padding="10,4"
+                    VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal">
+                    <StackPanel Orientation="Horizontal"
+                                VerticalAlignment="Center"
+                                ToolTip="Всего медиа загружено в матрицу"
+                                AutomationProperties.Name="{Binding Grid.TotalCount, Mode=OneWay, StringFormat='Всего медиа: {0}'}">
+                        <iconPacks:PackIconLucide Kind="Hash"
+                                          Width="13"
+                                          Height="13"
+                                          Foreground="{DynamicResource Fg.Muted}"
+                                          VerticalAlignment="Center"
+                                          Margin="0,0,4,0" />
+                        <TextBlock Text="{Binding Grid.TotalCount, Mode=OneWay}"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource Fg.Primary}"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
+
+                    <Border Width="1"
+                            Margin="8,1"
+                            Background="{DynamicResource Border.Subtle}" />
+
+                    <StackPanel Orientation="Horizontal"
+                                VerticalAlignment="Center"
+                                ToolTip="Показано – сколько медиа проходит текущие фильтры"
+                                AutomationProperties.Name="{Binding Grid.VisibleCount, Mode=OneWay, StringFormat='Показано: {0}'}">
+                        <iconPacks:PackIconLucide Kind="Eye"
+                                          Width="13"
+                                          Height="13"
+                                          Foreground="{DynamicResource Fg.Muted}"
+                                          VerticalAlignment="Center"
+                                          Margin="0,0,4,0" />
+                        <TextBlock Text="{Binding Grid.VisibleCount, Mode=OneWay}"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource Fg.Primary}"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
+
+                    <Border Width="1"
+                            Margin="8,1"
+                            Background="{DynamicResource Border.Subtle}" />
+
+                    <StackPanel Orientation="Horizontal"
+                                VerticalAlignment="Center"
+                                ToolTip="Выделено строк в матрице"
+                                AutomationProperties.Name="{Binding Grid.SelectedCount, Mode=OneWay, StringFormat='Выделено: {0}'}">
+                        <iconPacks:PackIconLucide Kind="Check"
+                                          Width="13"
+                                          Height="13"
+                                          VerticalAlignment="Center"
+                                          Margin="0,0,4,0">
+                            <iconPacks:PackIconLucide.Style>
+                                <Style TargetType="iconPacks:PackIconLucide">
+                                    <Setter Property="Foreground"
+                                            Value="{DynamicResource Fg.Muted}" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Grid.HasSelection}"
+                                                     Value="True">
+                                            <Setter Property="Foreground"
+                                                    Value="{DynamicResource Accent.Primary}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </iconPacks:PackIconLucide.Style>
+                        </iconPacks:PackIconLucide>
+                        <TextBlock Text="{Binding Grid.SelectedCount, Mode=OneWay}"
+                                   FontWeight="SemiBold"
+                                   VerticalAlignment="Center">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Foreground"
+                                            Value="{DynamicResource Fg.Primary}" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Grid.HasSelection}"
+                                                     Value="True">
+                                            <Setter Property="Foreground"
+                                                    Value="{DynamicResource Accent.Primary}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <ToggleButton x:Name="ViewOptionsButton"
+                          Style="{StaticResource FilterDropDownButton}"
+                          Margin="16,0,0,0"
+                          ToolTip="Настройки отображения матрицы"
+                          AutomationProperties.Name="Настройки отображения матрицы">
+                <StackPanel Orientation="Horizontal">
+                    <iconPacks:PackIconLucide Kind="SlidersHorizontal"
+                                      Width="14"
+                                      Height="14"
+                                      VerticalAlignment="Center"
+                                      Margin="0,0,6,0" />
+                    <TextBlock Text="Вид"
+                               VerticalAlignment="Center" />
+                    <Border Width="6"
+                            Height="6"
+                            Margin="6,0,0,0"
+                            CornerRadius="3"
+                            VerticalAlignment="Center"
+                            Background="{DynamicResource Accent.Primary}"
+                            ToolTip="Включён нестандартный режим отображения"
+                            Visibility="{Binding Grid.IsViewCustomized, Converter={StaticResource BoolToVisibility}}" />
+                    <iconPacks:PackIconLucide Kind="ChevronDown"
+                                      Width="12"
+                                      Height="12"
+                                      Foreground="{DynamicResource Fg.Muted}"
+                                      VerticalAlignment="Center"
+                                      Margin="6,0,0,0" />
+                </StackPanel>
+            </ToggleButton>
+            <Popup IsOpen="{Binding ElementName=ViewOptionsButton, Path=IsChecked}"
+                   PlacementTarget="{Binding ElementName=ViewOptionsButton}"
+                   Placement="Bottom"
+                   StaysOpen="False"
+                   AllowsTransparency="True"
+                   PopupAnimation="Fade">
+                <Border Background="{DynamicResource Bg.Surface}"
+                        BorderBrush="{DynamicResource Border.Subtle}"
+                        BorderThickness="1"
+                        CornerRadius="{DynamicResource Radius.M}"
+                        Padding="6"
+                        MinWidth="248">
+                    <StackPanel>
+                        <TextBlock Text="Отображение матрицы"
+                                   Style="{StaticResource TextBlock.Subtle}"
+                                   Margin="6,2,6,6" />
+
+                        <CheckBox IsChecked="{Binding Grid.IsCompact, Mode=TwoWay}"
+                                  Margin="6,4"
+                                  ToolTip="Уплотнить строки – одна строка с обрезкой вместо переноса текста">
+                            <StackPanel Orientation="Horizontal">
+                                <iconPacks:PackIconLucide Kind="Rows3"
+                                                  Width="14"
+                                                  Height="14"
+                                                  VerticalAlignment="Center"
+                                                  Margin="0,0,8,0" />
+                                <TextBlock Text="Компактные строки"
+                                           VerticalAlignment="Center" />
+                            </StackPanel>
+                        </CheckBox>
+
+                        <CheckBox IsChecked="{Binding Grid.IsGrouped, Mode=TwoWay}"
+                                  Margin="6,4"
+                                  ToolTip="Группировать строки по сериям (серия определяется из названия)">
+                            <StackPanel Orientation="Horizontal">
+                                <iconPacks:PackIconLucide Kind="Layers"
+                                                  Width="14"
+                                                  Height="14"
+                                                  VerticalAlignment="Center"
+                                                  Margin="0,0,8,0" />
+                                <TextBlock Text="Группировать по сериям"
+                                           VerticalAlignment="Center" />
+                            </StackPanel>
+                        </CheckBox>
+
+                        <CheckBox IsChecked="{Binding Grid.IsSourceHeaderCompact, Mode=TwoWay}"
+                                  Margin="6,4"
+                                  ToolTip="Сокращать имена в заголовках столбцов-источников – полное имя во всплывающей подсказке">
+                            <StackPanel Orientation="Horizontal">
+                                <iconPacks:PackIconLucide Kind="ChevronsRightLeft"
+                                                  Width="14"
+                                                  Height="14"
+                                                  VerticalAlignment="Center"
+                                                  Margin="0,0,8,0" />
+                                <TextBlock Text="Короткие заголовки источников"
+                                           VerticalAlignment="Center" />
+                            </StackPanel>
+                        </CheckBox>
+
+                        <StackPanel Orientation="Horizontal"
+                                    Margin="34,2,6,4"
+                                    VerticalAlignment="Center"
+                                    Visibility="{Binding Grid.IsSourceHeaderLengthAdjustable, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Text="Длина"
+                                       Style="{StaticResource TextBlock.Subtle}"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,8,0" />
+                            <Button Style="{StaticResource Button.Ghost}"
+                                    Command="{Binding Grid.DecreaseSourceHeaderLengthCommand}"
+                                    Padding="6,2"
+                                    ToolTip="Меньше букв в заголовке источника"
+                                    AutomationProperties.Name="Меньше букв в заголовке источника">
+                                <iconPacks:PackIconLucide Kind="Minus"
+                                                  Width="12"
+                                                  Height="12"
+                                                  VerticalAlignment="Center" />
+                            </Button>
+                            <TextBlock Text="{Binding Grid.SourceHeaderCompactLength, Mode=OneWay}"
+                                       MinWidth="20"
+                                       TextAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       ToolTip="Сколько букв оставлять в заголовке столбца источника" />
+                            <Button Style="{StaticResource Button.Ghost}"
+                                    Command="{Binding Grid.IncreaseSourceHeaderLengthCommand}"
+                                    Padding="6,2"
+                                    ToolTip="Больше букв в заголовке источника"
+                                    AutomationProperties.Name="Больше букв в заголовке источника">
+                                <iconPacks:PackIconLucide Kind="Plus"
+                                                  Width="12"
+                                                  Height="12"
+                                                  VerticalAlignment="Center" />
+                            </Button>
+                        </StackPanel>
+
+                        <Border Height="1"
+                                Margin="6,6"
+                                Background="{DynamicResource Border.Subtle}" />
+
+                        <Button Style="{StaticResource Button.Ghost}"
+                                Command="{Binding Grid.AutoFitColumnsCommand}"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Left"
+                                Padding="6,5"
+                                Margin="2,0"
+                                ToolTip="Подогнать ширину столбцов матрицы под содержимое"
+                                AutomationProperties.Name="Подогнать ширину столбцов">
+                            <StackPanel Orientation="Horizontal">
+                                <iconPacks:PackIconLucide Kind="ArrowLeftRight"
+                                                  Width="14"
+                                                  Height="14"
+                                                  VerticalAlignment="Center"
+                                                  Margin="0,0,8,0" />
+                                <TextBlock Text="Подогнать ширину столбцов"
+                                           VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </Border>
+            </Popup>
+
+            <ToggleButton Style="{StaticResource ToggleButton.Toolbar}"
+                          IsChecked="{Binding IsInspectorCollapsed, Mode=TwoWay}"
+                          Margin="8,0,0,0"
+                          ToolTip="{Binding InspectorToggleTooltip}"
+                          AutomationProperties.Name="{Binding InspectorToggleAutomationName}">
+                <iconPacks:PackIconLucide Kind="PanelRight"
+                                  Width="14"
+                                  Height="14"
+                                  VerticalAlignment="Center" />
+            </ToggleButton>
+        </StackPanel>
+    </Grid>
+</UserControl>

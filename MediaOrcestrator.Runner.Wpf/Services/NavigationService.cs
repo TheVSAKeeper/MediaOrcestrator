@@ -7,18 +7,29 @@ namespace MediaOrcestrator.Runner.Wpf.Services;
 public sealed class NavigationService : INavigationService
 {
     private readonly Lazy<ShellViewModel> _shell;
+    private readonly Lazy<MediaViewModel> _media;
     private readonly Lazy<OperationsViewModel> _operations;
     private readonly IDialogService _dialogs;
 
     public NavigationService(IServiceProvider sp, IDialogService dialogs)
     {
         _shell = new(sp.GetRequiredService<ShellViewModel>);
+        _media = new(sp.GetRequiredService<MediaViewModel>);
         _operations = new(sp.GetRequiredService<OperationsViewModel>);
         _dialogs = dialogs;
     }
 
     public void OpenInspector(Media media)
     {
+        var grid = _media.Value.Grid;
+        var row = grid.Rows.FirstOrDefault(r => string.Equals(r.MediaId, media.Id, StringComparison.Ordinal));
+
+        if (row is null)
+        {
+            return;
+        }
+
+        grid.OpenInspectorCommand.Execute(row);
     }
 
     public void OpenSourcesGraph(SourceSyncRelation? highlight = null)

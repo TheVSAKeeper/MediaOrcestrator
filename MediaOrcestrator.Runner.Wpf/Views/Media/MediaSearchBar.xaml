@@ -1,0 +1,45 @@
+﻿<UserControl x:Class="MediaOrcestrator.Runner.Wpf.Views.Media.MediaSearchBar"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:MediaOrcestrator.Runner.Wpf.ViewModels"
+             xmlns:keepshell="https://schemas.keepshell.dev/wpf"
+             xmlns:iconPacks="http://metro.mahapps.com/winfx/xaml/iconpacks"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vm:MediaFilterViewModel}"
+             d:DesignWidth="400">
+    
+    <UserControl.Resources>
+    </UserControl.Resources>
+
+    <Grid Margin="{DynamicResource Margin.StackItem}">
+        <TextBox Style="{StaticResource TextBox.Toolbar}"
+                 Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                 keepshell:PlaceholderBehavior.Placeholder="Название или ID в источнике"
+                 AutomationProperties.Name="Поиск по медиа"
+                 MinWidth="260"
+                 Padding="32,0,32,0" />
+        <iconPacks:PackIconLucide Kind="Search"
+                          Width="16"
+                          Height="16"
+                          Foreground="{DynamicResource Fg.Muted}"
+                          Margin="12,0,0,0"
+                          VerticalAlignment="Center"
+                          HorizontalAlignment="Left"
+                          IsHitTestVisible="False" />
+        <Button Style="{StaticResource Button.Ghost}"
+                Command="{Binding ClearSearchCommand}"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Center"
+                Margin="0,0,4,0"
+                Padding="6,2"
+                ToolTip="Очистить поиск"
+                AutomationProperties.Name="Очистить поиск"
+                Visibility="{Binding SearchText, Converter={StaticResource NullToVisibility}}">
+            <iconPacks:PackIconLucide Kind="X"
+                              Width="12"
+                              Height="12" />
+        </Button>
+    </Grid>
+</UserControl>

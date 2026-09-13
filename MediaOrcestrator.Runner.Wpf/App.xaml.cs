@@ -4,6 +4,8 @@ using MediaOrcestrator.Domain.Comments;
 using MediaOrcestrator.Domain.Merging;
 using MediaOrcestrator.Modules;
 using MediaOrcestrator.Runner.Wpf.Bootstrap;
+using MediaOrcestrator.Runner.Wpf.MediaContextMenu;
+using MediaOrcestrator.Runner.Wpf.MediaContextMenu.Actions;
 using MediaOrcestrator.Runner.Wpf.Services;
 using MediaOrcestrator.Runner.Wpf.ViewModels;
 using MediaOrcestrator.Runner.Wpf.Views;
@@ -275,6 +277,7 @@ public partial class App : Application
 
         var actionHolder = _host.Services.GetRequiredService<ActionHolder>();
         var sources = _host.Services.GetRequiredService<SourcesRelationsViewModel>();
+        var media = _host.Services.GetRequiredService<MediaViewModel>();
         var audit = _host.Services.GetRequiredService<AuditViewModel>();
         var transfers = _host.Services.GetRequiredService<TransfersViewModel>();
         var tools = _host.Services.GetRequiredService<ToolsViewModel>();
@@ -287,6 +290,7 @@ public partial class App : Application
         var dbSteps = new PreloadStep[]
         {
             new("Источники и связи", _ => sources.EnsureLoadedAsync()),
+            new("Медиа", _ => media.EnsureLoadedAsync()),
             new("Аудит источников", _ => audit.EnsureLoadedAsync()),
             new("План передач", _ => transfers.EnsureLoadedAsync()),
         };
@@ -611,10 +615,22 @@ public partial class App : Application
         services.AddSingleton<IAuthUI, WpfAuthUI>();
         services.AddSingleton<INavigationService, NavigationService>();
         services.AddSingleton<IAppLifetime, AppLifetime>();
+        services.AddSingleton<MediaActionContextFactory>();
+        services.AddSingleton<MediaContextMenuBuilder>();
+        services.AddSingleton<IMediaMenuAction, MetadataAction>();
+        services.AddSingleton<IMediaMenuAction, SyncAction>();
+        services.AddSingleton<IMediaMenuAction, SkipAction>();
+        services.AddSingleton<IMediaMenuAction, SkipPlanAction>();
+        services.AddSingleton<IMediaMenuAction, EditAction>();
+        services.AddSingleton<IMediaMenuAction, CopyDetailsAction>();
+        services.AddSingleton<IMediaMenuAction, OpenExternalAction>();
+        services.AddSingleton<IMediaMenuAction, DeleteAction>();
+        services.AddSingleton<IMediaMenuAction, ConvertAction>();
 
         services.AddSingleton<ShellPreferences>();
         services.AddSingleton<UpdatePreferences>();
         services.AddSingleton<ThemeViewModel>();
+        services.AddSingleton<MediaViewModel>();
         services.AddSingleton<AuditViewModel>();
         services.AddSingleton<TransfersViewModel>();
         services.AddSingleton<PublishViewModel>();
