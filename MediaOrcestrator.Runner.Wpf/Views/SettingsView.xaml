@@ -1,0 +1,74 @@
+﻿<UserControl x:Class="MediaOrcestrator.Runner.Wpf.Views.SettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:design="clr-namespace:MediaOrcestrator.Runner.Wpf.ViewModels.Design"
+             xmlns:settings="clr-namespace:MediaOrcestrator.Runner.Wpf.Views.Settings"
+             xmlns:keepshell="https://schemas.keepshell.dev/wpf"
+             xmlns:iconPacks="http://metro.mahapps.com/winfx/xaml/iconpacks"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=design:DesignSettingsViewModel, IsDesignTimeCreatable=True}"
+             d:DesignHeight="640"
+             d:DesignWidth="900">
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <keepshell:SettingsRail Grid.Column="0"
+                                Sections="{Binding Sections}"
+                                SearchText="{Binding SearchText, Mode=TwoWay}"
+                                Margin="0,0,20,0" />
+
+        <Grid Grid.Column="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <ScrollViewer Grid.Row="0"
+                          VerticalScrollBarVisibility="Auto"
+                          Padding="0,0,12,0"
+                          RequestBringIntoView="SuppressAutoScroll">
+                <StackPanel>
+                    <settings:PathsSettingsView Visibility="{Binding Sections[paths].IsSelected, Converter={StaticResource BoolToVisibility}}" />
+                    <settings:AppearanceSettingsView Visibility="{Binding Sections[appearance].IsSelected, Converter={StaticResource BoolToVisibility}}" />
+                    <settings:NotificationsSettingsView Visibility="{Binding Sections[notifications].IsSelected, Converter={StaticResource BoolToVisibility}}" />
+                    <settings:UpdatesSettingsView Visibility="{Binding Sections[updates].IsSelected, Converter={StaticResource BoolToVisibility}}" />
+
+                    <keepshell:EmptyState Icon="SearchX"
+                                          Margin="0,40,0,0"
+                                          HorizontalAlignment="Center"
+                                          Heading="Ни один раздел не подошёл"
+                                          Description="Поиск в рейле слева фильтрует разделы по названию и по словам вроде «тема», «порт», «github». Очистите поле, чтобы вернуть весь список."
+                                          DescriptionMaxWidth="420"
+                                          Visibility="{Binding Sections.NoMatches, Converter={StaticResource BoolToVisibility}}" />
+                </StackPanel>
+            </ScrollViewer>
+
+            <Border Grid.Row="1"
+                    Padding="12,10"
+                    Margin="0,12,12,0"
+                    Background="{DynamicResource State.SuccessSoft}"
+                    BorderBrush="{DynamicResource State.Success}"
+                    BorderThickness="1"
+                    CornerRadius="{DynamicResource Radius.M}"
+                    Visibility="{Binding HasSavedRecently, Converter={StaticResource BoolToVisibility}}">
+                <StackPanel Orientation="Horizontal">
+                    <iconPacks:PackIconLucide Kind="Check"
+                                              Width="14"
+                                              Height="14"
+                                              Foreground="{DynamicResource State.Success}"
+                                              VerticalAlignment="Center"
+                                              Margin="0,0,10,0"
+                                              AutomationProperties.Name="Готово" />
+                    <TextBlock Text="{Binding StatusMessage}"
+                               VerticalAlignment="Center"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

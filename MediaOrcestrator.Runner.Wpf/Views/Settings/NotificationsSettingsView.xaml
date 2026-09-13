@@ -1,0 +1,33 @@
+﻿<UserControl x:Class="MediaOrcestrator.Runner.Wpf.Views.Settings.NotificationsSettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:design="clr-namespace:MediaOrcestrator.Runner.Wpf.ViewModels.Design"
+             xmlns:keepshell="https://schemas.keepshell.dev/wpf"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=design:DesignSettingsViewModel, IsDesignTimeCreatable=True}"
+             d:DesignHeight="260"
+             d:DesignWidth="640">
+    <HeaderedContentControl Style="{StaticResource Form.Panel}"
+                            Header="Уведомления"
+                            keepshell:Form.ResetCommand="{Binding ResetSectionCommand}"
+                            keepshell:Form.ResetCommandParameter="{Binding Reset[notifications]}"
+                            keepshell:Form.ResetHint="{Binding Reset[notifications].Hint}">
+        <StackPanel>
+            <CheckBox Content="Системные уведомления о завершении задач"
+                      IsChecked="{Binding Preferences.EnableToastNotifications, Mode=TwoWay}"
+                      VerticalAlignment="Center" />
+            <TextBlock Style="{StaticResource Form.CheckHint}"
+                       Text="Windows-тост на долгие и упавшие задачи. Отменённые и короткие успехи молчат." />
+
+            <CheckBox Content="Только когда окно неактивно"
+                      IsChecked="{Binding Preferences.ToastOnlyWhenInactive, Mode=TwoWay}"
+                      IsEnabled="{Binding Preferences.EnableToastNotifications}"
+                      Margin="0,18,0,0"
+                      VerticalAlignment="Center" />
+            <TextBlock Style="{StaticResource Form.CheckHint}"
+                       Text="Пока окно на переднем плане, о результате и так видно по ленте задач – тост в этот момент только мешает." />
+        </StackPanel>
+    </HeaderedContentControl>
+</UserControl>

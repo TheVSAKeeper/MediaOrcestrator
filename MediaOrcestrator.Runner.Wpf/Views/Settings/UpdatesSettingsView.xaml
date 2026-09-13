@@ -1,0 +1,66 @@
+﻿<UserControl x:Class="MediaOrcestrator.Runner.Wpf.Views.Settings.UpdatesSettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:design="clr-namespace:MediaOrcestrator.Runner.Wpf.ViewModels.Design"
+             xmlns:keepshell="https://schemas.keepshell.dev/wpf"
+             xmlns:iconPacks="http://metro.mahapps.com/winfx/xaml/iconpacks"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=design:DesignSettingsViewModel, IsDesignTimeCreatable=True}"
+             d:DesignHeight="320"
+             d:DesignWidth="640">
+    <HeaderedContentControl Style="{StaticResource Form.Panel}"
+                            Header="Обновления"
+                            keepshell:Form.ResetCommand="{Binding ResetSectionCommand}"
+                            keepshell:Form.ResetCommandParameter="{Binding Reset[updates]}"
+                            keepshell:Form.ResetHint="{Binding Reset[updates].Hint}">
+        <StackPanel>
+            <TextBlock Text="Репозиторий релизов"
+                       Style="{StaticResource Form.Label}" />
+            <TextBox Text="{Binding Updates.Repo, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                     Margin="0,8,0,0"
+                     HorizontalAlignment="Left"
+                     MinWidth="320"
+                     FontFamily="{DynamicResource Font.Mono}"
+                     AutomationProperties.Name="Репозиторий GitHub, откуда берутся релизы" />
+            <TextBlock Style="{StaticResource Form.Hint}"
+                       Text="В формате «владелец/репозиторий». Отсюда приложение тянет zip релиза и текст изменений; пустое поле откатывается к тому, что зашито в сборку." />
+
+            <Grid Margin="0,18,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <Button Grid.Column="0"
+                        Style="{StaticResource Button.Base}"
+                        Command="{Binding AppUpdate.CheckNowCommand}"
+                        Content="Проверить сейчас"
+                        ToolTip="Спросить GitHub о свежем релизе прямо сейчас"
+                        ToolTipService.ShowOnDisabled="True" />
+
+                <TextBlock Grid.Column="1"
+                           Text="{Binding AppUpdate.CheckStatus}"
+                           Margin="12,0,0,0"
+                           VerticalAlignment="Center"
+                           TextWrapping="Wrap"
+                           Visibility="{Binding AppUpdate.HasCheckStatus, Converter={StaticResource BoolToVisibility}}" />
+            </Grid>
+
+            <StackPanel Orientation="Horizontal"
+                        Margin="0,14,0,0">
+                <iconPacks:PackIconLucide Kind="Package"
+                                          Width="14"
+                                          Height="14"
+                                          VerticalAlignment="Center"
+                                          Margin="0,0,8,0"
+                                          Foreground="{DynamicResource Fg.Muted}"
+                                          AutomationProperties.Name="Установленная версия" />
+                <TextBlock Text="{Binding AppUpdate.CurrentVersionText, StringFormat=Установлена версия {0}}"
+                           Style="{StaticResource TextBlock.Subtle}"
+                           VerticalAlignment="Center" />
+            </StackPanel>
+        </StackPanel>
+    </HeaderedContentControl>
+</UserControl>
