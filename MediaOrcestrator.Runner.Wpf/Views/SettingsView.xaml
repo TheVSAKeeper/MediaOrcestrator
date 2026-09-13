@@ -37,6 +37,7 @@
                     <settings:AppearanceSettingsView Visibility="{Binding Sections[appearance].IsSelected, Converter={StaticResource BoolToVisibility}}" />
                     <settings:NotificationsSettingsView Visibility="{Binding Sections[notifications].IsSelected, Converter={StaticResource BoolToVisibility}}" />
                     <settings:UpdatesSettingsView Visibility="{Binding Sections[updates].IsSelected, Converter={StaticResource BoolToVisibility}}" />
+                    <settings:McpSettingsView Visibility="{Binding Sections[mcp].IsSelected, Converter={StaticResource BoolToVisibility}}" />
 
                     <keepshell:EmptyState Icon="SearchX"
                                           Margin="0,40,0,0"

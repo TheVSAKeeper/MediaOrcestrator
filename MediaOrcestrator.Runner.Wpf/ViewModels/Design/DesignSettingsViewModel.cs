@@ -1,4 +1,5 @@
-﻿using KeepShell.Services.Platform;
+﻿using KeepShell.Mcp;
+using KeepShell.Services.Platform;
 using MediaOrcestrator.Domain;
 using MediaOrcestrator.Runner.Wpf.Bootstrap;
 using MediaOrcestrator.Runner.Wpf.Services;
@@ -24,6 +25,9 @@ public sealed class DesignSettingsViewModel : SettingsViewModel
             new ThemeViewModel(new DesignSettingsStore()),
             new UpdatePreferences(new DesignSettingsStore()),
             DesignUpdates.ViewModel,
+            DesignMcp.Preferences,
+            DesignMcp.Host,
+            DesignMcp.Options,
             new DesignClipboardService(),
             new DesignShellLauncher(),
             new DesignFilePicker())
@@ -129,4 +133,25 @@ internal sealed class DesignReleaseProvider : IReleaseProvider
     {
         return Task.CompletedTask;
     }
+}
+
+internal static class DesignMcp
+{
+    public static McpServerOptions Options { get; } = new()
+    {
+        ServerName = "mediaorcestrator",
+        AppName = "MediaOrcestrator",
+        AppVersion = "0.0.0",
+        ShotsDirectory = @"C:\Sources\MediaOrcestrator\shots",
+        DefaultPort = 7655,
+    };
+
+    public static McpPreferences Preferences { get; } = new(new DesignSettingsStore(), Options);
+
+    public static McpServerHost Host { get; } = new(
+        Preferences,
+        null!,
+        null!,
+        Options,
+        new ServiceCollection().BuildServiceProvider());
 }
