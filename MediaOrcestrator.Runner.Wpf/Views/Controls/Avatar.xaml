@@ -1,0 +1,47 @@
+﻿<UserControl x:Class="MediaOrcestrator.Runner.Wpf.Views.Controls.Avatar"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             x:Name="Root"
+             mc:Ignorable="d"
+             d:DesignHeight="28"
+             d:DesignWidth="28">
+    
+    <Border Width="{Binding Size, ElementName=Root}"
+            Height="{Binding Size, ElementName=Root}"
+            CornerRadius="{DynamicResource Radius.Avatar}"
+            Background="{DynamicResource Bg.SurfaceMute}"
+            ClipToBounds="True">
+        <Grid>
+            <TextBlock Text="{Binding Initial, ElementName=Root}"
+                       Foreground="{DynamicResource Fg.Secondary}"
+                       FontWeight="SemiBold"
+                       FontSize="{Binding InitialFontSize, ElementName=Root}"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="Visibility"
+                                Value="Visible" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding ImageSource, ElementName=Root, Converter={StaticResource NullToVisibility}}"
+                                         Value="Visible">
+                                <Setter Property="Visibility"
+                                        Value="Collapsed" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+            <Ellipse Width="{Binding Size, ElementName=Root}"
+                     Height="{Binding Size, ElementName=Root}"
+                     Visibility="{Binding ImageSource, ElementName=Root, Converter={StaticResource NullToVisibility}}">
+                <Ellipse.Fill>
+                    <ImageBrush ImageSource="{Binding ImageSource, ElementName=Root}"
+                                Stretch="UniformToFill" />
+                </Ellipse.Fill>
+            </Ellipse>
+        </Grid>
+    </Border>
+</UserControl>

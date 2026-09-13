@@ -8,7 +8,9 @@ using MediaOrcestrator.Runner.Wpf.MediaContextMenu;
 using MediaOrcestrator.Runner.Wpf.MediaContextMenu.Actions;
 using MediaOrcestrator.Runner.Wpf.Services;
 using MediaOrcestrator.Runner.Wpf.ViewModels;
+using MediaOrcestrator.Runner.Wpf.ViewModels.Comments;
 using MediaOrcestrator.Runner.Wpf.Views;
+using MediaOrcestrator.Runner.Wpf.Views.Comments;
 using ErrorReportWindow = KeepShell.Views.ErrorReportWindow;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -279,6 +281,7 @@ public partial class App : Application
         var sources = _host.Services.GetRequiredService<SourcesRelationsViewModel>();
         var media = _host.Services.GetRequiredService<MediaViewModel>();
         var audit = _host.Services.GetRequiredService<AuditViewModel>();
+        var comments = _host.Services.GetRequiredService<CommentsViewModel>();
         var transfers = _host.Services.GetRequiredService<TransfersViewModel>();
         var tools = _host.Services.GetRequiredService<ToolsViewModel>();
         var updateManager = _host.Services.GetRequiredService<AppUpdateManager>();
@@ -292,6 +295,7 @@ public partial class App : Application
             new("Источники и связи", _ => sources.EnsureLoadedAsync()),
             new("Медиа", _ => media.EnsureLoadedAsync()),
             new("Аудит источников", _ => audit.EnsureLoadedAsync()),
+            new("Комментарии", _ => comments.EnsureLoadedAsync()),
             new("План передач", _ => transfers.EnsureLoadedAsync()),
         };
 
@@ -307,6 +311,7 @@ public partial class App : Application
                     appUpdateNote = note;
                 }
             }),
+            new("Прогрев редактора ответов", _ => SafePreheatReplyEditorAsync()),
         };
 
         var totalSteps = dbSteps.Length + ioSteps.Length;
@@ -411,6 +416,20 @@ public partial class App : Application
     }
 
     private sealed record PreloadStep(string Status, Func<CancellationToken, Task> Action);
+
+    private static async Task SafePreheatReplyEditorAsync()
+    {
+        try
+        {
+            await Current.Dispatcher.InvokeAsync(
+                () => new ReplyEditorView(),
+                System.Windows.Threading.DispatcherPriority.Background);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Прогрев ReplyEditorView не удался");
+        }
+    }
 
     private static async Task SafeCheckToolsAsync(ToolsViewModel tools)
     {
@@ -640,6 +659,7 @@ public partial class App : Application
         services.AddSingleton<LogsViewModel>();
         services.AddSingleton<SystemViewModel>();
         services.AddSingleton<SourcesRelationsViewModel>();
+        services.AddSingleton<CommentsViewModel>();
         services.AddSingleton<BatchRenameSubViewModel>();
         services.AddSingleton<BatchPreviewSubViewModel>();
         services.AddSingleton<MergeDuplicatesSubViewModel>();

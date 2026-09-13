@@ -1,0 +1,177 @@
+﻿<UserControl x:Class="MediaOrcestrator.Runner.Wpf.Views.Dialogs.CommentsFetchOptionsDialogView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:MediaOrcestrator.Runner.Wpf.ViewModels.Comments"
+             xmlns:iconPacks="http://metro.mahapps.com/winfx/xaml/iconpacks"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vm:CommentsFetchOptionsDialogViewModel}"
+             Width="520">
+
+    <Grid Margin="22">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0"
+                   Text="Загрузка комментариев"
+                   Style="{StaticResource TextBlock.Heading}" />
+
+        <TextBlock Grid.Row="1"
+                   Style="{StaticResource TextBlock.Subtle}"
+                   Margin="0,6,0,16"
+                   TextWrapping="Wrap"
+                   Text="Какие медиа выбранных источников будут опрошены на свежие комментарии." />
+
+        <Grid Grid.Row="2"
+              Margin="0,0,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="240" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <StackPanel>
+                <TextBlock Text="Только за последние N дней"
+                           FontWeight="SemiBold" />
+                <TextBlock Style="{StaticResource TextBlock.Subtle}"
+                           Margin="0,2,0,0"
+                           Text="0 – без ограничения по дате." />
+            </StackPanel>
+            <Grid Grid.Column="1"
+                  VerticalAlignment="Center"
+                  HorizontalAlignment="Left">
+                <TextBox Style="{StaticResource TextBox.Numeric}"
+                         Width="140"
+                         Text="{Binding SinceDays, UpdateSourceTrigger=PropertyChanged}" />
+                <StackPanel HorizontalAlignment="Right"
+                            VerticalAlignment="Center"
+                            Margin="0,0,1,0">
+                    <RepeatButton Style="{StaticResource RepeatButton.Stepper}"
+                                  AutomationProperties.Name="Увеличить количество дней"
+                                  Command="{Binding IncreaseSinceDaysCommand}">
+                        <iconPacks:PackIconLucide Kind="ChevronUp"
+                                                  Width="8"
+                                                  Height="8" />
+                    </RepeatButton>
+                    <RepeatButton Style="{StaticResource RepeatButton.Stepper}"
+                                  AutomationProperties.Name="Уменьшить количество дней"
+                                  Command="{Binding DecreaseSinceDaysCommand}">
+                        <iconPacks:PackIconLucide Kind="ChevronDown"
+                                                  Width="8"
+                                                  Height="8" />
+                    </RepeatButton>
+                </StackPanel>
+            </Grid>
+        </Grid>
+
+        <Grid Grid.Row="3"
+              Margin="0,0,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="240" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <StackPanel>
+                <TextBlock Text="Только последние N медиа"
+                           FontWeight="SemiBold" />
+                <TextBlock Style="{StaticResource TextBlock.Subtle}"
+                           Margin="0,2,0,0"
+                           Text="0 – все медиа источника." />
+            </StackPanel>
+            <Grid Grid.Column="1"
+                  VerticalAlignment="Center"
+                  HorizontalAlignment="Left">
+                <TextBox Style="{StaticResource TextBox.Numeric}"
+                         Width="140"
+                         Text="{Binding OnlyRecent, UpdateSourceTrigger=PropertyChanged}" />
+                <StackPanel HorizontalAlignment="Right"
+                            VerticalAlignment="Center"
+                            Margin="0,0,1,0">
+                    <RepeatButton Style="{StaticResource RepeatButton.Stepper}"
+                                  AutomationProperties.Name="Увеличить количество медиа"
+                                  Command="{Binding IncreaseOnlyRecentCommand}">
+                        <iconPacks:PackIconLucide Kind="ChevronUp"
+                                                  Width="8"
+                                                  Height="8" />
+                    </RepeatButton>
+                    <RepeatButton Style="{StaticResource RepeatButton.Stepper}"
+                                  AutomationProperties.Name="Уменьшить количество медиа"
+                                  Command="{Binding DecreaseOnlyRecentCommand}">
+                        <iconPacks:PackIconLucide Kind="ChevronDown"
+                                                  Width="8"
+                                                  Height="8" />
+                    </RepeatButton>
+                </StackPanel>
+            </Grid>
+        </Grid>
+
+        <Grid Grid.Row="4"
+              Margin="0,0,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="240" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <StackPanel>
+                <TextBlock Text="Параллельных загрузок"
+                           FontWeight="SemiBold" />
+                <TextBlock Style="{StaticResource TextBlock.Subtle}"
+                           Margin="0,2,0,0">
+                    <Run Text="Внутри источника, от " />
+                    <Run Text="{Binding ParallelismMin, Mode=OneWay}" />
+                    <Run Text=" до " />
+                    <Run Text="{Binding ParallelismMax, Mode=OneWay}" />
+                    <Run Text="." />
+                </TextBlock>
+            </StackPanel>
+            <Grid Grid.Column="1"
+                  VerticalAlignment="Center"
+                  HorizontalAlignment="Left">
+                <TextBox Style="{StaticResource TextBox.Numeric}"
+                         Width="140"
+                         Text="{Binding MaxParallelism, UpdateSourceTrigger=PropertyChanged}" />
+                <StackPanel HorizontalAlignment="Right"
+                            VerticalAlignment="Center"
+                            Margin="0,0,1,0">
+                    <RepeatButton Style="{StaticResource RepeatButton.Stepper}"
+                                  AutomationProperties.Name="Увеличить параллельность"
+                                  Command="{Binding IncreaseMaxParallelismCommand}">
+                        <iconPacks:PackIconLucide Kind="ChevronUp"
+                                                  Width="8"
+                                                  Height="8" />
+                    </RepeatButton>
+                    <RepeatButton Style="{StaticResource RepeatButton.Stepper}"
+                                  AutomationProperties.Name="Уменьшить параллельность"
+                                  Command="{Binding DecreaseMaxParallelismCommand}">
+                        <iconPacks:PackIconLucide Kind="ChevronDown"
+                                                  Width="8"
+                                                  Height="8" />
+                    </RepeatButton>
+                </StackPanel>
+            </Grid>
+        </Grid>
+
+        <StackPanel Grid.Row="6"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right"
+                    Margin="0,16,0,0">
+            <Button Style="{StaticResource Button.Ghost}"
+                    Command="{Binding CancelCommand}"
+                    Content="Отмена"
+                    Margin="0,0,8,0"
+                    Padding="14,6"
+                    MinHeight="{DynamicResource Control.Height.Default}"
+                    IsCancel="True" />
+            <Button Style="{StaticResource Button.Primary}"
+                    Command="{Binding OkCommand}"
+                    Content="Начать загрузку"
+                    Padding="14,6"
+                    MinHeight="{DynamicResource Control.Height.Default}"
+                    IsDefault="True" />
+        </StackPanel>
+    </Grid>
+</UserControl>

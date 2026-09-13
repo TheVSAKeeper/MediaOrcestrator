@@ -1,0 +1,48 @@
+﻿<UserControl x:Class="MediaOrcestrator.Runner.Wpf.Views.Comments.CommentDeleteConfirm"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:MediaOrcestrator.Runner.Wpf.ViewModels.Comments"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vm:CommentItemViewModel}">
+
+    <StackPanel>
+        
+        <Border Style="{StaticResource Card.Error}"
+                Margin="0,8,0,0"
+                Padding="10,6"
+                Visibility="{Binding IsConfirmingDelete, Converter={StaticResource BoolToVisibility}}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="Подтвердить удаление комментария?"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource State.Error}"
+                           FontWeight="SemiBold" />
+                <StackPanel Grid.Column="1"
+                            Orientation="Horizontal">
+                    <Button Style="{StaticResource Button.Destructive}"
+                            Padding="10,3"
+                            MinHeight="26"
+                            Command="{Binding ConfirmDeleteCommand}"
+                            Content="Удалить" />
+                    <Button Style="{StaticResource Button.Ghost}"
+                            Padding="10,3"
+                            MinHeight="26"
+                            Margin="6,0,0,0"
+                            Command="{Binding CancelDeleteCommand}"
+                            Content="Отмена" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <TextBlock Margin="0,6,0,0"
+                   Text="{Binding ErrorMessage}"
+                   Foreground="{DynamicResource State.Error}"
+                   TextWrapping="Wrap"
+                   Visibility="{Binding ErrorMessage, Converter={StaticResource NullToVisibility}}" />
+    </StackPanel>
+</UserControl>

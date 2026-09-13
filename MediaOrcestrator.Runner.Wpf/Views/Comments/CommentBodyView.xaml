@@ -1,0 +1,60 @@
+﻿<UserControl x:Class="MediaOrcestrator.Runner.Wpf.Views.Comments.CommentBodyView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:MediaOrcestrator.Runner.Wpf.ViewModels.Comments"
+             xmlns:keepshell="https://schemas.keepshell.dev/wpf"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vm:CommentItemViewModel}">
+
+    <StackPanel>
+        
+        <TextBlock Margin="0,8,0,0"
+                   FontSize="{DynamicResource Comments.CommentFontSize}"
+                   LineHeight="{DynamicResource Comments.LineHeight}"
+                   TextWrapping="Wrap"
+                   keepshell:InlinesBindingBehavior.BoundInlines="{Binding Inlines}"
+                   Visibility="{Binding IsViewing, Converter={StaticResource BoolToVisibility}}" />
+
+        <Grid Margin="0,8,0,0"
+              Visibility="{Binding IsEditing, Converter={StaticResource BoolToVisibility}}">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <TextBox Grid.Row="0"
+                     Text="{Binding EditText, UpdateSourceTrigger=PropertyChanged}"
+                     AcceptsReturn="True"
+                     TextWrapping="Wrap"
+                     MinHeight="64"
+                     MaxHeight="220"
+                     VerticalScrollBarVisibility="Auto" />
+
+            <TextBlock Grid.Row="1"
+                       Text="{Binding ErrorMessage}"
+                       Foreground="{DynamicResource State.Error}"
+                       Margin="0,6,0,0"
+                       TextWrapping="Wrap"
+                       Visibility="{Binding ErrorMessage, Converter={StaticResource NullToVisibility}}" />
+
+            <StackPanel Grid.Row="2"
+                        Orientation="Horizontal"
+                        Margin="0,8,0,0">
+                <Button Style="{StaticResource Button.Primary}"
+                        Command="{Binding SaveEditCommand}"
+                        Content="Сохранить"
+                        MinHeight="28"
+                        Padding="12,4" />
+                <Button Style="{StaticResource Button.Ghost}"
+                        Command="{Binding CancelEditCommand}"
+                        Content="Отмена"
+                        MinHeight="28"
+                        Padding="12,4"
+                        Margin="8,0,0,0" />
+            </StackPanel>
+        </Grid>
+    </StackPanel>
+</UserControl>

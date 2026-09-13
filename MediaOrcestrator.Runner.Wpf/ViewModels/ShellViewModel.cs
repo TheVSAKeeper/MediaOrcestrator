@@ -4,6 +4,7 @@ using MahApps.Metro.IconPacks;
 using MediaOrcestrator.Domain;
 using MediaOrcestrator.Runner.Wpf.Bootstrap;
 using MediaOrcestrator.Runner.Wpf.Services;
+using MediaOrcestrator.Runner.Wpf.ViewModels.Comments;
 using Microsoft.Extensions.Logging;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -62,6 +63,7 @@ public sealed partial class ShellViewModel : ShellViewModelBase
         ActionHolder actionHolder,
         IDialogService dialogs,
         ISettingsStore settings,
+        CommentsViewModel comments,
         OperationsViewModel operations,
         ShellPreferences preferences,
         AppUpdateViewModel appUpdate,
@@ -94,6 +96,7 @@ public sealed partial class ShellViewModel : ShellViewModelBase
         Sections.Add(new("Хронология", PackIconLucideKind.Film, chronology, key: "chronology"));
         Sections.Add(new("Публикация", PackIconLucideKind.Upload, publish, key: "publish"));
         Sections.Add(BuildOperationsGroup(operations, IsOperationsExpandedPersisted()));
+        Sections.Add(new("Комментарии", PackIconLucideKind.MessageSquare, comments, key: "comments"));
         Sections.Add(new("Система", PackIconLucideKind.Settings, system, key: "system"));
 
         Selected = Sections[0];

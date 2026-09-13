@@ -6,6 +6,7 @@
     <conv:JournalLevelToBrushConverter x:Key="JournalLevelToBrush" />
     <conv:OperationRowStatusToIconConverter x:Key="OperationRowStatusToIcon" />
     <conv:OperationSourceChipStateToIconConverter x:Key="OperationSourceChipStateToIcon" />
+    <conv:DepthToIndentConverter x:Key="DepthToIndent" />
     <conv:BoolToVisibilityHiddenConverter x:Key="BoolToVisibilityHidden" />
 
 </ResourceDictionary>
