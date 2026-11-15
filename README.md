@@ -3,8 +3,8 @@
 ### Заливаешь видосы на 5 площадок руками? Серьёзно? В 2026?
 
 [![Release](https://github.com/MaxNagibator/MediaOrcestrator/actions/workflows/release.yml/badge.svg)](https://github.com/MaxNagibator/MediaOrcestrator/actions/workflows/release.yml)
-![.NET 8](https://img.shields.io/badge/.NET-8.0-purple)
-![WinForms](https://img.shields.io/badge/UI-WinForms%20💀-orange)
+![.NET 10](https://img.shields.io/badge/.NET-10.0-purple)
+![WPF](https://img.shields.io/badge/UI-WPF-orange)
 ![LiteDB](https://img.shields.io/badge/DB-LiteDB-green)
 ![Platform](https://img.shields.io/badge/platform-Windows-blue)
 ![Tests](https://img.shields.io/badge/tests-какие%20тесты%3F-red)
@@ -19,7 +19,7 @@
 MediaOrcestrator берёт эту рутину на себя. Настраиваешь связи между площадками, жмёшь кнопку - сам качает, конвертит,
 льёт и следит, чтобы метаданные не потерялись по дороге.
 
-Написан на C#. WinForms. LiteDB в одном файле. Если хочется Electron с тремя гигами node_modules - это не сюда.
+Написан на C#. WPF. LiteDB в одном файле. Если хочется Electron с тремя гигами node_modules - это не сюда.
 
 ---
 
@@ -115,7 +115,7 @@ LiteDB файл бэкапится при каждом запуске и пот�
 
 ## Быстрый старт
 
-Понадобится [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0). Без него никуда.
+Понадобится [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0). Без него никуда.
 
 Собрать:
 
@@ -126,7 +126,7 @@ dotnet build MediaOrcestrator.sln
 Запустить:
 
 ```bash
-dotnet run --project MediaOrcestrator.Runner
+dotnet run --project MediaOrcestrator.Runner.Wpf
 ```
 
 Первый запуск спросит путь к плагинам и базе. По умолчанию `ModuleBuilds` и `MyData.db`. Жмякай далее.
@@ -134,7 +134,7 @@ dotnet run --project MediaOrcestrator.Runner
 Собрать релиз:
 
 ```bash
-dotnet publish MediaOrcestrator.Runner -r win-x64 --self-contained false
+dotnet publish MediaOrcestrator.Runner.Wpf -r win-x64 --self-contained false
 dotnet publish MediaOrcestrator.Updater -r win-x64 --self-contained false
 ```
 
@@ -146,7 +146,7 @@ dotnet publish MediaOrcestrator.Updater -r win-x64 --self-contained false
 MediaOrcestrator.sln
 │
 ├── Domain            мозг: оркестрация, планирование, поиск плагинов
-├── Runner            WinForms UI (да, WinForms, да, 2026, да, работает)
+├── Runner.Wpf        UI на WPF и каркасе KeepShell
 ├── Modules           интерфейсы - контракт, по которому живут плагины
 │
 ├── Youtube           OAuth + форк YoutubeExplode
@@ -156,7 +156,8 @@ MediaOrcestrator.sln
 ├── HardDiskDrive     просто файлы на диске. зато надёжно
 │
 ├── Updater           автообновлятор, отдельный exe
-└── Other/            форк YoutubeExplode - лежит прямо в репе
+├── Other/            форк YoutubeExplode - лежит прямо в репе
+└── classic/          WinForms Runner на пенсии: вне решения, не выпускается
 ```
 
 Плагины - это DLL-ки в папке `ModuleBuilds/`. При старте `PluginLoader` проходит по ним reflection-ом, ищет
@@ -170,11 +171,11 @@ MediaOrcestrator.sln
 
 | Что      | Чем                                            |
 |----------|------------------------------------------------|
-| Язык     | C# 12                                          |
-| Рантайм  | .NET 8                                         |
-| UI       | WinForms                                       |
+| Язык     | C# 14                                          |
+| Рантайм  | .NET 10                                        |
+| UI       | WPF + KeepShell                                |
 | База     | LiteDB                                         |
-| Логи     | Serilog (консоль + файл + RichTextBox в UI)    |
+| Логи     | Serilog (консоль + файл + журнал в UI)         |
 | YouTube  | Google.Apis.YouTube.v3 + YoutubeExplode (форк) |
 | Telegram | WTelegramClient                                |
 | Видео    | ffmpeg, yt-dlp                                 |
@@ -187,9 +188,9 @@ MediaOrcestrator.sln
 
 Пушишь тег `v*` или мержишь в master:
 
-1. GitHub Actions собирает Runner и Updater через `dotnet publish`
+1. GitHub Actions собирает Runner.Wpf и Updater через `dotnet publish`
 2. Плагины подтягиваются из `ModuleBuilds/`
-3. Всё пакуется в 7z
+3. Всё пакуется в zip
 4. Создаётся GitHub Release
 
 Версия в `Directory.Build.props`. Бампни перед релизом, иначе перезатрёшь предыдущий.
@@ -208,9 +209,9 @@ MediaOrcestrator.sln
 
 ## FAQ
 
-**Почему WinForms?**
+**А где WinForms?**
 
-Потому что работает. Следующий вопрос.
+В `classic/`. Отработал своё, новых релизов не будет. Уже установленный сидит на последней версии, WPF ставится рядом в отдельную папку и хочет .NET 10 Desktop Runtime.
 
 **А если всё сломается?**
 
