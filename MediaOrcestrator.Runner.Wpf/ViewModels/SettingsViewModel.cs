@@ -1,5 +1,6 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using KeepShell.Bootstrap;
 using KeepShell.Mcp;
 using KeepShell.Services.Platform;
 using MahApps.Metro.IconPacks;
@@ -13,8 +14,11 @@ using System.IO;
 
 namespace MediaOrcestrator.Runner.Wpf.ViewModels;
 
-public partial class SettingsViewModel : ObservableObject
+public partial class SettingsViewModel : ObservableObject, IPageHeader
 {
+    public string PageTitle => "Настройки";
+
+    public string? PageDescription => "Пути хранения, тема оформления, уведомления, автообновление и MCP-сервер.";
     public const string SelectedSectionKey = "wpf.settings.section";
 
     private readonly ISettingsStore _store;
@@ -24,6 +28,7 @@ public partial class SettingsViewModel : ObservableObject
     private readonly IClipboardService _clipboard;
     private readonly IShellLauncher _shellLauncher;
     private readonly McpServerOptions _mcpOptions;
+    private readonly ToastHostViewModel _toasts;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSavedRecently))]
@@ -47,7 +52,8 @@ public partial class SettingsViewModel : ObservableObject
         McpServerOptions mcpOptions,
         IClipboardService clipboard,
         IShellLauncher shellLauncher,
-        IFilePicker filePicker)
+        IFilePicker filePicker,
+        ToastHostViewModel toasts)
     {
         _store = store;
         _dialogs = dialogs;
@@ -56,6 +62,7 @@ public partial class SettingsViewModel : ObservableObject
         _clipboard = clipboard;
         _shellLauncher = shellLauncher;
         _mcpOptions = mcpOptions;
+        _toasts = toasts;
         Preferences = preferences;
         Theme = theme;
         Updates = updates;
@@ -221,25 +228,39 @@ public partial class SettingsViewModel : ObservableObject
     [RelayCommand]
     private void CopySettingsPath()
     {
-        StatusMessage = _clipboard.TrySetText(SettingsFilePath)
-            ? "Путь к файлу настроек скопирован в буфер обмена."
-            : "Буфер обмена занят другим приложением – путь скопировать не удалось.";
+        CopyWithToast(
+            SettingsFilePath,
+            "Путь к файлу настроек скопирован в буфер обмена.",
+            "Буфер обмена занят другим приложением – путь скопировать не удалось.");
     }
 
     [RelayCommand]
     private void CopyMcpToken()
     {
-        StatusMessage = _clipboard.TrySetText(Mcp.Token)
-            ? "Токен MCP скопирован в буфер обмена."
-            : "Буфер обмена занят другим приложением – токен скопировать не удалось.";
+        CopyWithToast(
+            Mcp.Token,
+            "Токен MCP скопирован в буфер обмена.",
+            "Буфер обмена занят другим приложением – токен скопировать не удалось.");
     }
 
     [RelayCommand]
     private void CopyMcpConnectSnippet()
     {
-        StatusMessage = _clipboard.TrySetText(McpConnectSnippet)
-            ? "Строка подключения скопирована – вставьте её в настройки своего ИИ-помощника."
-            : "Буфер обмена занят другим приложением – строку подключения скопировать не удалось.";
+        CopyWithToast(
+            McpConnectSnippet,
+            "Строка подключения скопирована – вставьте её в настройки своего ИИ-помощника.",
+            "Буфер обмена занят другим приложением – строку подключения скопировать не удалось.");
+    }
+
+    private void CopyWithToast(string text, string successMessage, string failureMessage)
+    {
+        if (_clipboard.TrySetText(text))
+        {
+            _toasts.Show(successMessage, StatusSeverity.Success);
+            return;
+        }
+
+        _toasts.Show(failureMessage, StatusSeverity.Warning);
     }
 
     private void OnSectionsPropertyChanged(object? sender, PropertyChangedEventArgs e)

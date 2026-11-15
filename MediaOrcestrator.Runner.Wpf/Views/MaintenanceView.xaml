@@ -112,7 +112,7 @@
                     <Grid Margin="32,10,0,0"
                           Visibility="{Binding HasAgeFilter, Converter={StaticResource BoolToVisibility}}">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="110" />
+                            <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
@@ -208,12 +208,81 @@
         </DataTemplate>
     </UserControl.Resources>
 
-    <Grid>
-        <ScrollViewer VerticalScrollBarVisibility="Auto"
-                      Padding="0,0,12,0">
-            <StackPanel>
+    <StackPanel>
+        <Border Style="{StaticResource Card.Inset}"
+                Margin="0,0,0,12"
+                Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}">
+            <keepshell:ProgressStatusBlock StatusText="{Binding StatusText}"
+                                          CancelCommand="{Binding CancelCommand}"
+                                          Maximum="{Binding ProgressMax}"
+                                          Value="{Binding ProgressValue, Mode=OneWay}" />
+        </Border>
 
-                <Grid Margin="0,0,0,16">
+        <Border Style="{StaticResource Card.Inset}"
+                Margin="0,0,0,12">
+            <StackPanel>
+                <Grid Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Grid.Column="0"
+                               Style="{StaticResource SectionTitle}"
+                               Text="Очистка файлов"
+                               Margin="0,0,0,0" />
+
+                    <TextBlock Grid.Column="1"
+                               Style="{StaticResource TextBlock.Subtle}"
+                               VerticalAlignment="Center">
+                        <Run Text="Выбрано:" />
+                        <Run Text="{Binding SafeSelectedCount, Mode=OneWay}"
+                             FontWeight="SemiBold"
+                             Foreground="{DynamicResource Fg.Primary}" />
+                    </TextBlock>
+                </Grid>
+
+                <TextBlock Style="{StaticResource TextBlock.Subtle}"
+                           TextWrapping="Wrap"
+                           Margin="0,0,0,10"
+                           Text="Освобождает место на диске. Файлы можно потерять, но БД и записи останутся нетронутыми." />
+
+                <StackPanel Orientation="Horizontal"
+                            Margin="0,0,0,12">
+                    <Button Style="{StaticResource Button.Ghost}"
+                            Command="{Binding SelectAllSafeCommand}"
+                            Content="Выбрать всё"
+                            Padding="12,4"
+                            MinHeight="{DynamicResource Control.Height.Compact}" />
+                    <Button Style="{StaticResource Button.Ghost}"
+                            Command="{Binding SelectNoneSafeCommand}"
+                            Content="Снять выбор"
+                            Padding="12,4"
+                            MinHeight="{DynamicResource Control.Height.Compact}"
+                            Margin="8,0,0,0" />
+                    <Button Style="{StaticResource Button.Ghost}"
+                            Command="{Binding RefreshAllCommand}"
+                            Padding="10,4"
+                            MinHeight="{DynamicResource Control.Height.Compact}"
+                            Margin="16,0,0,0"
+                            ToolTip="Пересчитать размеры папок">
+                        <StackPanel Orientation="Horizontal">
+                            <iconPacks:PackIconLucide Kind="RotateCcw"
+                                                      Width="14"
+                                                      Height="14"
+                                                      Margin="0,0,6,0"
+                                                      VerticalAlignment="Center" />
+                            <TextBlock Text="Обновить размеры"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+
+                <ItemsControl ItemsSource="{Binding SafeItems}"
+                              Grid.IsSharedSizeScope="True"
+                              ItemTemplate="{StaticResource MaintenanceItemTemplate}" />
+
+                <Grid Margin="0,8,0,0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
@@ -222,307 +291,28 @@
                     <TextBlock Grid.Column="0"
                                Style="{StaticResource TextBlock.Subtle}"
                                TextWrapping="Wrap"
-                               MaxWidth="780"
-                               HorizontalAlignment="Left"
-                               Text="Сведения о приложении, файловые пути и ручная очистка тяжёлых данных. Перед массовой чисткой создаётся бэкап БД – рядом с обычным расписанием раз в 6 часов." />
+                               VerticalAlignment="Center"
+                               Text="Перед очисткой будет создан ручной бэкап БД (на случай если задели не то)." />
 
                     <Button Grid.Column="1"
-                            Style="{StaticResource Button.Ghost}"
-                            Command="{Binding CopyDiagnosticsCommand}"
-                            Padding="{DynamicResource Padding.Control}"
-                            MinHeight="{DynamicResource Control.Height.Compact}"
-                            ToolTip="Скопировать сводку в буфер обмена"
-                            VerticalAlignment="Top">
+                            Style="{StaticResource Button.Primary}"
+                            Command="{Binding RunSafeCommand}"
+                            Padding="18,8"
+                            MinHeight="{DynamicResource Control.Height.Default}">
                         <StackPanel Orientation="Horizontal">
-                            <iconPacks:PackIconLucide Kind="Clipboard"
+                            <iconPacks:PackIconLucide Kind="Eraser"
                                                       Width="14"
                                                       Height="14"
                                                       Margin="0,0,6,0"
                                                       VerticalAlignment="Center" />
-                            <TextBlock Text="Копировать сводку"
-                                       VerticalAlignment="Center" />
+                            <TextBlock VerticalAlignment="Center">
+                                <Run Text="Освободить место" />
+                                <Run Text="(" /><Run Text="{Binding SafeSelectedCount, Mode=OneWay}" /><Run Text=")" />
+                            </TextBlock>
                         </StackPanel>
                     </Button>
                 </Grid>
-
-                <Border Style="{StaticResource Card.Inset}"
-                        Margin="0,0,0,12">
-                    <StackPanel>
-                        <TextBlock Style="{StaticResource SectionTitle}"
-                                   Text="Приложение" />
-
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="140" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                            </Grid.RowDefinitions>
-
-                            <TextBlock Grid.Row="0" Grid.Column="0" Style="{StaticResource InfoLabel}" Text="Версия" Margin="0,0,12,6" />
-                            <TextBlock Grid.Row="0" Grid.Column="1" Style="{StaticResource InfoValue}" Text="{Binding AppVersion}" Margin="0,0,0,6" />
-
-                            <TextBlock Grid.Row="1" Grid.Column="0" Style="{StaticResource InfoLabel}" Text="Runtime" Margin="0,0,12,6" />
-                            <TextBlock Grid.Row="1" Grid.Column="1" Style="{StaticResource InfoValue}" Text="{Binding RuntimeDescription}" Margin="0,0,0,6" />
-
-                            <TextBlock Grid.Row="2" Grid.Column="0" Style="{StaticResource InfoLabel}" Text="Архитектура" Margin="0,0,12,6" />
-                            <TextBlock Grid.Row="2" Grid.Column="1" Style="{StaticResource InfoValue}" Text="{Binding ProcessArchitecture}" Margin="0,0,0,6" />
-
-                            <TextBlock Grid.Row="3" Grid.Column="0" Style="{StaticResource InfoLabel}" Text="PID" Margin="0,0,12,6" />
-                            <TextBlock Grid.Row="3" Grid.Column="1" Style="{StaticResource InfoValue}" Text="{Binding ProcessId}" Margin="0,0,0,6" />
-
-                            <TextBlock Grid.Row="4" Grid.Column="0" Style="{StaticResource InfoLabel}" Text="Время работы" Margin="0,0,12,6" />
-                            <TextBlock Grid.Row="4" Grid.Column="1" Style="{StaticResource InfoValue}" Text="{Binding UpTimeText}" Margin="0,0,0,6" />
-
-                            <TextBlock Grid.Row="5" Grid.Column="0" Style="{StaticResource InfoLabel}" Text="Папка" />
-                            <TextBlock Grid.Row="5" Grid.Column="1" Style="{StaticResource InfoValueMono}" Text="{Binding AppDirectory}" />
-                        </Grid>
-
-                        <StackPanel Orientation="Horizontal"
-                                    Margin="0,14,0,0">
-                            <Button Style="{StaticResource Button.Ghost}"
-                                    Command="{Binding OpenAppFolderCommand}"
-                                    Padding="{DynamicResource Padding.Control}"
-                                    MinHeight="{DynamicResource Control.Height.Compact}">
-                                <StackPanel Orientation="Horizontal">
-                                    <iconPacks:PackIconLucide Kind="FolderOpen" Width="14" Height="14" Margin="0,0,6,0" VerticalAlignment="Center" />
-                                    <TextBlock Text="Открыть папку приложения" VerticalAlignment="Center" />
-                                </StackPanel>
-                            </Button>
-                            <Button Style="{StaticResource Button.Ghost}"
-                                    Command="{Binding RefreshAllCommand}"
-                                    Padding="{DynamicResource Padding.Control}"
-                                    Margin="8,0,0,0"
-                                    MinHeight="{DynamicResource Control.Height.Compact}"
-                                    ToolTip="Пересчитать размеры и обновить время работы">
-                                <StackPanel Orientation="Horizontal">
-                                    <iconPacks:PackIconLucide Kind="RotateCcw" Width="14" Height="14" Margin="0,0,6,0" VerticalAlignment="Center" />
-                                    <TextBlock Text="Обновить" VerticalAlignment="Center" />
-                                </StackPanel>
-                            </Button>
-                        </StackPanel>
-                    </StackPanel>
-                </Border>
-
-                <Border Style="{StaticResource Card.Inset}"
-                        Margin="0,0,0,12">
-                    <StackPanel>
-                        <TextBlock Style="{StaticResource SectionTitle}"
-                                   Text="Система" />
-
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="140" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                            </Grid.RowDefinitions>
-
-                            <TextBlock Grid.Row="0" Grid.Column="0" Style="{StaticResource InfoLabel}" Text="ОС" Margin="0,0,12,6" />
-                            <TextBlock Grid.Row="0" Grid.Column="1" Style="{StaticResource InfoValue}" Text="{Binding OperatingSystem}" Margin="0,0,0,6" />
-
-                            <TextBlock Grid.Row="1" Grid.Column="0" Style="{StaticResource InfoLabel}" Text="Машина" />
-                            <TextBlock Grid.Row="1" Grid.Column="1" Style="{StaticResource InfoValue}" Text="{Binding MachineName}" />
-                        </Grid>
-                    </StackPanel>
-                </Border>
-
-                <Border Style="{StaticResource Card.Inset}"
-                        Margin="0,0,0,12">
-                    <StackPanel>
-                        <TextBlock Style="{StaticResource SectionTitle}"
-                                   Text="База данных" />
-
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="140" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                            </Grid.RowDefinitions>
-
-                            <TextBlock Grid.Row="0" Grid.Column="0" Style="{StaticResource InfoLabel}" Text="Размер файла" Margin="0,0,12,6" />
-                            <TextBlock Grid.Row="0" Grid.Column="1" Style="{StaticResource InfoValue}" Text="{Binding DatabaseSizeText}" Margin="0,0,0,6" />
-
-                            <TextBlock Grid.Row="1" Grid.Column="0" Style="{StaticResource InfoLabel}" Text="Путь" />
-                            <TextBlock Grid.Row="1" Grid.Column="1" Style="{StaticResource InfoValueMono}" Text="{Binding DatabasePath}" />
-                        </Grid>
-
-                        <StackPanel Orientation="Horizontal"
-                                    Margin="0,14,0,0">
-                            <Button Style="{StaticResource Button.Ghost}"
-                                    Command="{Binding OpenDatabaseFolderCommand}"
-                                    Padding="{DynamicResource Padding.Control}"
-                                    MinHeight="{DynamicResource Control.Height.Compact}">
-                                <StackPanel Orientation="Horizontal">
-                                    <iconPacks:PackIconLucide Kind="ExternalLink" Width="14" Height="14" Margin="0,0,6,0" VerticalAlignment="Center" />
-                                    <TextBlock Text="Показать в проводнике" VerticalAlignment="Center" />
-                                </StackPanel>
-                            </Button>
-                            <TextBlock Style="{StaticResource TextBlock.Subtle}"
-                                       VerticalAlignment="Center"
-                                       Margin="14,0,0,0"
-                                       Text="Управление бэкапами и удаление записей – во вкладке «Очистка БД»." />
-                        </StackPanel>
-                    </StackPanel>
-                </Border>
-
-                <Border Style="{StaticResource Card.Inset}"
-                        Margin="0,0,0,12">
-                    <StackPanel>
-                        <TextBlock Style="{StaticResource SectionTitle}"
-                                   Text="Папки приложения" />
-
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="120" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                            </Grid.RowDefinitions>
-
-                            <TextBlock Grid.Row="0" Grid.Column="0" Style="{StaticResource InfoLabel}" Text="logs/" Margin="0,0,12,6" />
-                            <TextBlock Grid.Row="0" Grid.Column="1" Style="{StaticResource InfoValueMono}" Text="{Binding LogsPath}" Margin="0,0,0,6" />
-                            <Button Grid.Row="0" Grid.Column="2" Style="{StaticResource Button.Icon}" Command="{Binding OpenLogsFolderCommand}" AutomationProperties.Name="Открыть папку логов" ToolTip="Открыть в проводнике" Margin="0,-3,0,0">
-                                <iconPacks:PackIconLucide Kind="FolderOpen" Width="14" Height="14" />
-                            </Button>
-
-                            <TextBlock Grid.Row="1" Grid.Column="0" Style="{StaticResource InfoLabel}" Text="backups/" Margin="0,0,12,6" />
-                            <TextBlock Grid.Row="1" Grid.Column="1" Style="{StaticResource InfoValueMono}" Text="{Binding BackupsPath}" Margin="0,0,0,6" />
-                            <Button Grid.Row="1" Grid.Column="2" Style="{StaticResource Button.Icon}" Command="{Binding OpenBackupsFolderCommand}" AutomationProperties.Name="Открыть папку бэкапов" ToolTip="Открыть в проводнике" Margin="0,-3,0,6">
-                                <iconPacks:PackIconLucide Kind="FolderOpen" Width="14" Height="14" />
-                            </Button>
-
-                            <TextBlock Grid.Row="2" Grid.Column="0" Style="{StaticResource InfoLabel}" Text="temp/" />
-                            <TextBlock Grid.Row="2" Grid.Column="1" Style="{StaticResource InfoValueMono}" Text="{Binding TempPath}" />
-                            <Button Grid.Row="2" Grid.Column="2" Style="{StaticResource Button.Icon}" Command="{Binding OpenTempFolderCommand}" AutomationProperties.Name="Открыть папку временных файлов" ToolTip="Открыть в проводнике" Margin="0,-3,0,0">
-                                <iconPacks:PackIconLucide Kind="FolderOpen" Width="14" Height="14" />
-                            </Button>
-                        </Grid>
-                    </StackPanel>
-                </Border>
-
-                <Border Style="{StaticResource Card.Inset}"
-                        Margin="0,0,0,12"
-                        Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}">
-                    <keepshell:ProgressStatusBlock StatusText="{Binding StatusText}"
-                                                  CancelCommand="{Binding CancelCommand}"
-                                                  Maximum="{Binding ProgressMax}"
-                                                  Value="{Binding ProgressValue, Mode=OneWay}" />
-                </Border>
-
-                <Border Style="{StaticResource Card.Inset}"
-                        Margin="0,0,0,12">
-                    <StackPanel>
-                        <Grid Margin="0,0,0,8">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-
-                            <TextBlock Grid.Column="0"
-                                       Style="{StaticResource SectionTitle}"
-                                       Text="Очистка файлов"
-                                       Margin="0,0,0,0" />
-
-                            <TextBlock Grid.Column="1"
-                                       Style="{StaticResource TextBlock.Subtle}"
-                                       VerticalAlignment="Center">
-                                <Run Text="Выбрано:" />
-                                <Run Text="{Binding SafeSelectedCount, Mode=OneWay}"
-                                     FontWeight="SemiBold"
-                                     Foreground="{DynamicResource Fg.Primary}" />
-                            </TextBlock>
-                        </Grid>
-
-                        <TextBlock Style="{StaticResource TextBlock.Subtle}"
-                                   TextWrapping="Wrap"
-                                   Margin="0,0,0,10"
-                                   Text="Освобождает место на диске. Файлы можно потерять, но БД и записи останутся нетронутыми." />
-
-                        <StackPanel Orientation="Horizontal"
-                                    Margin="0,0,0,12">
-                            <Button Style="{StaticResource Button.Ghost}"
-                                    Command="{Binding SelectAllSafeCommand}"
-                                    Content="Выбрать всё"
-                                    Padding="12,4"
-                                    MinHeight="{DynamicResource Control.Height.Compact}" />
-                            <Button Style="{StaticResource Button.Ghost}"
-                                    Command="{Binding SelectNoneSafeCommand}"
-                                    Content="Снять выбор"
-                                    Padding="12,4"
-                                    MinHeight="{DynamicResource Control.Height.Compact}"
-                                    Margin="8,0,0,0" />
-                            <Button Style="{StaticResource Button.Ghost}"
-                                    Command="{Binding RefreshAllCommand}"
-                                    Padding="10,4"
-                                    MinHeight="{DynamicResource Control.Height.Compact}"
-                                    Margin="16,0,0,0"
-                                    ToolTip="Пересчитать размеры коллекций и папок">
-                                <StackPanel Orientation="Horizontal">
-                                    <iconPacks:PackIconLucide Kind="RotateCcw"
-                                                              Width="14"
-                                                              Height="14"
-                                                              Margin="0,0,6,0"
-                                                              VerticalAlignment="Center" />
-                                    <TextBlock Text="Обновить размеры"
-                                               VerticalAlignment="Center" />
-                                </StackPanel>
-                            </Button>
-                        </StackPanel>
-
-                        <ItemsControl ItemsSource="{Binding SafeItems}"
-                                      Grid.IsSharedSizeScope="True"
-                                      ItemTemplate="{StaticResource MaintenanceItemTemplate}" />
-
-                        <Grid Margin="0,8,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-
-                            <TextBlock Grid.Column="0"
-                                       Style="{StaticResource TextBlock.Subtle}"
-                                       TextWrapping="Wrap"
-                                       VerticalAlignment="Center"
-                                       Text="Перед очисткой будет создан ручной бэкап БД (на случай если задели не то)." />
-
-                            <Button Grid.Column="1"
-                                    Style="{StaticResource Button.Primary}"
-                                    Command="{Binding RunSafeCommand}"
-                                    Padding="18,8"
-                                    MinHeight="{DynamicResource Control.Height.Default}">
-                                <StackPanel Orientation="Horizontal">
-                                    <iconPacks:PackIconLucide Kind="Eraser"
-                                                              Width="14"
-                                                              Height="14"
-                                                              Margin="0,0,6,0"
-                                                              VerticalAlignment="Center" />
-                                    <TextBlock VerticalAlignment="Center">
-                                        <Run Text="Освободить место" />
-                                        <Run Text="(" /><Run Text="{Binding SafeSelectedCount, Mode=OneWay}" /><Run Text=")" />
-                                    </TextBlock>
-                                </StackPanel>
-                            </Button>
-                        </Grid>
-                    </StackPanel>
-                </Border>
-
             </StackPanel>
-        </ScrollViewer>
-    </Grid>
+        </Border>
+    </StackPanel>
 </UserControl>

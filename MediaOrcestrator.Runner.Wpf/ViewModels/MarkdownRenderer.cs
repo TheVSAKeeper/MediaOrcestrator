@@ -229,12 +229,12 @@ internal static class MarkdownRenderer
     {
         var paragraph = new Paragraph
         {
-            FontFamily = new FontFamily("Consolas, Cascadia Mono, monospace"),
             FontSize = 12,
             Margin = new Thickness(0, 4, 0, 10),
             Padding = new Thickness(10, 8, 10, 8),
         };
 
+        paragraph.SetResourceReference(TextElement.FontFamilyProperty, "Font.Mono");
         paragraph.SetResourceReference(TextElement.BackgroundProperty, "Bg.SurfaceAlt");
         paragraph.SetResourceReference(TextElement.ForegroundProperty, "Fg.Primary");
         paragraph.Inlines.Add(new Run(code));
@@ -271,10 +271,8 @@ internal static class MarkdownRenderer
 
         foreach (Match m in InlineCodeRegex.Matches(text))
         {
-            var run = new Run(m.Groups[1].Value)
-            {
-                FontFamily = new FontFamily("Consolas, Cascadia Mono, monospace"),
-            };
+            var run = new Run(m.Groups[1].Value);
+            run.SetResourceReference(TextElement.FontFamilyProperty, "Font.Mono");
             run.SetResourceReference(TextElement.BackgroundProperty, "Bg.SurfaceAlt");
             tokens.Add((m.Index, m.Length, run));
         }

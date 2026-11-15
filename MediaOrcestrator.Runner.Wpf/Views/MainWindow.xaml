@@ -43,10 +43,10 @@
         <KeyBinding Key="Escape"
                     Command="{Binding CloseTasksDrawerCommand}" />
         <KeyBinding Key="F5"
-                    Command="{Binding CurrentPageRefresh.RefreshCommand}" />
+                    Command="{Binding RefreshActivePageCommand}" />
     </Window.InputBindings>
 
-    <keepshell:ShellLayout>
+    <keepshell:ShellLayout ModalCoversShell="True">
         <keepshell:ShellLayout.TitleBar>
             <views:TitleBarView />
         </keepshell:ShellLayout.TitleBar>
@@ -54,82 +54,86 @@
             <views:StatusBarView />
         </keepshell:ShellLayout.StatusBar>
         <keepshell:ShellLayout.ContentOverlay>
-            
-            <Border VerticalAlignment="Bottom"
-                    Height="420"
-                    Background="{DynamicResource Bg.Surface}"
-                    BorderBrush="{DynamicResource Border.Subtle}"
-                    BorderThickness="0,1,0,0"
-                    Effect="{DynamicResource Card.Shadow}"
-                    KeyboardNavigation.TabNavigation="Cycle"
-                    Visibility="{Binding IsTasksDrawerOpen, Converter={StaticResource BoolToVisibility}}">
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
-                    </Grid.RowDefinitions>
+            <Grid>
+                <Border VerticalAlignment="Bottom"
+                        Height="420"
+                        Background="{DynamicResource Bg.Surface}"
+                        BorderBrush="{DynamicResource Border.Subtle}"
+                        BorderThickness="0,1,0,0"
+                        Effect="{DynamicResource Card.Shadow}"
+                        KeyboardNavigation.TabNavigation="Cycle"
+                        Visibility="{Binding IsTasksDrawerOpen, Converter={StaticResource BoolToVisibility}}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
 
-                    <Border Grid.Row="0"
-                            BorderBrush="{DynamicResource Border.Subtle}"
-                            BorderThickness="0,0,0,1"
-                            Padding="20,12">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0"
-                                        Orientation="Horizontal"
-                                        VerticalAlignment="Center">
-                                <TextBlock Text="Лента задач"
-                                           Style="{StaticResource TextBlock.Heading}"
-                                           VerticalAlignment="Center" />
-                                <TextBlock Text="{Binding Tasks.Header}"
-                                           Style="{StaticResource TextBlock.Subtle}"
-                                           VerticalAlignment="Center"
-                                           Margin="14,0,0,0" />
-                            </StackPanel>
-                            <Button Grid.Column="1"
-                                    Style="{StaticResource Button.Ghost}"
-                                    Command="{Binding Tasks.ShowDebugDumpCommand}"
-                                    Padding="10,4"
-                                    Margin="0,0,8,0"
-                                    ToolTip="Показать все задачи текстом (отладка)"
-                                    AutomationProperties.Name="Отладочный дамп задач">
-                                <iconPacks:PackIconLucide Kind="Bug"
-                                                  Width="16"
-                                                  Height="16" />
-                            </Button>
-                            <Button Grid.Column="2"
-                                    Style="{StaticResource Button.Ghost}"
-                                    Content="Отменить все"
-                                    Command="{Binding Tasks.CancelAllCommand}"
-                                    Padding="10,4"
-                                    Margin="0,0,8,0"
-                                    ToolTip="Отменить все активные задачи"
-                                    Visibility="{Binding Tasks.HasActive, Converter={StaticResource BoolToVisibility}}" />
-                            <Button Grid.Column="3"
-                                    Style="{StaticResource Button.Ghost}"
-                                    Command="{Binding CloseTasksDrawerCommand}"
-                                    Padding="10,4"
-                                    ToolTip="Закрыть (Esc)"
-                                    AutomationProperties.Name="Закрыть ленту задач">
-                                <iconPacks:PackIconLucide Kind="X"
-                                                  Width="16"
-                                                  Height="16" />
-                            </Button>
-                        </Grid>
-                    </Border>
+                        <Border Grid.Row="0"
+                                BorderBrush="{DynamicResource Border.Subtle}"
+                                BorderThickness="0,0,0,1"
+                                Padding="20,12">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0"
+                                            Orientation="Horizontal"
+                                            VerticalAlignment="Center">
+                                    <TextBlock Text="Лента задач"
+                                               Style="{StaticResource TextBlock.Heading}"
+                                               VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding Tasks.Header}"
+                                               Style="{StaticResource TextBlock.Subtle}"
+                                               VerticalAlignment="Center"
+                                               Margin="14,0,0,0" />
+                                </StackPanel>
+                                <Button Grid.Column="1"
+                                        Style="{StaticResource Button.Ghost}"
+                                        Command="{Binding Tasks.ShowDebugDumpCommand}"
+                                        Padding="10,4"
+                                        Margin="0,0,8,0"
+                                        ToolTip="Показать все задачи текстом (отладка)"
+                                        AutomationProperties.Name="Отладочный дамп задач">
+                                    <iconPacks:PackIconLucide Kind="Bug"
+                                                      Width="16"
+                                                      Height="16" />
+                                </Button>
+                                <Button Grid.Column="2"
+                                        Style="{StaticResource Button.Ghost}"
+                                        Content="Отменить все"
+                                        Command="{Binding Tasks.CancelAllCommand}"
+                                        Padding="10,4"
+                                        Margin="0,0,8,0"
+                                        ToolTip="Отменить все активные задачи"
+                                        Visibility="{Binding Tasks.HasActive, Converter={StaticResource BoolToVisibility}}" />
+                                <Button Grid.Column="3"
+                                        Style="{StaticResource Button.Ghost}"
+                                        Command="{Binding CloseTasksDrawerCommand}"
+                                        Padding="10,4"
+                                        ToolTip="Закрыть (Esc)"
+                                        AutomationProperties.Name="Закрыть ленту задач">
+                                    <iconPacks:PackIconLucide Kind="X"
+                                                      Width="16"
+                                                      Height="16" />
+                                </Button>
+                            </Grid>
+                        </Border>
 
-                    <views:TasksView Grid.Row="1"
-                                     DataContext="{Binding Tasks}"
-                                     Compact="True"
-                                     Focusable="False"
-                                     Margin="20,16,20,16" />
-                </Grid>
-            </Border>
+                        <views:TasksView Grid.Row="1"
+                                         DataContext="{Binding Tasks}"
+                                         Compact="True"
+                                         Focusable="False"
+                                         Margin="20,16,20,16" />
+                    </Grid>
+                </Border>
+
+                <keepshell:ToastHost DataContext="{Binding Toasts}"
+                                     Panel.ZIndex="10" />
+            </Grid>
         </keepshell:ShellLayout.ContentOverlay>
         <keepshell:ShellLayout.WindowOverlay>
             

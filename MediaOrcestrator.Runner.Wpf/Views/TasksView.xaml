@@ -12,61 +12,6 @@
              d:DesignHeight="640"
              d:DesignWidth="900">
     <UserControl.Resources>
-        <Style x:Key="Tasks.CompletedToggle"
-               TargetType="ToggleButton">
-            <Setter Property="Background"
-                    Value="Transparent" />
-            <Setter Property="Foreground"
-                    Value="{DynamicResource Fg.Secondary}" />
-            <Setter Property="BorderBrush"
-                    Value="Transparent" />
-            <Setter Property="BorderThickness"
-                    Value="1" />
-            <Setter Property="Padding"
-                    Value="10,4" />
-            <Setter Property="MinHeight"
-                    Value="{DynamicResource Control.Height.Compact}" />
-            <Setter Property="HorizontalContentAlignment"
-                    Value="Left" />
-            <Setter Property="Cursor"
-                    Value="Hand" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="ToggleButton">
-                        <Border x:Name="Bd"
-                                Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="{DynamicResource Radius.M}"
-                                Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Left"
-                                              VerticalAlignment="Center"
-                                              RecognizesAccessKey="True" />
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver"
-                                     Value="True">
-                                <Setter TargetName="Bd"
-                                        Property="Background"
-                                        Value="{DynamicResource Bg.SurfaceAlt}" />
-                            </Trigger>
-                            <Trigger Property="IsChecked"
-                                     Value="True">
-                                <Setter TargetName="Bd"
-                                        Property="Background"
-                                        Value="{DynamicResource Accent.Soft}" />
-                                <Setter TargetName="Bd"
-                                        Property="BorderBrush"
-                                        Value="{DynamicResource Accent.Primary}" />
-                                <Setter Property="Foreground"
-                                        Value="{DynamicResource Fg.Primary}" />
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
         <Style x:Key="Tasks.ChevronButton"
                TargetType="Button"
                BasedOn="{StaticResource Button.Ghost}">
@@ -147,7 +92,7 @@
                             <TextBlock Grid.Column="2"
                                        Text="{Binding TimeBadge}"
                                        Style="{StaticResource TextBlock.Subtle}"
-                                       FontFamily="Consolas"
+                                       FontFamily="{DynamicResource Font.Mono}"
                                        Margin="8,0,0,0"
                                        VerticalAlignment="Center" />
 
@@ -232,7 +177,7 @@
                         <TextBlock Grid.Column="3"
                                    Text="{Binding TimeBadge}"
                                    Style="{StaticResource TextBlock.Subtle}"
-                                   FontFamily="Consolas"
+                                   FontFamily="{DynamicResource Font.Mono}"
                                    Margin="10,0,0,0"
                                    VerticalAlignment="Center" />
                     </Grid>
@@ -278,7 +223,8 @@
             </Grid.ColumnDefinitions>
 
             <ToggleButton Grid.Column="0"
-                          Style="{StaticResource Tasks.CompletedToggle}"
+                          Style="{StaticResource ToggleButton.Filter}"
+                          HorizontalContentAlignment="Left"
                           IsChecked="{Binding IsCompletedExpanded, Mode=TwoWay}"
                           Visibility="{Binding HasCompleted, Converter={StaticResource BoolToVisibility}}">
                 <StackPanel Orientation="Horizontal">

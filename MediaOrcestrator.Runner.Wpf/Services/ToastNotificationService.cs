@@ -1,6 +1,8 @@
-﻿using MediaOrcestrator.Domain;
+﻿using KeepShell.Services.Platform;
+using MediaOrcestrator.Domain;
 using MediaOrcestrator.Runner.Wpf.Bootstrap;
 using MediaOrcestrator.Runner.Wpf.ViewModels;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Toolkit.Uwp.Notifications;
@@ -13,22 +15,36 @@ internal sealed class ToastNotificationService : IHostedService
 {
     private const int MaxReasonLength = 120;
     private static readonly TimeSpan MinDurationForSuccess = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan ActiveSuccessDuration = TimeSpan.FromSeconds(4);
+    private static readonly TimeSpan ActiveErrorDuration = TimeSpan.FromSeconds(8);
+    private static readonly TimeSpan WriteFailedThrottle = TimeSpan.FromSeconds(30);
 
     private readonly ActionHolder _actions;
     private readonly ISettingsStore _settings;
     private readonly ShellPreferences _preferences;
+    private readonly ToastHostViewModel _toasts;
+    private readonly IShellLauncher _shellLauncher;
+    private readonly IServiceProvider _services;
     private readonly ILogger<ToastNotificationService> _logger;
     private readonly ConcurrentDictionary<Guid, byte> _seen = new();
+    private DateTime _lastWriteFailedUtc;
+    private string? _lastWriteFailedReason;
 
     public ToastNotificationService(
         ActionHolder actions,
         ISettingsStore settings,
         ShellPreferences preferences,
+        ToastHostViewModel toasts,
+        IShellLauncher shellLauncher,
+        IServiceProvider services,
         ILogger<ToastNotificationService> logger)
     {
         _actions = actions;
         _settings = settings;
         _preferences = preferences;
+        _toasts = toasts;
+        _shellLauncher = shellLauncher;
+        _services = services;
         _logger = logger;
     }
 
@@ -101,14 +117,24 @@ internal sealed class ToastNotificationService : IHostedService
             return;
         }
 
-        if (OnlyWhenInactive() && IsMainWindowActive())
+        var isFailed = action.State == ActionState.Failed;
+        var headline = isFailed ? "Ошибка задачи" : "Задача завершена";
+        var isActive = IsMainWindowActive();
+
+        if (isActive)
         {
-            return;
+            var message = BuildInAppActionMessage(action, isFailed);
+            var severity = isFailed ? StatusSeverity.Error : StatusSeverity.Success;
+            var duration = isFailed ? ActiveErrorDuration : ActiveSuccessDuration;
+            _toasts.Show(message, "К задачам", OpenTasksDrawer, severity, duration);
+
+            if (OnlyWhenInactive())
+            {
+                return;
+            }
         }
 
-        var headline = action.State == ActionState.Failed ? "Ошибка задачи" : "Задача завершена";
-
-        ShowToast(headline, action.Name, action.Status, action.Id.ToString("N"), $"задачи {action.Id}");
+        ShowUwpToast(headline, action.Name, action.Status, action.Id.ToString("N"), $"задачи {action.Id}");
     }
 
     private void OnSettingsWriteFailed(object? sender, SettingsWriteFailedEventArgs e)
@@ -127,15 +153,78 @@ internal sealed class ToastNotificationService : IHostedService
             reason = null;
         }
 
-        dispatcher.BeginInvoke(() => ShowToast(
+        dispatcher.BeginInvoke(() => ShowWriteFailed(reason));
+    }
+
+    private void ShowWriteFailed(string? reason)
+    {
+        var now = DateTime.UtcNow;
+
+        if (now - _lastWriteFailedUtc < WriteFailedThrottle
+            && string.Equals(_lastWriteFailedReason, reason, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _lastWriteFailedUtc = now;
+        _lastWriteFailedReason = reason;
+
+        if (IsMainWindowActive())
+        {
+            var message = string.IsNullOrWhiteSpace(reason)
+                ? "Файл settings.toml не удалось записать – последние изменения пропадут после перезапуска."
+                : $"Файл settings.toml не удалось записать: {reason}";
+
+            _toasts.Show(message, "Показать файл", RevealSettingsFile, StatusSeverity.Error, ActiveErrorDuration);
+            return;
+        }
+
+        ShowUwpToast(
             "Настройки не сохранились",
             "Файл settings.toml не удалось записать, последние изменения пропадут после перезапуска.",
             reason,
             "settings-write-failed",
-            "отказа записи настроек"));
+            "отказа записи настроек");
     }
 
-    private void ShowToast(string headline, string body, string? attribution, string tag, string what)
+    private void OpenTasksDrawer()
+    {
+        var shell = _services.GetService<ShellViewModel>();
+
+        if (shell is not null)
+        {
+            shell.IsTasksDrawerOpen = true;
+        }
+    }
+
+    private void RevealSettingsFile()
+    {
+        _shellLauncher.Reveal(_settings.FilePath);
+    }
+
+    private static string BuildInAppActionMessage(ActionHolder.RunningAction action, bool isFailed)
+    {
+        if (!isFailed)
+        {
+            return $"Готово: {action.Name}";
+        }
+
+        var status = action.Status?.Trim();
+
+        if (string.IsNullOrWhiteSpace(status))
+        {
+            return $"Ошибка: {action.Name}";
+        }
+
+        if (status.Length > MaxReasonLength)
+        {
+            status = string.Concat(status.AsSpan(0, MaxReasonLength), "…");
+        }
+
+        return $"Ошибка ({action.Name}): {status}";
+    }
+
+    private void ShowUwpToast(string headline, string body, string? attribution, string tag, string what)
     {
         try
         {
@@ -163,7 +252,7 @@ internal sealed class ToastNotificationService : IHostedService
     private static bool IsMainWindowActive()
     {
         var window = Application.Current?.MainWindow;
-        return window is not null && window.IsActive;
+        return window is { IsVisible: true, IsActive: true } && window.WindowState != WindowState.Minimized;
     }
 
     private bool IsEnabled() => _preferences.EnableToastNotifications;

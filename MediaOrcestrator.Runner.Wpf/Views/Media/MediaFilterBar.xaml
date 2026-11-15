@@ -12,62 +12,6 @@
     
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
-
-        <Style x:Key="FilterDropDownButton"
-               TargetType="ToggleButton">
-            <Setter Property="Background"
-                    Value="Transparent" />
-            <Setter Property="Foreground"
-                    Value="{DynamicResource Fg.Secondary}" />
-            <Setter Property="BorderBrush"
-                    Value="Transparent" />
-            <Setter Property="BorderThickness"
-                    Value="1" />
-            <Setter Property="Padding"
-                    Value="10,4" />
-            <Setter Property="MinHeight"
-                    Value="32" />
-            <Setter Property="Cursor"
-                    Value="Hand" />
-            <Setter Property="FocusVisualStyle"
-                    Value="{x:Null}" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="ToggleButton">
-                        <Border x:Name="Bd"
-                                Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="{DynamicResource Radius.M}"
-                                Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center"
-                                              VerticalAlignment="Center"
-                                              RecognizesAccessKey="True" />
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver"
-                                     Value="True">
-                                <Setter TargetName="Bd"
-                                        Property="Background"
-                                        Value="{DynamicResource Bg.SurfaceAlt}" />
-                            </Trigger>
-                            <Trigger Property="IsChecked"
-                                     Value="True">
-                                <Setter TargetName="Bd"
-                                        Property="Background"
-                                        Value="{DynamicResource Accent.Soft}" />
-                            </Trigger>
-                            <Trigger Property="IsKeyboardFocused"
-                                     Value="True">
-                                <Setter TargetName="Bd"
-                                        Property="BorderBrush"
-                                        Value="{DynamicResource Accent.Primary}" />
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
     </UserControl.Resources>
 
     <Grid Margin="{DynamicResource Margin.StackItem}">
@@ -79,7 +23,7 @@
         <StackPanel Grid.Column="0"
                     Orientation="Horizontal">
             <ToggleButton x:Name="SourcesFilterButton"
-                          Style="{StaticResource FilterDropDownButton}"
+                          Style="{StaticResource ToggleButton.Filter}"
                           Margin="{DynamicResource Margin.InlineGap}">
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="Источники"
@@ -103,7 +47,7 @@
             </Popup>
 
             <ToggleButton x:Name="StatusFilterButton"
-                          Style="{StaticResource FilterDropDownButton}"
+                          Style="{StaticResource ToggleButton.Filter}"
                           Margin="{DynamicResource Margin.InlineGap}">
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="Статус"
@@ -127,7 +71,7 @@
             </Popup>
 
             <ToggleButton x:Name="RelationsFilterButton"
-                          Style="{StaticResource FilterDropDownButton}"
+                          Style="{StaticResource ToggleButton.Filter}"
                           Margin="{DynamicResource Margin.InlineGap}"
                           ToolTip="Фильтр по связям синхронизации">
                 <StackPanel Orientation="Horizontal">
@@ -154,7 +98,7 @@
             </Popup>
 
             <ToggleButton x:Name="ColumnsFilterButton"
-                          Style="{StaticResource FilterDropDownButton}"
+                          Style="{StaticResource ToggleButton.Filter}"
                           Margin="{DynamicResource Margin.InlineGap}"
                           ToolTip="Колонки метаданных в таблице">
                 <StackPanel Orientation="Horizontal">
@@ -357,7 +301,7 @@
             </Border>
 
             <ToggleButton x:Name="ViewOptionsButton"
-                          Style="{StaticResource FilterDropDownButton}"
+                          Style="{StaticResource ToggleButton.Filter}"
                           Margin="16,0,0,0"
                           ToolTip="Настройки отображения матрицы"
                           AutomationProperties.Name="Настройки отображения матрицы">

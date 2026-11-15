@@ -17,13 +17,13 @@ internal static class GalleryPages
         new("merge", "Слияние дубликатов"),
         new("conflicts", "Разбор конфликтов"),
         new("comments", "Комментарии"),
-        new("system", "Система", "Задачи"),
-        new("tools", "Система", "Инструменты"),
-        new("logs", "Система", "Логи"),
-        new("diagnostics", "Система", "Диагностика"),
-        new("cleanup", "Система", "Очистка БД"),
-        new("about", "Система", "О программе"),
-        new("settings", "Система", "Настройки"),
+        new("tools", "Обслуживание", "tools"),
+        new("cleanup", "Обслуживание", "cleanup"),
+        new("tasks", "Обслуживание", "tasks"),
+        new("logs", "Логи"),
+        new("diagnostics", "Диагностика"),
+        new("about", "О программе"),
+        new("settings", "Настройки"),
     ];
 
     public static IReadOnlyList<string> AllKeys { get; } = [.. All.Select(page => page.Key)];

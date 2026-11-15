@@ -9,6 +9,7 @@ public sealed class NavigationService : INavigationService
     private readonly Lazy<ShellViewModel> _shell;
     private readonly Lazy<MediaViewModel> _media;
     private readonly Lazy<OperationsViewModel> _operations;
+    private readonly Lazy<MaintenanceHubViewModel> _maintenance;
     private readonly IDialogService _dialogs;
 
     public NavigationService(IServiceProvider sp, IDialogService dialogs)
@@ -16,6 +17,7 @@ public sealed class NavigationService : INavigationService
         _shell = new(sp.GetRequiredService<ShellViewModel>);
         _media = new(sp.GetRequiredService<MediaViewModel>);
         _operations = new(sp.GetRequiredService<OperationsViewModel>);
+        _maintenance = new(sp.GetRequiredService<MaintenanceHubViewModel>);
         _dialogs = dialogs;
     }
 
@@ -53,5 +55,11 @@ public sealed class NavigationService : INavigationService
     {
         _shell.Value.NavigateToOperations(tab);
         _operations.Value.ApplyExternalSelection(tab, selection);
+    }
+
+    public void OpenMaintenance(MaintenanceSection section = MaintenanceSection.Tools)
+    {
+        _shell.Value.NavigateByKey("maintenance");
+        _maintenance.Value.SelectSection(section);
     }
 }

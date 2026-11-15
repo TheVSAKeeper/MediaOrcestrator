@@ -1,4 +1,5 @@
 ﻿using KeepShell.Automation;
+using KeepShell.Diagnostics;
 using KeepShell.Mcp;
 using LiteDB;
 using MediaOrcestrator.Domain;
@@ -11,6 +12,7 @@ using MediaOrcestrator.Runner.Wpf.Mcp;
 using MediaOrcestrator.Runner.Wpf.MediaContextMenu;
 using MediaOrcestrator.Runner.Wpf.MediaContextMenu.Actions;
 using MediaOrcestrator.Runner.Wpf.Services;
+using MediaOrcestrator.Runner.Wpf.Services.Diagnostics;
 using MediaOrcestrator.Runner.Wpf.ViewModels;
 using MediaOrcestrator.Runner.Wpf.ViewModels.Comments;
 using MediaOrcestrator.Runner.Wpf.Views;
@@ -21,6 +23,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Serilog;
 using Serilog.Events;
+using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 using System.Windows;
@@ -39,6 +42,7 @@ public partial class App : Application
     private SingleInstanceGuard? _singleInstanceGuard;
     private GlobalExceptionHandlers? _exceptionHandlers;
     private StartupSplash? _splash;
+    private IDisposable? _systemThemeWatch;
     private CancellationTokenSource? _ipcCts;
     private string? _startupCommand;
 
@@ -47,6 +51,7 @@ public partial class App : Application
         base.OnStartup(e);
 
         StyledMessageBox.DefaultTitle = "MediaOrcestrator";
+        AppResources.InstallInto(this);
 
         var galleryIndex = Array.FindIndex(e.Args, static arg => string.Equals(arg, GalleryOptions.Argument, StringComparison.OrdinalIgnoreCase));
 
@@ -85,6 +90,7 @@ public partial class App : Application
 
         try
         {
+            var startupWatch = Stopwatch.StartNew();
             var paths = PathsLoader.Load();
             var settingsPath = Path.Combine(AppContext.BaseDirectory, TomlSettingsFile.PrimaryFileName);
 
@@ -109,7 +115,8 @@ public partial class App : Application
             var settingsStore = _host.Services.GetRequiredService<ISettingsStore>();
             AppThemes.Register();
             var savedKey = settingsStore.GetStringValue(ThemeManager.SettingsKeyName);
-            ThemeManager.Apply(string.IsNullOrWhiteSpace(savedKey) ? AppThemes.LightKey : savedKey);
+            ThemeManager.Apply(string.IsNullOrWhiteSpace(savedKey) ? AppThemes.SystemKey : savedKey);
+            _systemThemeWatch = SystemTheme.Watch(Dispatcher);
 
             FontScaleManager.Initialize(settingsStore.GetDouble(ShellPreferences.FontScaleKey, FontScaleManager.DefaultScale));
 
@@ -158,6 +165,8 @@ public partial class App : Application
                 MainWindow = window;
                 window.Show();
             }
+
+            _host.Services.GetRequiredService<PerformanceMonitor>().ReportStartup(startupWatch.Elapsed);
 
             _splash.Dispose();
             _splash = null;
@@ -227,7 +236,7 @@ public partial class App : Application
             ? string.Empty
             : $"\n\nПричина: {check.ErrorSummary}";
 
-        var message = $"{headline}{details}\n\nПолный лог сохранён в разделе «Система – Логи».";
+        var message = $"{headline}{details}\n\nПолный лог сохранён в разделе «Логи».";
 
         try
         {
@@ -302,6 +311,9 @@ public partial class App : Application
         }
         finally
         {
+            _systemThemeWatch?.Dispose();
+            _systemThemeWatch = null;
+
             _singleInstanceGuard?.Dispose();
             _singleInstanceGuard = null;
 
@@ -327,6 +339,7 @@ public partial class App : Application
         var updateManager = _host.Services.GetRequiredService<AppUpdateManager>();
         var appUpdate = _host.Services.GetRequiredService<AppUpdateViewModel>();
         var preloadSignal = _host.Services.GetRequiredService<PreloadCompletionSignal>();
+        var performanceMonitor = _host.Services.GetRequiredService<PerformanceMonitor>();
 
         string? appUpdateNote = null;
 
@@ -370,6 +383,7 @@ public partial class App : Application
 
             try
             {
+                performanceMonitor.SetPhase("Предзагрузка");
                 using var scope = actionHolder.BeginScope(action);
 
                 var ioTasks = ioSteps
@@ -409,6 +423,7 @@ public partial class App : Application
             }
             finally
             {
+                performanceMonitor.SetPhase(null);
                 preloadSignal.Complete();
                 cts.Dispose();
             }
@@ -707,7 +722,25 @@ public partial class App : Application
 
         services.AddSingleton<ISettingsStore>(_ => new SettingsStore(settingsPath));
 
+        var fullDbPath = Path.GetFullPath(paths.DatabasePath);
+        var dataDirectory = Path.GetDirectoryName(fullDbPath)!;
+        var baseDirectory = Path.GetFullPath(AppContext.BaseDirectory);
+
         services.AddKeepShell();
+        services.AddKeepShellToasts();
+        services.AddKeepShellDiagnostics(new DiagnosticsOptions
+        {
+            AppName = "MediaOrcestrator",
+            AppVersion = ResolveAppVersion(),
+            DataDirectory = dataDirectory,
+            PortableStorage = dataDirectory.StartsWith(baseDirectory, StringComparison.OrdinalIgnoreCase),
+        });
+        services.AddSingleton<IDiagnosticsSecretSource, MediaOrcestratorSecretSource>();
+        services.AddSingleton<IDiagnosticsBundleSource, MediaOrcestratorBundleSource>();
+        services.AddSingleton<IDiagnosticsCard, DatabaseDiagnosticsCard>();
+        services.AddSingleton<IDiagnosticsCard, SourcesPluginsDiagnosticsCard>();
+        services.AddSingleton<IDiagnosticsCard, ToolsDiagnosticsCard>();
+        services.AddSingleton<IDiagnosticsCard, StoragePathsDiagnosticsCard>();
         services.AddSingleton<MediaOrcestratorAutomation>();
         services.AddKeepShellMcp<ShellViewModel>(new McpServerOptions
         {
@@ -745,7 +778,8 @@ public partial class App : Application
         services.AddSingleton<TasksViewModel>();
         services.AddSingleton<ToolsViewModel>();
         services.AddSingleton<LogsViewModel>();
-        services.AddSingleton<SystemViewModel>();
+        services.AddSingleton<CleanupAndBackupsViewModel>();
+        services.AddSingleton<MaintenanceHubViewModel>();
         services.AddSingleton<SourcesRelationsViewModel>();
         services.AddSingleton<CommentsViewModel>();
         services.AddSingleton<BatchRenameSubViewModel>();
@@ -765,5 +799,6 @@ public partial class App : Application
         services.AddSingleton<PreloadCompletionSignal>();
         services.AddHostedService<AutoSyncHostedService>();
         services.AddHostedService<ToastNotificationService>();
+        services.AddHostedService<ChildProcessSampler>();
     }
 }

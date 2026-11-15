@@ -1,5 +1,6 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using KeepShell.Bootstrap;
 using KeepShell.Services.Platform;
 using Microsoft.Extensions.Logging;
 using System.Reflection;
@@ -8,8 +9,11 @@ using System.Text;
 
 namespace MediaOrcestrator.Runner.Wpf.ViewModels;
 
-public sealed partial class AboutViewModel : ObservableObject
+public sealed partial class AboutViewModel : ObservableObject, IPageHeader
 {
+    public string PageTitle => "О программе";
+
+    public string? PageDescription => Tagline;
     private readonly ErrorReportService _errorReports;
     private readonly UpdatePreferences _updates;
     private readonly ILogger<AboutViewModel> _logger;

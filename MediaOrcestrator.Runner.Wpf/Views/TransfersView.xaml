@@ -55,58 +55,6 @@
                     Value="{DynamicResource State.Error}" />
         </Style>
 
-        <Style x:Key="FilterToggleButton"
-               TargetType="ToggleButton">
-            <Setter Property="Background"
-                    Value="Transparent" />
-            <Setter Property="Foreground"
-                    Value="{DynamicResource Fg.Secondary}" />
-            <Setter Property="BorderBrush"
-                    Value="Transparent" />
-            <Setter Property="BorderThickness"
-                    Value="1" />
-            <Setter Property="Padding"
-                    Value="10,4" />
-            <Setter Property="MinHeight"
-                    Value="32" />
-            <Setter Property="Cursor"
-                    Value="Hand" />
-            <Setter Property="FocusVisualStyle"
-                    Value="{x:Null}" />
-            <Setter Property="Margin"
-                    Value="0,0,4,0" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="ToggleButton">
-                        <Border x:Name="Bd"
-                                Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="{DynamicResource Radius.M}"
-                                Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center"
-                                              VerticalAlignment="Center"
-                                              RecognizesAccessKey="True" />
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver"
-                                     Value="True">
-                                <Setter TargetName="Bd"
-                                        Property="Background"
-                                        Value="{DynamicResource Bg.SurfaceAlt}" />
-                            </Trigger>
-                            <Trigger Property="IsChecked"
-                                     Value="True">
-                                <Setter TargetName="Bd"
-                                        Property="Background"
-                                        Value="{DynamicResource Accent.Soft}" />
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
         <Style x:Key="MenuItemButton"
                TargetType="Button"
                BasedOn="{StaticResource Button.Ghost}">
@@ -460,8 +408,8 @@
 
                     <ToggleButton x:Name="SourcesFilterToggle"
                                   Grid.Column="1"
-                                  Style="{StaticResource FilterToggleButton}"
-                                  Margin="6,0,0,0">
+                                  Style="{StaticResource ToggleButton.Filter}"
+                                  Margin="6,0,4,0">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="Источники"
                                        VerticalAlignment="Center" />
@@ -486,7 +434,8 @@
 
                     <ToggleButton x:Name="RelationsFilterToggle"
                                   Grid.Column="2"
-                                  Style="{StaticResource FilterToggleButton}">
+                                  Style="{StaticResource ToggleButton.Filter}"
+                                  Margin="0,0,4,0">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="Связи"
                                        VerticalAlignment="Center" />
@@ -511,7 +460,8 @@
 
                     <ToggleButton x:Name="MoreMenuToggle"
                                   Grid.Column="3"
-                                  Style="{StaticResource FilterToggleButton}"
+                                  Style="{StaticResource ToggleButton.Filter}"
+                                  Margin="0,0,4,0"
                                   IsChecked="{Binding IsMoreMenuOpen, Mode=TwoWay}"
                                   ToolTip="Дополнительные действия"
                                   AutomationProperties.Name="Дополнительные действия"
@@ -710,7 +660,7 @@
                                 Orientation="Horizontal"
                                 VerticalAlignment="Center">
                         <ToggleButton x:Name="RunOptionsToggle"
-                                      Style="{StaticResource FilterToggleButton}"
+                                      Style="{StaticResource ToggleButton.Filter}"
                                       VerticalAlignment="Center"
                                       Margin="0,0,8,0"
                                       Padding="8,4"
@@ -748,7 +698,7 @@
                                                FontWeight="SemiBold"
                                                Margin="0,0,0,8" />
                                     <ToggleButton Content="Пауза между загрузками"
-                                                  Style="{StaticResource FilterToggleButton}"
+                                                  Style="{StaticResource ToggleButton.Filter}"
                                                   IsChecked="{Binding UploadIntervalEnabled}"
                                                   IsEnabled="{Binding CanEditUploadInterval}"
                                                   HorizontalAlignment="Left"
@@ -788,12 +738,12 @@
                             </Border>
                         </Popup>
                         <ToggleButton Content="Стоп при ошибке"
-                                      Style="{StaticResource FilterToggleButton}"
+                                      Style="{StaticResource ToggleButton.Filter}"
                                       IsChecked="{Binding StopOnError}"
                                       VerticalAlignment="Center"
                                       Margin="0,0,8,0"
                                       ToolTip="Если включено – первая ошибка останавливает прогон." />
-                        <ToggleButton Style="{StaticResource FilterToggleButton}"
+                        <ToggleButton Style="{StaticResource ToggleButton.Filter}"
                                       IsChecked="{Binding IsJournalOpen}"
                                       VerticalAlignment="Center"
                                       Margin="0"
@@ -905,29 +855,13 @@
                         </TreeView.Resources>
                     </TreeView>
 
-                    <Border Style="{StaticResource Card.Empty}"
-                            VerticalAlignment="Center"
-                            HorizontalAlignment="Center"
-                            Visibility="{Binding EmptyHint, Converter={StaticResource NullToVisibility}}">
-                        <StackPanel>
-                            <Path Width="36"
-                                  Height="36"
-                                  Stretch="Uniform"
-                                  Stroke="{DynamicResource State.Success}"
-                                  StrokeThickness="3"
-                                  StrokeStartLineCap="Round"
-                                  StrokeEndLineCap="Round"
-                                  Fill="Transparent"
-                                  HorizontalAlignment="Center"
-                                  Margin="0,0,0,12"
-                                  Data="M 2 7 L 6 11 L 12 3" />
-                            <TextBlock Text="{Binding EmptyHint}"
-                                       Style="{StaticResource TextBlock.Subtle}"
-                                       TextAlignment="Center"
-                                       TextWrapping="Wrap"
-                                       MaxWidth="420" />
-                        </StackPanel>
-                    </Border>
+                    <keepshell:EmptyState VerticalAlignment="Center"
+                                          HorizontalAlignment="Center"
+                                          Icon="{Binding EmptyIcon}"
+                                          Heading="{Binding EmptyHeading}"
+                                          Description="{Binding EmptyHint}"
+                                          DescriptionMaxWidth="420"
+                                          Visibility="{Binding EmptyHint, Converter={StaticResource NullToVisibility}}" />
 
                     <Grid Visibility="{Binding IsRebuilding, Converter={StaticResource BoolToVisibility}}">
                         <Rectangle Fill="{DynamicResource Bg.Surface}"
@@ -1010,27 +944,49 @@
                     <Border Grid.Row="1"
                             BorderBrush="{DynamicResource Border.Subtle}"
                             BorderThickness="0,1,0,0">
-                        <ScrollViewer VerticalScrollBarVisibility="Auto"
-                                      HorizontalScrollBarVisibility="Disabled">
-                            <ItemsControl ItemsSource="{Binding Journal}"
-                                          Padding="12,8">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <StackPanel Orientation="Horizontal"
-                                                    Margin="0,2">
-                                            <TextBlock Text="{Binding TimeText}"
-                                                       Style="{StaticResource TextBlock.Mono}"
-                                                       Foreground="{DynamicResource Fg.Muted}"
-                                                       VerticalAlignment="Top"
-                                                       Margin="0,1,8,0" />
-                                            <TextBlock Text="{Binding Text}"
-                                                       Style="{StaticResource JournalEntryText}"
-                                                       MaxWidth="240" />
-                                        </StackPanel>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </ScrollViewer>
+                        <Grid>
+                            <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                          HorizontalScrollBarVisibility="Disabled">
+                                <ItemsControl ItemsSource="{Binding Journal}"
+                                              Padding="12,8">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Orientation="Horizontal"
+                                                        Margin="0,2">
+                                                <TextBlock Text="{Binding TimeText}"
+                                                           Style="{StaticResource TextBlock.Mono}"
+                                                           Foreground="{DynamicResource Fg.Muted}"
+                                                           VerticalAlignment="Top"
+                                                           Margin="0,1,8,0" />
+                                                <TextBlock Text="{Binding Text}"
+                                                           Style="{StaticResource JournalEntryText}"
+                                                           MaxWidth="240" />
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                            <keepshell:EmptyState VerticalAlignment="Center"
+                                                  Icon="ScrollText"
+                                                  Heading="Журнал пока пуст"
+                                                  Description="Здесь появятся события текущего прогона."
+                                                  DescriptionMaxWidth="260"
+                                                  Margin="12">
+                                <keepshell:EmptyState.Style>
+                                    <Style TargetType="keepshell:EmptyState">
+                                        <Setter Property="Visibility"
+                                                Value="Collapsed" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Journal.Count}"
+                                                         Value="0">
+                                                <Setter Property="Visibility"
+                                                        Value="Visible" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </keepshell:EmptyState.Style>
+                            </keepshell:EmptyState>
+                        </Grid>
                     </Border>
 
                 </Grid>

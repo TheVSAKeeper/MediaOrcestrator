@@ -13,56 +13,6 @@
              d:DesignHeight="640"
              d:DesignWidth="1100">
 
-    <UserControl.Resources>
-
-        <Style x:Key="ViewModeButton"
-               TargetType="ToggleButton">
-            <Setter Property="Background"
-                    Value="Transparent" />
-            <Setter Property="Foreground"
-                    Value="{DynamicResource Fg.Secondary}" />
-            <Setter Property="BorderThickness"
-                    Value="0" />
-            <Setter Property="Padding"
-                    Value="10,4" />
-            <Setter Property="MinHeight"
-                    Value="30" />
-            <Setter Property="Cursor"
-                    Value="Hand" />
-            <Setter Property="FocusVisualStyle"
-                    Value="{x:Null}" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="ToggleButton">
-                        <Border x:Name="Bd"
-                                Background="{TemplateBinding Background}"
-                                CornerRadius="{DynamicResource Radius.M}"
-                                Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center"
-                                              VerticalAlignment="Center" />
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver"
-                                     Value="True">
-                                <Setter TargetName="Bd"
-                                        Property="Background"
-                                        Value="{DynamicResource Bg.SurfaceAlt}" />
-                            </Trigger>
-                            <Trigger Property="IsChecked"
-                                     Value="True">
-                                <Setter TargetName="Bd"
-                                        Property="Background"
-                                        Value="{DynamicResource Accent.Soft}" />
-                                <Setter Property="Foreground"
-                                        Value="{DynamicResource Fg.Primary}" />
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-    </UserControl.Resources>
-
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -113,9 +63,11 @@
                         CornerRadius="{DynamicResource Radius.M}"
                         Padding="2">
                     <StackPanel Orientation="Horizontal">
-                        <ToggleButton Style="{StaticResource ViewModeButton}"
-                                      IsChecked="{Binding IsListMode, Mode=OneWay}"
-                                      Command="{Binding SetListModeCommand}">
+                        <RadioButton Style="{StaticResource RadioButton.Segment}"
+                                     GroupName="SourcesViewMode"
+                                     IsChecked="{Binding IsListMode, Mode=OneWay}"
+                                     Command="{Binding SetListModeCommand}"
+                                     AutomationProperties.Name="Режим списка">
                             <StackPanel Orientation="Horizontal">
                                 <iconPacks:PackIconLucide Kind="LayoutGrid"
                                                   Width="14"
@@ -124,10 +76,12 @@
                                 <TextBlock Text="Список"
                                            VerticalAlignment="Center" />
                             </StackPanel>
-                        </ToggleButton>
-                        <ToggleButton Style="{StaticResource ViewModeButton}"
-                                      IsChecked="{Binding IsGraphMode, Mode=OneWay}"
-                                      Command="{Binding SetGraphModeCommand}">
+                        </RadioButton>
+                        <RadioButton Style="{StaticResource RadioButton.Segment}"
+                                     GroupName="SourcesViewMode"
+                                     IsChecked="{Binding IsGraphMode, Mode=OneWay}"
+                                     Command="{Binding SetGraphModeCommand}"
+                                     AutomationProperties.Name="Режим графа">
                             <StackPanel Orientation="Horizontal">
                                 <iconPacks:PackIconLucide Kind="Diamond"
                                                   Width="14"
@@ -136,7 +90,7 @@
                                 <TextBlock Text="Граф"
                                            VerticalAlignment="Center" />
                             </StackPanel>
-                        </ToggleButton>
+                        </RadioButton>
                     </StackPanel>
                 </Border>
             </StackPanel>

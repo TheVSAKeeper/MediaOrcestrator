@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Windows;
+using System.Windows.Input;
 using System.Windows.Threading;
 
 namespace MediaOrcestrator.Runner.Wpf.ViewModels;
@@ -16,10 +17,6 @@ namespace MediaOrcestrator.Runner.Wpf.ViewModels;
 public sealed partial class ShellViewModel : ShellViewModelBase
 {
     private const string TasksDrawerOpenKey = "wpf.shell.tasks_drawer_open";
-
-    // TODO: рейл без скроллбара, 13 строк не влезают в 720 – группа «Операции» свёрнута,
-    // чтобы «Система» оставалась видимой; снять, когда в каркасе появится флаг скрытия
-    // футер-кнопки «Настройки», дублирующей раздел «Система».
     private const string NavOperationsExpandedKey = "wpf.shell.nav_operations_expanded";
 
     [ObservableProperty]
@@ -36,7 +33,7 @@ public sealed partial class ShellViewModel : ShellViewModelBase
     [ObservableProperty]
     private bool _isTarkovBootPlaying;
 
-    private readonly SystemViewModel _system;
+    private readonly NavigationItem _settingsItem;
     private readonly ISettingsStore _settings;
     private readonly ActionHolder _actionHolder;
     private readonly IDialogService _dialogs;
@@ -45,6 +42,7 @@ public sealed partial class ShellViewModel : ShellViewModelBase
     private bool _suppressPersist;
 
     private IPageRenderMetric? _renderMetricSource;
+    private ICommand? _observedPageRefreshCommand;
     private string? _defaultRenderText;
     private string? _customRenderText;
     private IReadOnlyList<PageRenderStage>? _customRenderStages;
@@ -57,12 +55,17 @@ public sealed partial class ShellViewModel : ShellViewModelBase
         TransfersViewModel transfers,
         PublishViewModel publish,
         ChronologyViewModel chronology,
-        SystemViewModel system,
+        MaintenanceHubViewModel maintenance,
+        LogsViewModel logs,
+        DiagnosticsViewModel diagnostics,
+        AboutViewModel about,
+        SettingsViewModel settings,
         TasksViewModel tasks,
         ModalHostViewModel modal,
+        ToastHostViewModel toasts,
         ActionHolder actionHolder,
         IDialogService dialogs,
-        ISettingsStore settings,
+        ISettingsStore settingsStore,
         CommentsViewModel comments,
         OperationsViewModel operations,
         ShellPreferences preferences,
@@ -72,15 +75,18 @@ public sealed partial class ShellViewModel : ShellViewModelBase
     {
         Theme = theme;
         Theme.PropertyChanged += OnThemePropertyChanged;
-        _system = system;
-        _settings = settings;
+        _settings = settingsStore;
         _actionHolder = actionHolder;
         _dialogs = dialogs;
         _preferences = preferences;
         _logger = logger;
         _preferences.PropertyChanged += OnPreferencesPropertyChanged;
         Tasks = tasks;
+        Toasts = toasts;
         AppUpdate = appUpdate;
+        modal.PropertyChanged += OnModalPropertyChanged;
+        PropertyChanged += OnShellPropertyChanged;
+        AttachPageRefreshCommand(PageRefreshCommand);
 
         _actionHolder.Changed += OnActionsChanged;
         RefreshStatusText();
@@ -88,6 +94,8 @@ public sealed partial class ShellViewModel : ShellViewModelBase
         _suppressPersist = true;
         IsTasksDrawerOpen = bool.TryParse(_settings.GetStringValue(TasksDrawerOpenKey), out var drawerOpen) && drawerOpen;
         _suppressPersist = false;
+
+        _settingsItem = new("Настройки", PackIconLucideKind.Settings, settings, key: "settings");
 
         Sections.Add(new("Медиа", PackIconLucideKind.Library, media, key: "media"));
         Sections.Add(new("Источники и связи", PackIconLucideKind.Link, sources, key: "sources"));
@@ -97,7 +105,10 @@ public sealed partial class ShellViewModel : ShellViewModelBase
         Sections.Add(new("Публикация", PackIconLucideKind.Upload, publish, key: "publish"));
         Sections.Add(BuildOperationsGroup(operations, IsOperationsExpandedPersisted()));
         Sections.Add(new("Комментарии", PackIconLucideKind.MessageSquare, comments, key: "comments"));
-        Sections.Add(new("Система", PackIconLucideKind.Settings, system, key: "system"));
+        Sections.Add(new("Обслуживание", PackIconLucideKind.Wrench, maintenance, key: "maintenance") { StartsGroup = true });
+        Sections.Add(new("Логи", PackIconLucideKind.ScrollText, logs, key: "logs"));
+        Sections.Add(new("Диагностика", PackIconLucideKind.Activity, diagnostics, key: "diagnostics"));
+        Sections.Add(new("О программе", PackIconLucideKind.Info, about, key: "about"));
 
         Selected = Sections[0];
     }
@@ -173,6 +184,8 @@ public sealed partial class ShellViewModel : ShellViewModelBase
     public TasksViewModel Tasks { get; }
 
     public AppUpdateViewModel AppUpdate { get; }
+
+    public ToastHostViewModel Toasts { get; }
 
     public bool HasPageRenderStages => PageRenderStages is { Count: > 0 };
 
@@ -323,15 +336,7 @@ public sealed partial class ShellViewModel : ShellViewModelBase
 
     protected override void NavigateToSettings()
     {
-        var system = Sections.LastOrDefault(item => item.Title == "Система");
-
-        if (system is null)
-        {
-            return;
-        }
-
-        Selected = system;
-        _system.SelectSettings();
+        Selected = _settingsItem;
     }
 
     [RelayCommand]
@@ -346,7 +351,57 @@ public sealed partial class ShellViewModel : ShellViewModelBase
         IsTasksDrawerOpen = false;
     }
 
-    private bool CanCloseTasksDrawer() => IsTasksDrawerOpen;
+    private bool CanCloseTasksDrawer() => IsTasksDrawerOpen && !Modal.HasActive;
+
+    [RelayCommand(CanExecute = nameof(CanRefreshActivePage))]
+    private void RefreshActivePage()
+    {
+        if (PageRefreshCommand is { } command && command.CanExecute(null))
+        {
+            command.Execute(null);
+        }
+    }
+
+    private bool CanRefreshActivePage() => !Modal.HasActive && PageRefreshCommand?.CanExecute(null) == true;
+
+    private void OnModalPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(ModalHostViewModel.HasActive))
+        {
+            CloseTasksDrawerCommand.NotifyCanExecuteChanged();
+            RefreshActivePageCommand.NotifyCanExecuteChanged();
+        }
+    }
+
+    private void OnShellPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (string.IsNullOrEmpty(e.PropertyName) || e.PropertyName == nameof(PageRefreshCommand))
+        {
+            AttachPageRefreshCommand(PageRefreshCommand);
+        }
+    }
+
+    private void AttachPageRefreshCommand(ICommand? next)
+    {
+        if (_observedPageRefreshCommand is not null)
+        {
+            _observedPageRefreshCommand.CanExecuteChanged -= OnObservedPageRefreshCanExecuteChanged;
+        }
+
+        _observedPageRefreshCommand = next;
+
+        if (next is not null)
+        {
+            next.CanExecuteChanged += OnObservedPageRefreshCanExecuteChanged;
+        }
+
+        RefreshActivePageCommand.NotifyCanExecuteChanged();
+    }
+
+    private void OnObservedPageRefreshCanExecuteChanged(object? sender, EventArgs e)
+    {
+        RefreshActivePageCommand.NotifyCanExecuteChanged();
+    }
 
     partial void OnIsTasksDrawerOpenChanged(bool value)
     {
@@ -403,6 +458,12 @@ public sealed partial class ShellViewModel : ShellViewModelBase
         {
             var target = command[StartupCommandLine.NavCommandPrefix.Length..].Trim();
 
+            if (string.Equals(target, "settings", StringComparison.OrdinalIgnoreCase))
+            {
+                NavigateToSettings();
+                return;
+            }
+
             if (!NavigateByKey(target))
             {
                 NavigateToTitle(target);
@@ -432,6 +493,13 @@ public sealed partial class ShellViewModel : ShellViewModelBase
         if (string.IsNullOrWhiteSpace(title))
         {
             return false;
+        }
+
+        if (string.Equals(title, _settingsItem.Title, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(title, _settingsItem.Key, StringComparison.OrdinalIgnoreCase))
+        {
+            NavigateToSettings();
+            return true;
         }
 
         var match = FindByTitle(title);

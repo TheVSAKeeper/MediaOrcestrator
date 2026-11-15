@@ -1,16 +1,10 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using KeepShell.Services.Platform;
 using MediaOrcestrator.Domain;
 using MediaOrcestrator.Runner.Wpf.Services;
 using Microsoft.Extensions.Logging;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
-using System.Diagnostics;
-using System.IO;
-using System.Reflection;
-using System.Runtime.InteropServices;
-using System.Text;
 
 namespace MediaOrcestrator.Runner.Wpf.ViewModels;
 
@@ -24,14 +18,13 @@ public sealed partial class MaintenanceViewModel : ObservableObject
     private const int DefaultBackupRetentionDays = 14;
     private const int DefaultTempRetentionDays = 0;
 
-    private static readonly DateTime ProcessStarted = Process.GetCurrentProcess().StartTime;
-
     private readonly DatabaseMaintenanceService _maintenance;
     private readonly ActionHolder _actionHolder;
     private readonly IDialogService _dialogs;
     private readonly ILogger<MaintenanceViewModel> _logger;
-    private readonly IShellLauncher _shellLauncher;
-    private readonly IClipboardService _clipboard;
+    private readonly string _tempPath;
+    private readonly string _logsPath;
+    private readonly string _backupsPath;
     private CancellationTokenSource? _runCts;
 
     [ObservableProperty]
@@ -53,38 +46,20 @@ public sealed partial class MaintenanceViewModel : ObservableObject
     [ObservableProperty]
     private double _progressMax = 1;
 
-    [ObservableProperty]
-    private string _databaseSizeText = "–";
-
-    [ObservableProperty]
-    private string _upTimeText = "–";
-
     public MaintenanceViewModel(
         DatabaseMaintenanceService maintenance,
         ActionHolder actionHolder,
         IDialogService dialogs,
-        ILogger<MaintenanceViewModel> logger,
-        IShellLauncher shellLauncher,
-        IClipboardService clipboard)
+        ILogger<MaintenanceViewModel> logger)
     {
         _maintenance = maintenance;
         _actionHolder = actionHolder;
         _dialogs = dialogs;
         _logger = logger;
-        _shellLauncher = shellLauncher;
-        _clipboard = clipboard;
 
-        AppVersion = ResolveAppVersion();
-        AppDirectory = AppContext.BaseDirectory;
-        RuntimeDescription = RuntimeInformation.FrameworkDescription;
-        OperatingSystem = $"{RuntimeInformation.OSDescription} ({RuntimeInformation.OSArchitecture})";
-        MachineName = Environment.MachineName;
-        ProcessArchitecture = RuntimeInformation.ProcessArchitecture.ToString();
-        ProcessId = Environment.ProcessId;
-        DatabasePath = _maintenance.DatabasePath;
-        TempPath = _maintenance.TempPath;
-        LogsPath = _maintenance.LogsPath;
-        BackupsPath = _maintenance.BackupsPath;
+        _tempPath = _maintenance.TempPath;
+        _logsPath = _maintenance.LogsPath;
+        _backupsPath = _maintenance.BackupsPath;
 
         SafeItems = new ObservableCollection<MaintenanceItemViewModel>
         {
@@ -130,28 +105,6 @@ public sealed partial class MaintenanceViewModel : ObservableObject
 
     public ObservableCollection<MaintenanceItemViewModel> SafeItems { get; }
 
-    public string AppVersion { get; }
-
-    public string AppDirectory { get; }
-
-    public string RuntimeDescription { get; }
-
-    public string OperatingSystem { get; }
-
-    public string MachineName { get; }
-
-    public string ProcessArchitecture { get; }
-
-    public int ProcessId { get; }
-
-    public string DatabasePath { get; }
-
-    public string TempPath { get; }
-
-    public string LogsPath { get; }
-
-    public string BackupsPath { get; }
-
     [RelayCommand(CanExecute = nameof(CanRefresh))]
     private async Task RefreshAllAsync()
     {
@@ -166,11 +119,7 @@ public sealed partial class MaintenanceViewModel : ObservableObject
             {
                 item.SizeText = MeasureItem(item);
             }
-
-            DatabaseSizeText = FormatBytes(_maintenance.MeasureDatabaseFile());
         });
-
-        UpTimeText = FormatUpTime(DateTime.Now - ProcessStarted);
     }
 
     [RelayCommand(CanExecute = nameof(CanRunSafe))]
@@ -257,7 +206,6 @@ public sealed partial class MaintenanceViewModel : ObservableObject
 
             StatusText = "Готово";
             running.Finish($"Очищено: {processed}");
-            DatabaseSizeText = FormatBytes(_maintenance.MeasureDatabaseFile());
         }
         catch (OperationCanceledException)
         {
@@ -303,47 +251,6 @@ public sealed partial class MaintenanceViewModel : ObservableObject
         }
     }
 
-    [RelayCommand]
-    private void OpenAppFolder() => RevealInExplorer(AppDirectory);
-
-    [RelayCommand]
-    private void OpenLogsFolder() => RevealInExplorer(LogsPath);
-
-    [RelayCommand]
-    private void OpenBackupsFolder() => RevealInExplorer(BackupsPath);
-
-    [RelayCommand]
-    private void OpenTempFolder() => RevealInExplorer(TempPath);
-
-    [RelayCommand]
-    private void OpenDatabaseFolder()
-    {
-        if (File.Exists(DatabasePath))
-        {
-            SelectInExplorer(DatabasePath);
-        }
-        else
-        {
-            RevealInExplorer(Path.GetDirectoryName(DatabasePath));
-        }
-    }
-
-    [RelayCommand]
-    private void CopyDiagnostics()
-    {
-        var report = BuildDiagnosticsReport();
-
-        if (_clipboard.TrySetText(report))
-        {
-            StatusText = "Сводка скопирована в буфер";
-        }
-        else
-        {
-            StatusText = "Не удалось скопировать сводку в буфер";
-            _logger.LogWarning("Не удалось скопировать сводку в буфер");
-        }
-    }
-
     private void OnItemPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (sender is not MaintenanceItemViewModel item)
@@ -382,8 +289,8 @@ public sealed partial class MaintenanceViewModel : ObservableObject
         return item.Key switch
         {
             Key_TempFiles => FormatBytes(MeasureTempFiles(item.AgeDays)),
-            Key_OldLogs => FormatBytes(_maintenance.MeasureOldFiles(LogsPath, ToAge(item.AgeDays), "*.log", "*.txt")),
-            Key_OldBackups => FormatBytes(_maintenance.MeasureOldFiles(BackupsPath, ToAge(item.AgeDays), "*.db")),
+            Key_OldLogs => FormatBytes(_maintenance.MeasureOldFiles(_logsPath, ToAge(item.AgeDays), "*.log", "*.txt")),
+            Key_OldBackups => FormatBytes(_maintenance.MeasureOldFiles(_backupsPath, ToAge(item.AgeDays), "*.db")),
             _ => "–",
         };
     }
@@ -392,10 +299,10 @@ public sealed partial class MaintenanceViewModel : ObservableObject
     {
         if (ageDays <= 0)
         {
-            return _maintenance.MeasureFolder(TempPath, recursive: true);
+            return _maintenance.MeasureFolder(_tempPath, recursive: true);
         }
 
-        return _maintenance.MeasureOldFiles(TempPath, ToAge(ageDays), "*");
+        return _maintenance.MeasureOldFiles(_tempPath, ToAge(ageDays), "*");
     }
 
     private string CleanupItem(MaintenanceItemViewModel item)
@@ -403,48 +310,14 @@ public sealed partial class MaintenanceViewModel : ObservableObject
         return item.Key switch
         {
             Key_TempFiles => DescribeFolderClean(
-                _maintenance.CleanFolder(TempPath, "*", ToAge(item.AgeDays), recursive: true)),
+                _maintenance.CleanFolder(_tempPath, "*", ToAge(item.AgeDays), recursive: true)),
             Key_OldLogs => DescribeFolderClean(SumFolderResults(
-                _maintenance.CleanFolder(LogsPath, "*.log", ToAge(item.AgeDays)),
-                _maintenance.CleanFolder(LogsPath, "*.txt", ToAge(item.AgeDays)))),
+                _maintenance.CleanFolder(_logsPath, "*.log", ToAge(item.AgeDays)),
+                _maintenance.CleanFolder(_logsPath, "*.txt", ToAge(item.AgeDays)))),
             Key_OldBackups => DescribeFolderClean(
-                _maintenance.CleanFolder(BackupsPath, "*.db", ToAge(item.AgeDays))),
+                _maintenance.CleanFolder(_backupsPath, "*.db", ToAge(item.AgeDays))),
             _ => "Готово",
         };
-    }
-
-    private string BuildDiagnosticsReport()
-    {
-        var sb = new StringBuilder();
-        sb.AppendLine("MediaOrcestrator – сводка диагностики");
-        sb.AppendLine($"Дата:      {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
-        sb.AppendLine();
-        sb.AppendLine("Приложение");
-        sb.AppendLine($"  Версия:    {AppVersion}");
-        sb.AppendLine($"  Папка:     {AppDirectory}");
-        sb.AppendLine($"  Runtime:   {RuntimeDescription}");
-        sb.AppendLine($"  Arch:      {ProcessArchitecture}");
-        sb.AppendLine($"  PID:       {ProcessId}");
-        sb.AppendLine($"  Старт:     {ProcessStarted:yyyy-MM-dd HH:mm:ss} (uptime {UpTimeText})");
-        sb.AppendLine();
-        sb.AppendLine("Система");
-        sb.AppendLine($"  OS:        {OperatingSystem}");
-        sb.AppendLine($"  Машина:    {MachineName}");
-        sb.AppendLine();
-        sb.AppendLine("Папки");
-        sb.AppendLine($"  database:  {DatabasePath} ({DatabaseSizeText})");
-        sb.AppendLine($"  temp:      {TempPath}");
-        sb.AppendLine($"  logs:      {LogsPath}");
-        sb.AppendLine($"  backups:   {BackupsPath}");
-        sb.AppendLine();
-        sb.AppendLine("Размеры файловой очистки (на момент копирования)");
-
-        foreach (var item in SafeItems)
-        {
-            sb.AppendLine($"  {item.Title,-32} {item.SizeText}");
-        }
-
-        return sb.ToString();
     }
 
     private static TimeSpan? ToAge(int days) => days <= 0 ? null : TimeSpan.FromDays(days);
@@ -471,65 +344,5 @@ public sealed partial class MaintenanceViewModel : ObservableObject
             < 1024 * 1024 * 1024 => $"{bytes / (1024.0 * 1024):F1} МБ",
             _ => $"{bytes / (1024.0 * 1024 * 1024):F1} ГБ",
         };
-    }
-
-    private static string FormatUpTime(TimeSpan span)
-    {
-        if (span.TotalDays >= 1)
-        {
-            return $"{(int)span.TotalDays} д {span.Hours} ч {span.Minutes} мин";
-        }
-
-        if (span.TotalHours >= 1)
-        {
-            return $"{(int)span.TotalHours} ч {span.Minutes} мин";
-        }
-
-        return $"{(int)span.TotalMinutes} мин {span.Seconds} с";
-    }
-
-    private static string ResolveAppVersion()
-    {
-        var assembly = typeof(MaintenanceViewModel).Assembly;
-        var informational = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
-
-        if (!string.IsNullOrWhiteSpace(informational))
-        {
-            var plusIndex = informational.IndexOf('+');
-            return plusIndex >= 0 ? informational[..plusIndex] : informational;
-        }
-
-        return assembly.GetName().Version?.ToString() ?? "–";
-    }
-
-    private void RevealInExplorer(string? path)
-    {
-        if (string.IsNullOrWhiteSpace(path))
-        {
-            return;
-        }
-
-        try
-        {
-            Directory.CreateDirectory(path);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Не удалось открыть папку {Path}", path);
-            return;
-        }
-
-        if (!_shellLauncher.Open(path))
-        {
-            _logger.LogWarning("Не удалось открыть папку {Path}", path);
-        }
-    }
-
-    private void SelectInExplorer(string filePath)
-    {
-        if (!_shellLauncher.Reveal(filePath))
-        {
-            _logger.LogWarning("Не удалось показать файл в проводнике: {Path}", filePath);
-        }
     }
 }

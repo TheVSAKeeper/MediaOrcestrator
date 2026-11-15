@@ -10,66 +10,6 @@
              d:DesignHeight="32"
              d:DesignWidth="1200">
     
-    <UserControl.Resources>
-
-        <Style x:Key="Status.DrawerToggle"
-               TargetType="ToggleButton">
-            <Setter Property="Background"
-                    Value="Transparent" />
-            <Setter Property="BorderBrush"
-                    Value="Transparent" />
-            <Setter Property="BorderThickness"
-                    Value="1" />
-            <Setter Property="Foreground"
-                    Value="{DynamicResource Fg.Secondary}" />
-            <Setter Property="Padding"
-                    Value="10,4" />
-            <Setter Property="MinHeight"
-                    Value="{DynamicResource Control.Height.Compact}" />
-            <Setter Property="Cursor"
-                    Value="Hand" />
-            <Setter Property="FontFamily"
-                    Value="{DynamicResource Font.Sans}" />
-            <Setter Property="FontSize"
-                    Value="{DynamicResource Font.Size.M}" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="ToggleButton">
-                        <Border x:Name="Bd"
-                                Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="{DynamicResource Radius.M}"
-                                Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center"
-                                              VerticalAlignment="Center"
-                                              RecognizesAccessKey="True" />
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver"
-                                     Value="True">
-                                <Setter TargetName="Bd"
-                                        Property="Background"
-                                        Value="{DynamicResource Bg.SurfaceAlt}" />
-                            </Trigger>
-                            <Trigger Property="IsChecked"
-                                     Value="True">
-                                <Setter TargetName="Bd"
-                                        Property="Background"
-                                        Value="{DynamicResource Accent.Soft}" />
-                                <Setter TargetName="Bd"
-                                        Property="BorderBrush"
-                                        Value="{DynamicResource Accent.Primary}" />
-                                <Setter Property="Foreground"
-                                        Value="{DynamicResource Fg.Primary}" />
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-    </UserControl.Resources>
-
     <Border Background="{DynamicResource Bg.Surface}"
             BorderBrush="{DynamicResource Border.Subtle}"
             BorderThickness="0,1,0,0">
@@ -129,7 +69,7 @@
                       VerticalAlignment="Center"
                       Visibility="{Binding PageRenderDurationText, Converter={StaticResource NullToVisibility}, FallbackValue=Collapsed, TargetNullValue=Collapsed}">
                     <ToggleButton x:Name="RenderMetricToggle"
-                                  Style="{StaticResource Status.DrawerToggle}"
+                                  Style="{StaticResource ToggleButton.Filter}"
                                   Padding="8,2"
                                   MinHeight="22"
                                   IsEnabled="{Binding HasPageRenderStages}"
@@ -229,7 +169,7 @@
             </StackPanel>
 
             <ToggleButton Grid.Column="2"
-                          Style="{StaticResource Status.DrawerToggle}"
+                          Style="{StaticResource ToggleButton.Filter}"
                           IsChecked="{Binding IsTasksDrawerOpen, Mode=TwoWay}"
                           Margin="0,2,8,2"
                           ToolTip="Лента задач"

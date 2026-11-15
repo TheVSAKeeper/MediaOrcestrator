@@ -16,19 +16,9 @@
              KeyboardNavigation.TabNavigation="Cycle">
     
     <UserControl.Resources>
-        
-        <Style x:Key="FieldLabel"
-               TargetType="TextBlock"
-               BasedOn="{StaticResource TextBlock.Subtle}">
-            <Setter Property="FontWeight"
-                    Value="SemiBold" />
-            <Setter Property="Margin"
-                    Value="0,8,0,4" />
-        </Style>
-
         <Style x:Key="SliderValue"
                TargetType="TextBlock"
-               BasedOn="{StaticResource TextBlock.Subtle}">
+               BasedOn="{StaticResource Form.Value}">
             <Setter Property="VerticalAlignment"
                     Value="Center" />
             <Setter Property="MinWidth"
@@ -37,30 +27,6 @@
                     Value="Right" />
             <Setter Property="Margin"
                     Value="8,0,0,0" />
-        </Style>
-
-        <Style x:Key="Field.TextBox"
-               TargetType="TextBox"
-               BasedOn="{StaticResource TextBox.Form}">
-            <Setter Property="Height"
-                    Value="{DynamicResource Control.Height.Default}" />
-            <Setter Property="MinHeight"
-                    Value="{DynamicResource Control.Height.Default}" />
-            <Setter Property="Padding"
-                    Value="10,0" />
-            <Setter Property="VerticalContentAlignment"
-                    Value="Center" />
-        </Style>
-
-        <Style x:Key="Field.ComboBox"
-               TargetType="ComboBox"
-               BasedOn="{StaticResource ComboBox.Form}">
-            <Setter Property="Height"
-                    Value="{DynamicResource Control.Height.Default}" />
-            <Setter Property="MinHeight"
-                    Value="{DynamicResource Control.Height.Default}" />
-            <Setter Property="VerticalContentAlignment"
-                    Value="Center" />
         </Style>
 
         <Style x:Key="Field.Slider"
@@ -174,23 +140,23 @@
                               IsExpanded="{Binding IsTemplateSectionExpanded, Mode=TwoWay}">
                         <StackPanel>
                             <TextBlock Text="Имя профиля"
-                                       Style="{StaticResource FieldLabel}"
+                                       Style="{StaticResource Form.Label}"
                                        Margin="0,0,0,4" />
                             <TextBox x:Name="ProfileNameBox"
-                                     Style="{StaticResource Field.TextBox}"
+                                     Style="{StaticResource TextBox.Form}"
                                      Text="{Binding ProfileName, UpdateSourceTrigger=PropertyChanged}"
                                      ToolTip="Под этим именем профиль сохранится в templates/covers."
                                      AutomationProperties.Name="Имя профиля шаблона" />
 
                             <TextBlock Text="Картинка-шаблон"
-                                       Style="{StaticResource FieldLabel}" />
+                                       Style="{StaticResource Form.Label}" />
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <TextBox Grid.Column="0"
-                                         Style="{StaticResource Field.TextBox}"
+                                         Style="{StaticResource TextBox.Form}"
                                          Text="{Binding TemplatePath, UpdateSourceTrigger=PropertyChanged}"
                                          ToolTip="{Binding TemplatePath}"
                                          AutomationProperties.Name="Путь к картинке-шаблону" />
@@ -205,7 +171,7 @@
                             </Grid>
 
                             <TextBlock Text="Нумерация"
-                                       Style="{StaticResource FieldLabel}" />
+                                       Style="{StaticResource Form.Label}" />
                             <RadioButton GroupName="NumberMode"
                                          Content="Последовательно (от начального)"
                                          IsChecked="{Binding IsSequential, Mode=OneWay}"
@@ -230,7 +196,7 @@
                                          Margin="0,2,0,2" />
                             <StackPanel Margin="20,2,0,0"
                                         Visibility="{Binding IsTitleRegex, Converter={StaticResource BoolToVisibility}}">
-                                <TextBox Style="{StaticResource Field.TextBox}"
+                                <TextBox Style="{StaticResource TextBox.Form}"
                                          Text="{Binding TitleRegexPattern, UpdateSourceTrigger=PropertyChanged}"
                                          ToolTip="Группа (\d+) – номер из названия медиа."
                                          AutomationProperties.Name="Регулярное выражение для номера" />
@@ -336,21 +302,21 @@
                                   Header="Текст"
                                   IsExpanded="True">
                             <StackPanel>
-                                <TextBox Style="{StaticResource Field.TextBox}"
+                                <TextBox Style="{StaticResource TextBox.Form}"
                                          Text="{Binding SelectedLayer.TextTemplate, UpdateSourceTrigger=PropertyChanged}"
                                          ToolTip="{}{number} подставит номер обложки."
                                          AutomationProperties.Name="Текст слоя" />
 
                                 <TextBlock Text="Шрифт"
-                                           Style="{StaticResource FieldLabel}" />
-                                <ComboBox Style="{StaticResource Field.ComboBox}"
+                                           Style="{StaticResource Form.Label}" />
+                                <ComboBox Style="{StaticResource ComboBox.Form}"
                                           ItemsSource="{Binding FontFamilies}"
                                           SelectedItem="{Binding SelectedLayer.FontFamily, Mode=TwoWay}"
                                           AutomationProperties.Name="Шрифт слоя" />
 
                                 <TextBlock Text="Начертание"
-                                           Style="{StaticResource FieldLabel}" />
-                                <ComboBox Style="{StaticResource Field.ComboBox}"
+                                           Style="{StaticResource Form.Label}" />
+                                <ComboBox Style="{StaticResource ComboBox.Form}"
                                           ItemsSource="{Binding FontStyles}"
                                           SelectedValuePath="Value"
                                           SelectedValue="{Binding SelectedLayer.FontStyle, Mode=TwoWay}"
@@ -363,7 +329,7 @@
                                   IsExpanded="True">
                             <StackPanel>
                                 <TextBlock Text="Размер, % высоты кадра"
-                                           Style="{StaticResource FieldLabel}"
+                                           Style="{StaticResource Form.Label}"
                                            Margin="0,0,0,4" />
                                 <Grid>
                                     <Grid.ColumnDefinitions>
@@ -382,7 +348,7 @@
                                 </Grid>
 
                                 <TextBlock Text="Обводка, % высоты кадра"
-                                           Style="{StaticResource FieldLabel}" />
+                                           Style="{StaticResource Form.Label}" />
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
@@ -413,7 +379,7 @@
                                                VerticalAlignment="Center"
                                                Margin="0,0,6,0" />
                                     <TextBox Width="64"
-                                             Style="{StaticResource Field.TextBox}"
+                                             Style="{StaticResource TextBox.Form}"
                                              Text="{Binding SelectedLayer.TextXPercent, StringFormat={}{0:0}}"
                                              AutomationProperties.Name="Позиция по горизонтали, %" />
                                     <TextBlock Text="Y"
@@ -421,7 +387,7 @@
                                                VerticalAlignment="Center"
                                                Margin="14,0,6,0" />
                                     <TextBox Width="64"
-                                             Style="{StaticResource Field.TextBox}"
+                                             Style="{StaticResource TextBox.Form}"
                                              Text="{Binding SelectedLayer.TextYPercent, StringFormat={}{0:0}}"
                                              AutomationProperties.Name="Позиция по вертикали, %" />
                                     <TextBlock Text="%"
@@ -448,7 +414,7 @@
 
                                 <StackPanel Grid.Column="0">
                                     <TextBlock Text="Цвет текста"
-                                               Style="{StaticResource FieldLabel}"
+                                               Style="{StaticResource Form.Label}"
                                                Margin="0,0,0,4" />
                                     <Grid>
                                         <Grid.ColumnDefinitions>
@@ -480,7 +446,7 @@
                                                             Margin="0,4,0,0" />
                                         </Popup>
                                         <TextBox Grid.Column="1"
-                                                 Style="{StaticResource Field.TextBox}"
+                                                 Style="{StaticResource TextBox.Form}"
                                                  Text="{Binding SelectedLayer.FillColorHex, UpdateSourceTrigger=PropertyChanged}"
                                                  ToolTip="ARGB hex, например FFFFFFFF (непрозрачный белый). Свотч слева открывает пикер."
                                                  AutomationProperties.Name="Цвет текста, ARGB hex" />
@@ -489,7 +455,7 @@
 
                                 <StackPanel Grid.Column="2">
                                     <TextBlock Text="Цвет обводки"
-                                               Style="{StaticResource FieldLabel}"
+                                               Style="{StaticResource Form.Label}"
                                                Margin="0,0,0,4" />
                                     <Grid>
                                         <Grid.ColumnDefinitions>
@@ -521,7 +487,7 @@
                                                             Margin="0,4,0,0" />
                                         </Popup>
                                         <TextBox Grid.Column="1"
-                                                 Style="{StaticResource Field.TextBox}"
+                                                 Style="{StaticResource TextBox.Form}"
                                                  Text="{Binding SelectedLayer.StrokeColorHex, UpdateSourceTrigger=PropertyChanged}"
                                                  ToolTip="ARGB hex, например FF000000 (непрозрачный чёрный). Свотч слева открывает пикер."
                                                  AutomationProperties.Name="Цвет обводки, ARGB hex" />

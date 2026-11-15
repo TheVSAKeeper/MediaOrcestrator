@@ -111,4 +111,15 @@
         </Style.Triggers>
     </Style>
 
+    <Style x:Key="ToggleButton.Filter"
+           TargetType="ToggleButton"
+           BasedOn="{StaticResource ToggleButton.Toolbar}">
+        <Setter Property="Padding"
+                Value="10,4" />
+        <Setter Property="MinHeight"
+                Value="{DynamicResource Control.Height.Compact}" />
+        <Setter Property="FocusVisualStyle"
+                Value="{x:Null}" />
+    </Style>
+
 </ResourceDictionary>

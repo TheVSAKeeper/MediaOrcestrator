@@ -42,26 +42,22 @@
         </Style>
     </UserControl.Resources>
 
-    <Grid>
-        <ScrollViewer VerticalScrollBarVisibility="Auto"
-                      Padding="0,0,12,0">
-            <StackPanel>
+    <StackPanel>
+        <TextBlock Style="{StaticResource TextBlock.Subtle}"
+                   TextWrapping="Wrap"
+                   MaxWidth="780"
+                   HorizontalAlignment="Left"
+                   Margin="0,0,0,12"
+                   Text="Управление файлами бэкапов и удаление данных из LiteDB. Все действия ниже необратимы или восстанавливаются только из бэкапа." />
 
-                <TextBlock Style="{StaticResource TextBlock.Subtle}"
-                           TextWrapping="Wrap"
-                           MaxWidth="780"
-                           HorizontalAlignment="Left"
-                           Margin="0,0,0,16"
-                           Text="Управление файлами бэкапов и удаление данных из LiteDB. Все действия здесь необратимы или восстанавливаются только из бэкапа." />
-
-                <Border Style="{StaticResource Card.Inset}"
-                        Margin="0,0,0,12"
-                        Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}">
-                    <keepshell:ProgressStatusBlock StatusText="{Binding StatusText}"
-                                                  CancelCommand="{Binding CancelCommand}"
-                                                  Maximum="{Binding ProgressMax}"
-                                                  Value="{Binding ProgressValue, Mode=OneWay}" />
-                </Border>
+        <Border Style="{StaticResource Card.Inset}"
+                Margin="0,0,0,12"
+                Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}">
+            <keepshell:ProgressStatusBlock StatusText="{Binding StatusText}"
+                                          CancelCommand="{Binding CancelCommand}"
+                                          Maximum="{Binding ProgressMax}"
+                                          Value="{Binding ProgressValue, Mode=OneWay}" />
+        </Border>
 
                 <Border Style="{StaticResource Card.Inset}"
                         Margin="0,0,0,12">
@@ -506,6 +502,4 @@
                     </StackPanel>
                 </Border>
             </StackPanel>
-        </ScrollViewer>
-    </Grid>
 </UserControl>

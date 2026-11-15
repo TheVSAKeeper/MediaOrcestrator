@@ -55,7 +55,7 @@
                      SelectionBrush="{DynamicResource Accent.Soft}"
                      BorderThickness="0"
                      Padding="12,10"
-                     FontFamily="Consolas"
+                     FontFamily="{DynamicResource Font.Mono}"
                      FontSize="{DynamicResource Font.Size.S}"
                      TextWrapping="NoWrap"
                      VerticalScrollBarVisibility="Auto"

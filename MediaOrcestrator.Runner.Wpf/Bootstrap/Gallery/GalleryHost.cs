@@ -1,4 +1,5 @@
 ﻿using KeepShell.Automation;
+using MediaOrcestrator.Runner.Wpf.Services;
 using MediaOrcestrator.Runner.Wpf.ViewModels;
 using MediaOrcestrator.Runner.Wpf.ViewModels.Comments;
 using MediaOrcestrator.Runner.Wpf.Views;
@@ -63,13 +64,23 @@ internal sealed class GalleryHost : IGalleryHost
 
         if (page.Section is { } section)
         {
-            var system = _services.GetRequiredService<SystemViewModel>();
-
-            system.Selected = system.Sections.FirstOrDefault(item => string.Equals(item.Title, section, StringComparison.Ordinal))
-                ?? throw new InvalidOperationException($"Раздел «{section}» не найден на странице «{page.Title}».");
+            var hub = _services.GetRequiredService<MaintenanceHubViewModel>();
+            hub.SelectSection(section switch
+            {
+                "tools" => MaintenanceSection.Tools,
+                "cleanup" => MaintenanceSection.Cleanup,
+                "tasks" => MaintenanceSection.Tasks,
+                _ => throw new InvalidOperationException($"Неизвестная вкладка обслуживания «{section}»."),
+            });
         }
 
         await context.SettleAsync();
+
+        if (string.Equals(page.Key, "diagnostics", StringComparison.Ordinal))
+        {
+            await Task.Delay(250);
+            await context.SettleAsync();
+        }
 
         return context.Save(page.Key);
     }

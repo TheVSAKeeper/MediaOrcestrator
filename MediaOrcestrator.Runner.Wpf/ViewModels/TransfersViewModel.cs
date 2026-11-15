@@ -1,5 +1,6 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using MahApps.Metro.IconPacks;
 using MediaOrcestrator.Domain;
 using MediaOrcestrator.Runner.Wpf.Bootstrap;
 using MediaOrcestrator.Runner.Wpf.Services;
@@ -140,6 +141,12 @@ public sealed partial class TransfersViewModel : ObservableObject, IPageHeader, 
 
     [ObservableProperty]
     private string? _emptyHint;
+
+    [ObservableProperty]
+    private string _emptyHeading = "Передач нет";
+
+    [ObservableProperty]
+    private PackIconLucideKind _emptyIcon = PackIconLucideKind.CircleCheck;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSearch))]
@@ -293,6 +300,8 @@ public sealed partial class TransfersViewModel : ObservableObject, IPageHeader, 
             if (sources.Count == 0)
             {
                 applyBreakdown = ApplyPlanInternal([], 0);
+                EmptyIcon = PackIconLucideKind.SlidersHorizontal;
+                EmptyHeading = "Источники не настроены";
                 EmptyHint = "Источники не настроены. Добавьте источник в разделе «Источники и связи», чтобы появились медиа и передачи.";
                 StatusText = "Готов";
                 return;
@@ -301,6 +310,8 @@ public sealed partial class TransfersViewModel : ObservableObject, IPageHeader, 
             if (relations.Count == 0)
             {
                 applyBreakdown = ApplyPlanInternal([], 0);
+                EmptyIcon = PackIconLucideKind.Link2;
+                EmptyHeading = "Связи не настроены";
                 EmptyHint = "Связи не настроены. Чтобы передачи появились, добавьте связь в разделе «Источники и связи».";
                 StatusText = "Готов";
                 return;
@@ -314,6 +325,8 @@ public sealed partial class TransfersViewModel : ObservableObject, IPageHeader, 
 
             applyBreakdown = ApplyPlanInternal(rootIntents, totalSteps);
 
+            EmptyIcon = PackIconLucideKind.CircleCheck;
+            EmptyHeading = "Передач нет";
             EmptyHint = rootIntents.Count == 0
                 ? "Всё в порядке: медиа присутствуют во всех целевых источниках по активным связям."
                 : null;

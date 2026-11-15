@@ -4,6 +4,7 @@ namespace MediaOrcestrator.Runner.Wpf.ViewModels;
 
 public sealed partial class ThemeViewModel(ISettingsStore store) : ThemeViewModelBase<AppTheme>(store)
 {
+    public bool IsSystem => Current == AppTheme.System;
     public bool IsLight => Current == AppTheme.Light;
     public bool IsDark => Current == AppTheme.Dark;
     public bool IsTarkov => Current == AppTheme.Tarkov;
@@ -14,6 +15,7 @@ public sealed partial class ThemeViewModel(ISettingsStore store) : ThemeViewMode
 
     protected override void OnThemeFlavorChanged(AppTheme value)
     {
+        OnPropertyChanged(nameof(IsSystem));
         OnPropertyChanged(nameof(IsLight));
         OnPropertyChanged(nameof(IsDark));
         OnPropertyChanged(nameof(IsTarkov));

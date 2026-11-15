@@ -57,16 +57,13 @@
                     </ItemsControl.ItemContainerStyle>
                 </ItemsControl>
 
-                <Border Style="{StaticResource Card.Empty}"
-                        VerticalAlignment="Center"
-                        HorizontalAlignment="Center"
-                        Visibility="{Binding ShowEmptyMessage, Converter={StaticResource BoolToVisibility}}">
-                    <TextBlock Text="{Binding EmptyMessage}"
-                               TextAlignment="Center"
-                               TextWrapping="Wrap"
-                               Style="{StaticResource TextBlock.Subtle}"
-                               MaxWidth="440" />
-                </Border>
+                <keepshell:EmptyState VerticalAlignment="Center"
+                                      HorizontalAlignment="Center"
+                                      Icon="{Binding EmptyIcon}"
+                                      Heading="{Binding EmptyHeading}"
+                                      Description="{Binding EmptyMessage}"
+                                      DescriptionMaxWidth="440"
+                                      Visibility="{Binding ShowEmptyMessage, Converter={StaticResource BoolToVisibility}}" />
 
                 <Border Background="{DynamicResource Bg.Surface}"
                         Visibility="{Binding HasLoadError, Converter={StaticResource BoolToVisibility}}">

@@ -19,13 +19,30 @@
         <StackPanel>
             <TextBlock Text="Тема"
                        Style="{StaticResource Form.Label}" />
-            <StackPanel Orientation="Horizontal"
-                        Margin="0,8,0,0">
+            <WrapPanel Orientation="Horizontal"
+                       Margin="0,4,0,0">
+                <Button Style="{StaticResource Theme.SegmentButton}"
+                        Command="{Binding Theme.ApplyCommand}"
+                        CommandParameter="{x:Static bs:AppTheme.System}"
+                        Tag="{Binding Theme.IsSystem}"
+                        Padding="12,4"
+                        Margin="0,4,6,0"
+                        AutomationProperties.Name="Системная тема">
+                    <StackPanel Orientation="Horizontal">
+                        <iconPacks:PackIconLucide Kind="Monitor"
+                                                  Width="16"
+                                                  Height="16"
+                                                  Margin="0,0,6,0" />
+                        <TextBlock Text="Системная"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
                 <Button Style="{StaticResource Theme.SegmentButton}"
                         Command="{Binding Theme.ApplyCommand}"
                         CommandParameter="{x:Static bs:AppTheme.Light}"
                         Tag="{Binding Theme.IsLight}"
                         Padding="12,4"
+                        Margin="0,4,6,0"
                         AutomationProperties.Name="Светлая тема">
                     <StackPanel Orientation="Horizontal">
                         <iconPacks:PackIconLucide Kind="Sun"
@@ -41,7 +58,7 @@
                         CommandParameter="{x:Static bs:AppTheme.Dark}"
                         Tag="{Binding Theme.IsDark}"
                         Padding="12,4"
-                        Margin="6,0,0,0"
+                        Margin="0,4,6,0"
                         AutomationProperties.Name="Тёмная тема">
                     <StackPanel Orientation="Horizontal">
                         <iconPacks:PackIconLucide Kind="Moon"
@@ -57,7 +74,7 @@
                         CommandParameter="{x:Static bs:AppTheme.Tarkov}"
                         Tag="{Binding Theme.IsTarkov}"
                         Padding="12,4"
-                        Margin="6,0,0,0"
+                        Margin="0,4,0,0"
                         AutomationProperties.Name="Tarkov-тема">
                     <StackPanel Orientation="Horizontal">
                         <iconPacks:PackIconLucide Kind="Target"
@@ -68,7 +85,7 @@
                                    VerticalAlignment="Center" />
                     </StackPanel>
                 </Button>
-            </StackPanel>
+            </WrapPanel>
             <TextBlock Style="{StaticResource Form.Hint}"
                        Text="Переключается сразу, без перезапуска. Tarkov добавляет короткую заставку при входе." />
 

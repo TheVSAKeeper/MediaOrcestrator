@@ -116,9 +116,9 @@ public sealed class SettingsResetCatalog
 
             [SettingsSectionKeys.Appearance] = new(SettingsSectionKeys.Appearance,
                 null,
-                new(ThemeManager.SettingsKeyName, "Тема", "светлая",
-                    () => theme.Current == AppTheme.Light,
-                    () => theme.ApplyCommand.Execute(AppTheme.Light)),
+                new(ThemeManager.SettingsKeyName, "Тема", "системная",
+                    () => theme.Current == AppTheme.System,
+                    () => theme.ApplyCommand.Execute(AppTheme.System)),
                 new(ShellPreferences.FontScaleKey, "Масштаб шрифта", "100 %",
                     () => Math.Abs(shell.FontScale - FontScaleManager.DefaultScale) < 0.005,
                     () => shell.FontScale = FontScaleManager.DefaultScale),

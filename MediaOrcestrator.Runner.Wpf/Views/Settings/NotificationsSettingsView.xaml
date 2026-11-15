@@ -15,19 +15,19 @@
                             keepshell:Form.ResetCommandParameter="{Binding Reset[notifications]}"
                             keepshell:Form.ResetHint="{Binding Reset[notifications].Hint}">
         <StackPanel>
-            <CheckBox Content="Системные уведомления о завершении задач"
+            <CheckBox Content="Уведомления о завершении задач"
                       IsChecked="{Binding Preferences.EnableToastNotifications, Mode=TwoWay}"
                       VerticalAlignment="Center" />
             <TextBlock Style="{StaticResource Form.CheckHint}"
-                       Text="Windows-тост на долгие и упавшие задачи. Отменённые и короткие успехи молчат." />
+                       Text="Встроенные всплывающие карточки внутри активного окна и системные Windows-тосты для долгих и упавших задач. Отменённые и короткие успехи молчат." />
 
-            <CheckBox Content="Только когда окно неактивно"
+            <CheckBox Content="Системный Windows-тост только когда окно неактивно"
                       IsChecked="{Binding Preferences.ToastOnlyWhenInactive, Mode=TwoWay}"
                       IsEnabled="{Binding Preferences.EnableToastNotifications}"
                       Margin="0,18,0,0"
                       VerticalAlignment="Center" />
             <TextBlock Style="{StaticResource Form.CheckHint}"
-                       Text="Пока окно на переднем плане, о результате и так видно по ленте задач – тост в этот момент только мешает." />
+                       Text="Пока окно на переднем плане, достаточно карточки в углу окна – системный баннер Windows в этот момент только дублирует сообщение." />
         </StackPanel>
     </HeaderedContentControl>
 </UserControl>

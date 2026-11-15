@@ -9,6 +9,8 @@ public interface INavigationService
     void OpenOperations(OperationsTab tab, IReadOnlyList<Media> selection);
 
     void OpenSourcesGraph(SourceSyncRelation? highlight = null);
+
+    void OpenMaintenance(MaintenanceSection section = MaintenanceSection.Tools);
 }
 
 public enum OperationsTab
@@ -18,4 +20,12 @@ public enum OperationsTab
     Preview = 2,
     Merge = 3,
     Conflicts = 4,
+}
+
+public enum MaintenanceSection
+{
+    None = 0,
+    Tools = 1,
+    Cleanup = 2,
+    Tasks = 3,
 }

@@ -30,7 +30,8 @@ public sealed class DesignSettingsViewModel : SettingsViewModel
             DesignMcp.Options,
             new DesignClipboardService(),
             new DesignShellLauncher(),
-            new DesignFilePicker())
+            new DesignFilePicker(),
+            new ToastHostViewModel())
     {
         Paths[1].EditValue = @"D:\Data\MediaOrcestrator\MyData.db";
         Paths[2].EditValue = string.Empty;

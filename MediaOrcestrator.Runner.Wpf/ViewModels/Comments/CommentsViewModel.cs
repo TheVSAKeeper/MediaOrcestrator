@@ -1,6 +1,7 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using KeepShell.Services.Platform;
+using MahApps.Metro.IconPacks;
 using MediaOrcestrator.Domain;
 using MediaOrcestrator.Domain.Comments;
 using MediaOrcestrator.Modules;
@@ -104,6 +105,12 @@ public sealed partial class CommentsViewModel : ObservableObject, ICommentItemHo
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowEmptyMessage))]
     private string? _emptyMessage;
+
+    [ObservableProperty]
+    private string _emptyHeading = "Комментариев нет";
+
+    [ObservableProperty]
+    private PackIconLucideKind _emptyIcon = PackIconLucideKind.MessageSquare;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasLoadError))]
@@ -1182,13 +1189,30 @@ public sealed partial class CommentsViewModel : ObservableObject, ICommentItemHo
 
         TruncatedHint = result.Truncated ? "Увеличьте лимит, чтобы загрузить больше." : null;
 
-        EmptyMessage = result.Rows.Count == 0
-            ? HasSources
-                ? SelectedSourceCount == 0
-                    ? "Выберите источники в фильтре и нажмите «Загрузить», чтобы получить комментарии."
-                    : "Под текущие фильтры ничего не подошло. Сбросьте поиск или статус ответа."
-                : "Сначала добавьте источники в разделе «Источники и связи»."
-            : null;
+        if (result.Rows.Count > 0)
+        {
+            EmptyIcon = PackIconLucideKind.MessageSquare;
+            EmptyHeading = "Комментариев нет";
+            EmptyMessage = null;
+        }
+        else if (!HasSources)
+        {
+            EmptyIcon = PackIconLucideKind.SlidersHorizontal;
+            EmptyHeading = "Источники не настроены";
+            EmptyMessage = "Сначала добавьте источники в разделе «Источники и связи».";
+        }
+        else if (SelectedSourceCount == 0)
+        {
+            EmptyIcon = PackIconLucideKind.SlidersHorizontal;
+            EmptyHeading = "Источники не выбраны";
+            EmptyMessage = "Выберите источники в фильтре и нажмите «Загрузить», чтобы получить комментарии.";
+        }
+        else
+        {
+            EmptyIcon = PackIconLucideKind.MessageSquare;
+            EmptyHeading = "Комментариев нет";
+            EmptyMessage = "Под текущие фильтры ничего не подошло. Сбросьте поиск или статус ответа.";
+        }
     }
 
     private Task ToggleBranchAsync(BranchToggleViewModel toggle)
