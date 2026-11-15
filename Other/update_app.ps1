@@ -1,5 +1,5 @@
 ﻿# Определяем пути
-$sourcePath = "E:\bobgroup\projects\mediaOrcestrator\repo\MediaOrcestrator\MediaOrcestrator.Runner\bin\Debug\net8.0-windows"
+$sourcePath = "E:\bobgroup\projects\mediaOrcestrator\repo\MediaOrcestrator\classic\MediaOrcestrator.Runner\bin\Debug\net10.0-windows"
 $moduleBuildsPath = "E:\bobgroup\projects\mediaOrcestrator\repo\MediaOrcestrator\ModuleBuilds"
 $targetPath = "E:\bobgroup\projects\mediaOrcestrator\Production\App"
 $backupBasePath = "E:\bobgroup\projects\mediaOrcestrator\Production\App_backup"
@@ -18,6 +18,12 @@ function Get-NextBackupNumber {
         }
     }
     return 1
+}
+
+# Источник проверяем до бэкапа: иначе App уже перемещён, а копировать нечего
+if (-not (Test-Path $sourcePath)) {
+    Write-Host "Ошибка: Исходная папка не найдена: $sourcePath" -ForegroundColor Red
+    exit 1
 }
 
 # Получаем номер для бэкапа
@@ -62,12 +68,6 @@ if (Test-Path $targetPath) {
 
 # 2. Копируем новые файлы из источника в папку App (исключая logs, tools и settings.txt)
 Write-Host "`nКопирование новых файлов из $sourcePath..." -ForegroundColor Cyan
-
-# Проверяем существование исходной папки
-if (-not (Test-Path $sourcePath)) {
-    Write-Host "Ошибка: Исходная папка не найдена: $sourcePath" -ForegroundColor Red
-    exit 1
-}
 
 # Получаем все элементы из источника, исключая logs, tools и settings.txt
 $itemsToCopy = Get-ChildItem -Path $sourcePath | 

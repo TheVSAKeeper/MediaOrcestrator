@@ -1,4 +1,4 @@
-namespace MediaOrcestrator.Runner;
+﻿namespace MediaOrcestrator.Runner;
 
 /// <summary>
 /// Описание столбца метаданных в матрице. Учитывает принадлежность к источнику.
