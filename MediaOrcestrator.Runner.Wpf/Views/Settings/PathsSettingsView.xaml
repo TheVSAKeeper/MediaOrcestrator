@@ -64,7 +64,7 @@
         </Style>
     </UserControl.Resources>
 
-    <StackPanel>
+    <StackPanel Margin="0,0,0,8">
         <HeaderedContentControl Style="{StaticResource Form.Panel}"
                                 Header="Пути"
                                 keepshell:Form.ResetCommand="{Binding ResetSectionCommand}"
@@ -72,13 +72,13 @@
                                 keepshell:Form.ResetHint="{Binding Reset[paths].Hint}">
             <StackPanel>
                 <TextBlock Style="{StaticResource Form.Hint}"
-                           Margin="0,0,0,14"
+                           Margin="0,0,0,10"
                            Text="Системные пути приложения. Новые значения подхватываются только после перезапуска – DI привязывается к ним один раз на старте." />
 
                 <ItemsControl ItemsSource="{Binding Paths}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="{x:Type vm:PathSettingViewModel}">
-                            <Grid Margin="0,0,0,14">
+                            <Grid Margin="0,0,0,10">
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
@@ -86,28 +86,29 @@
                                 </Grid.RowDefinitions>
 
                                 <Grid Grid.Row="0"
-                                      Margin="0,0,0,6">
+                                      Margin="0,0,0,4">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
 
-                                    <StackPanel Grid.Column="0"
-                                                Orientation="Horizontal"
-                                                VerticalAlignment="Center">
-                                        <Ellipse Style="{StaticResource DirtyDot}" />
+                                    <DockPanel Grid.Column="0"
+                                               VerticalAlignment="Center">
+                                        <Ellipse DockPanel.Dock="Left"
+                                                 Style="{StaticResource DirtyDot}" />
                                         <TextBlock Text="{Binding Title}"
                                                    Style="{StaticResource Form.SectionTitle}"
                                                    TextTrimming="CharacterEllipsis"
                                                    ToolTip="{Binding Title}"
                                                    VerticalAlignment="Center" />
-                                    </StackPanel>
+                                    </DockPanel>
 
                                     <Button Grid.Column="1"
                                             Style="{StaticResource Button.Ghost}"
                                             Command="{Binding BrowseCommand}"
-                                            Padding="12,4"
-                                            Height="{DynamicResource Control.Height.Default}"
+                                            Padding="10,2"
+                                            MinHeight="0"
+                                            Height="{DynamicResource Control.Height.Compact}"
                                             ToolTip="Открыть диалог выбора">
                                         <StackPanel Orientation="Horizontal">
                                             <iconPacks:PackIconLucide Kind="Folder"
@@ -153,27 +154,27 @@
                     </StackPanel>
                 </Border>
 
-                <StackPanel Orientation="Horizontal"
-                            HorizontalAlignment="Right"
-                            Margin="0,14,0,0">
+                <keepshell:StretchWrapPanel HorizontalAlignment="Right"
+                                            Margin="0,4,0,0">
                     <Button Style="{StaticResource Button.Ghost}"
                             Command="{Binding RevertPathsCommand}"
                             Content="Отменить правки"
-                            Margin="0,0,8,0"
+                            Margin="0,6,8,0"
                             ToolTip="Вернуть поля к тому, что уже лежит в settings.toml"
                             ToolTipService.ShowOnDisabled="True" />
                     <Button Style="{StaticResource Button.Base}"
                             Command="{Binding SaveCommand}"
                             Content="Сохранить"
-                            Margin="0,0,8,0"
+                            Margin="0,6,8,0"
                             ToolTip="Записать пути в settings.toml без перезапуска"
                             ToolTipService.ShowOnDisabled="True" />
                     <Button Style="{StaticResource Button.Primary}"
                             Command="{Binding SaveAndRestartCommand}"
                             Content="Сохранить и перезапустить"
+                            Margin="0,6,0,0"
                             ToolTip="Записать пути и перезапустить приложение, чтобы DI подхватил новые значения"
                             ToolTipService.ShowOnDisabled="True" />
-                </StackPanel>
+                </keepshell:StretchWrapPanel>
             </StackPanel>
         </HeaderedContentControl>
 

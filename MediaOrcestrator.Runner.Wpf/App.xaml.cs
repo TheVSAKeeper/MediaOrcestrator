@@ -96,7 +96,7 @@ public partial class App : Application
                 .Build();
 
             Log.Information("MediaOrcestrator.Runner.Wpf запускается...");
-            UpdaterLogChecker.Check();
+            var updaterCheck = UpdaterLogChecker.Check();
 
             var restoreLogger = _host.Services.GetRequiredService<ILogger<DatabaseBackupService>>();
             var restored = DatabaseBackupService.ApplyPendingRestoreIfAny(paths.DatabasePath, restoreLogger);
@@ -172,6 +172,11 @@ public partial class App : Application
             }
 
             PreloadViewModelsInBackground();
+
+            if (updaterCheck.HasErrors)
+            {
+                ShowUpdaterErrorWarning(updaterCheck);
+            }
         }
         catch (Exception ex)
         {
@@ -209,6 +214,28 @@ public partial class App : Application
             }
 
             Shutdown(1);
+        }
+    }
+
+    private void ShowUpdaterErrorWarning(UpdaterLogCheck check)
+    {
+        var headline = check.RolledBack
+            ? "Прошлая попытка обновления сорвалась, вернули предыдущую версию."
+            : "Прошлая попытка обновления завершилась с ошибкой.";
+
+        var details = string.IsNullOrWhiteSpace(check.ErrorSummary)
+            ? string.Empty
+            : $"\n\nПричина: {check.ErrorSummary}";
+
+        var message = $"{headline}{details}\n\nПолный лог сохранён в разделе «Система – Логи».";
+
+        try
+        {
+            _host?.Services.GetRequiredService<IDialogService>().Warning("Обновление не удалось", message);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Не удалось показать предупреждение об ошибке обновления");
         }
     }
 

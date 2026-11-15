@@ -282,12 +282,6 @@
                                 </StackPanel>
                             </Grid>
                         </Border>
-
-                        <TextBlock Style="{StaticResource TextBlock.Subtle}"
-                                   Margin="0,8,0,0"
-                                   TextWrapping="Wrap">
-                            Генерация обложек по шаблонам пока доступна в WinForms-версии Runner. В новой версии – следующим шагом.
-                        </TextBlock>
                     </StackPanel>
                 </ScrollViewer>
             </Border>

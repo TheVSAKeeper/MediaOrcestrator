@@ -72,25 +72,6 @@
             <TextBlock Style="{StaticResource Form.Hint}"
                        Text="Переключается сразу, без перезапуска. Tarkov добавляет короткую заставку при входе." />
 
-            <TextBlock Text="Фон главного окна"
-                       Style="{StaticResource Form.Label}"
-                       Margin="0,18,0,0" />
-            <ComboBox ItemsSource="{Binding Preferences.BackdropOptions}"
-                      SelectedValuePath="Kind"
-                      SelectedValue="{Binding Preferences.Backdrop, Mode=TwoWay}"
-                      Margin="0,8,0,0"
-                      HorizontalAlignment="Left"
-                      MinWidth="220"
-                      AutomationProperties.Name="Системная подложка главного окна">
-                <ComboBox.ItemTemplate>
-                    <DataTemplate>
-                        <TextBlock Text="{Binding Label}" />
-                    </DataTemplate>
-                </ComboBox.ItemTemplate>
-            </ComboBox>
-            <TextBlock Style="{StaticResource Form.Hint}"
-                       Text="Системный материал-подложка окна (эффект DWM). Mica – спокойная подложка по обоям, Mica Alt – насыщеннее, Acrylic – выраженное полупрозрачное размытие. Переключается сразу. На Windows 10 настройка ни на что не влияет." />
-
             <keepshell:FontScaleField Scale="{Binding Preferences.FontScale, Mode=TwoWay}"
                                       Margin="0,18,0,0" />
 

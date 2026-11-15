@@ -82,7 +82,7 @@ public partial class SettingsViewModel : ObservableObject
 
         Sections = new(
             new(SettingsSectionKeys.Paths, "Пути", PackIconLucideKind.FolderTree, "база плагины папка temp"),
-            new(SettingsSectionKeys.Appearance, "Интерфейс", PackIconLucideKind.Palette, "тема шрифт масштаб mica"),
+            new(SettingsSectionKeys.Appearance, "Интерфейс", PackIconLucideKind.Palette, "тема шрифт масштаб"),
             new(SettingsSectionKeys.Notifications, "Уведомления", PackIconLucideKind.Bell, "тосты toast"),
             new(SettingsSectionKeys.Updates, "Обновления", PackIconLucideKind.Download, "github релиз версия"),
             new(SettingsSectionKeys.Mcp, "Управление через ИИ (MCP)", PackIconLucideKind.Bot, "mcp ии управление автоматизация"));

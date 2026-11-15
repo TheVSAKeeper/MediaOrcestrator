@@ -22,6 +22,8 @@
                TargetType="TextBlock">
             <Setter Property="TextWrapping"
                     Value="Wrap" />
+            <Setter Property="TextTrimming"
+                    Value="CharacterEllipsis" />
             <Setter Property="VerticalAlignment"
                     Value="Center" />
             <Style.Triggers>
@@ -29,10 +31,18 @@
                              Value="True">
                     <Setter Property="TextWrapping"
                             Value="NoWrap" />
-                    <Setter Property="TextTrimming"
-                            Value="CharacterEllipsis" />
                 </DataTrigger>
             </Style.Triggers>
+        </Style>
+
+        <Style x:Key="MetadataCellText"
+               TargetType="TextBlock">
+            <Setter Property="TextWrapping"
+                    Value="NoWrap" />
+            <Setter Property="TextTrimming"
+                    Value="CharacterEllipsis" />
+            <Setter Property="VerticalAlignment"
+                    Value="Center" />
         </Style>
     </UserControl.Resources>
 

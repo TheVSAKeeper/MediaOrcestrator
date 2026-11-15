@@ -16,7 +16,10 @@ namespace MediaOrcestrator.Runner.Wpf.Views.Media;
 
 public partial class MediaGridView : UserControl, IView<MediaGridViewModel>
 {
-    private const double SourceColumnWidth = 84;
+    private const double MinSourceColumnWidth = 64;
+    private const double MaxDefaultSourceColumnWidth = 240;
+    private const double MinCompactSourceColumnWidth = 30;
+    private const double SourceHeaderChromePadding = 28;
     private const double MetadataColumnWidth = 140;
 
     private static double CompactSourceColumnWidth(int headerLength) => 22 + headerLength * 8;
@@ -143,6 +146,7 @@ public partial class MediaGridView : UserControl, IView<MediaGridViewModel>
                        ToolTip="{{Binding TitleFull}}"
                        TextAlignment="Center"
                        TextWrapping="NoWrap"
+                       TextTrimming="CharacterEllipsis"
                        HorizontalAlignment="Stretch" />
         </DataTemplate>
         """;
@@ -188,6 +192,7 @@ public partial class MediaGridView : UserControl, IView<MediaGridViewModel>
         MediaGrid.Columns.Clear();
 
         var cellTextStyle = (Style)FindResource("MatrixCellText");
+        var metadataCellTextStyle = (Style)FindResource("MetadataCellText");
 
         var titleCol = new DataGridTextColumn
         {
@@ -212,7 +217,7 @@ public partial class MediaGridView : UserControl, IView<MediaGridViewModel>
                 MinWidth = 80,
                 Binding = new Binding($"MetadataCells[{i}]"),
                 CanUserSort = true,
-                ElementStyle = cellTextStyle,
+                ElementStyle = metadataCellTextStyle,
             };
             MediaGrid.Columns.Add(col);
             TrackColumnWidth(col);
@@ -222,18 +227,30 @@ public partial class MediaGridView : UserControl, IView<MediaGridViewModel>
             ? BuildCompactSourceHeaderTemplate(vm.SourceHeaderCompactLength)
             : SourceHeaderTemplate;
 
-        var sourceColumnWidth = vm.IsSourceHeaderCompact
-            ? CompactSourceColumnWidth(vm.SourceHeaderCompactLength)
-            : SourceColumnWidth;
+        var minWidth = vm.IsSourceHeaderCompact
+            ? MinCompactSourceColumnWidth
+            : MinSourceColumnWidth;
+
+        var compactWidth = CompactSourceColumnWidth(vm.SourceHeaderCompactLength);
 
         for (var i = 0; i < vm.ColumnSources.Count; i++)
         {
             var source = vm.ColumnSources[i];
             var key = MediaGridViewModel.SourceColumnKey(source.Id);
+            var defaultWidth = vm.IsSourceHeaderCompact
+                ? compactWidth
+                : MeasureSourceColumnWidth(source);
+            var hasSavedWidth = vm.TryGetColumnWidth(key, out var srcWidth);
+            var colMinWidth = vm.IsSourceHeaderCompact || hasSavedWidth
+                ? minWidth
+                : defaultWidth;
             var col = new DataGridTemplateColumn
             {
                 Header = source,
-                Width = vm.TryGetColumnWidth(key, out var srcWidth) ? new(srcWidth) : new(sourceColumnWidth),
+                MinWidth = colMinWidth,
+                Width = hasSavedWidth
+                    ? new(Math.Max(minWidth, srcWidth))
+                    : new(defaultWidth),
                 CellTemplate = BuildCellTemplate(i),
                 HeaderTemplate = sourceHeaderTemplate,
                 SortMemberPath = nameof(MediaRowViewModel.Title),
@@ -301,11 +318,31 @@ public partial class MediaGridView : UserControl, IView<MediaGridViewModel>
         }
     }
 
+    private double MeasureSourceColumnWidth(Source source)
+    {
+        var fontFamily = TryFindResource("Font.Sans") as FontFamily ?? MediaGrid.FontFamily;
+        var fontSize = TryFindResource("Font.Size.M") is double size && size > 0
+            ? size
+            : MediaGrid.FontSize;
+        var typeface = new Typeface(fontFamily, FontStyles.Normal, FontWeights.SemiBold, FontStretches.Normal);
+        var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+        var formatted = new FormattedText(
+            source.Title,
+            CultureInfo.CurrentUICulture,
+            FlowDirection.LeftToRight,
+            typeface,
+            fontSize,
+            Brushes.Black,
+            pixelsPerDip);
+        var maxWidth = MaxDefaultSourceColumnWidth * Math.Max(1.0, fontSize / 14.0);
+        return Math.Clamp(Math.Ceiling(formatted.WidthIncludingTrailingWhitespace + SourceHeaderChromePadding), MinSourceColumnWidth, maxWidth);
+    }
+
     private double DefaultColumnWidth(DataGridColumn column) => column.Header switch
     {
-        Source => _vm is { IsSourceHeaderCompact: true } vm
+        Source source => _vm is { IsSourceHeaderCompact: true } vm
             ? CompactSourceColumnWidth(vm.SourceHeaderCompactLength)
-            : SourceColumnWidth,
+            : MeasureSourceColumnWidth(source),
         MetadataColumnInfo => MetadataColumnWidth,
         _ => 0,
     };

@@ -1,4 +1,5 @@
-﻿using Serilog;
+﻿using MediaOrcestrator.Runner.Wpf.Converters;
+using Serilog;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO;
@@ -20,9 +21,16 @@ internal static class MediaThumbnailCache
         Timeout = TimeSpan.FromSeconds(20),
     };
 
-    public static Task<BitmapImage?> GetAsync(string url)
+    public static Task<BitmapImage?> GetAsync(string? url)
     {
-        return Cache.GetOrAdd(url, LoadAsync);
+        var normalized = StringToImageSourceConverter.NormalizeUrl(url);
+
+        if (string.IsNullOrWhiteSpace(normalized) || !StringToImageSourceConverter.CanRender(normalized))
+        {
+            return Task.FromResult<BitmapImage?>(null);
+        }
+
+        return Cache.GetOrAdd(normalized, LoadAsync);
     }
 
     private static async Task<BitmapImage?> LoadAsync(string url)
@@ -31,7 +39,9 @@ internal static class MediaThumbnailCache
 
         try
         {
-            var bytes = await Http.GetByteArrayAsync(url).ConfigureAwait(false);
+            var bytes = Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.IsFile
+                ? await File.ReadAllBytesAsync(uri.LocalPath).ConfigureAwait(false)
+                : await Http.GetByteArrayAsync(url).ConfigureAwait(false);
 
             var image = new BitmapImage();
             image.BeginInit();
