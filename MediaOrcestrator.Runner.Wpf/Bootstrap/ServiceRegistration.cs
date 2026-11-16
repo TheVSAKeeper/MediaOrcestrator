@@ -209,6 +209,7 @@ internal static class ServiceRegistration
         services.AddSingleton<IMediaMenuAction, CopyDetailsAction>();
         services.AddSingleton<IMediaMenuAction, OpenExternalAction>();
         services.AddSingleton<IMediaMenuAction, DeleteAction>();
+        services.AddSingleton<IMediaMenuAction, RemoveFromDatabaseAction>();
         services.AddSingleton<IMediaMenuAction, ConvertAction>();
 
         services.AddSingleton<ShellPreferences>();

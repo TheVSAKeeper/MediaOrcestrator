@@ -23,9 +23,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MediaOrcestrator.Domain\MediaOrcestrator.Domain.csproj" />
-    <ProjectReference Include="..\MediaOrcestrator.Youtube\MediaOrcestrator.Youtube.csproj" />
     <ProjectReference Include="..\MediaOrcestrator.Rutube\MediaOrcestrator.Rutube.csproj" />
     <ProjectReference Include="..\MediaOrcestrator.VkVideo\MediaOrcestrator.VkVideo.csproj" />
+    <ProjectReference Include="..\MediaOrcestrator.Youtube\MediaOrcestrator.Youtube.csproj" />
   </ItemGroup>
 
   <ItemGroup>

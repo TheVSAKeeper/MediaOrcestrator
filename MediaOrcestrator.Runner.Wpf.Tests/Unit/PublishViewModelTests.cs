@@ -4,6 +4,7 @@ using MediaOrcestrator.Runner.Wpf.Tests.Doubles;
 using MediaOrcestrator.Runner.Wpf.ViewModels;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using SkiaSharp;
 using System.IO;
 
@@ -178,6 +179,79 @@ public sealed class PublishViewModelTests
             Assert.That(_vm.StatusMessage, Does.Contain("№7"));
         }
     }
+
+    [Test]
+    public async Task PublishCommand_КогдаШагЦепочкиПропущен_ОстанавливаетЦепочкуБезОшибки()
+    {
+        var secondInner = Substitute.For<ISourceType>();
+        var thirdInner = Substitute.For<ISourceType>();
+
+        using var ctx = new TestDomainContext([_uploadPlugin, new RutubeTestPlugin(secondInner), new VkTestPlugin(thirdInner)]);
+        var s1 = CreateSource("s1", "YouTube", "Youtube");
+        var s2 = CreateSource("s2", "RuTube", "Rutube");
+        var s3 = CreateSource("s3", "VK", "VkVideo");
+        ctx.Database.GetCollection<Source>("sources").InsertBulk([s1, s2, s3]);
+        ctx.Database.GetCollection<SourceSyncRelation>("source_relations").InsertBulk([
+            new() { FromId = s1.Id, ToId = s2.Id },
+            new() { FromId = s2.Id, ToId = s3.Id },
+        ]);
+
+        _uploadPlugin.UploadAsync(Arg.Any<MediaDto>(), Arg.Any<Dictionary<string, string>>(), Arg.Any<IProgress<UploadProgress>?>(), Arg.Any<CancellationToken>())
+            .Returns(new UploadResult { Status = MediaStatusHelper.Ok(), Id = "ext-1" });
+        _uploadPlugin.DownloadAsync("ext-1", Arg.Any<Dictionary<string, string>>(), Arg.Any<IProgress<DownloadProgress>?>(), Arg.Any<CancellationToken>())
+            .ThrowsAsync(new MediaDownloadSkippedException("Стрим отключён"));
+
+        var vm = new PublishViewModel(
+            ctx.Orcestrator,
+            ctx.SyncRetryRunner,
+            ctx.SyncPlanner,
+            ctx.ActionHolder,
+            ctx.Dialogs,
+            NullLogger<PublishViewModel>.Instance,
+            ctx.FilePicker,
+            ctx.CoverGenerator,
+            ctx.CoverTemplateStore,
+            ctx.CoverEditorWindowService,
+            ctx.TempManager);
+
+        var videoPath = Path.Combine(ctx.Root, "pub.mp4");
+        await File.WriteAllTextAsync(videoPath, "video");
+        vm.Reload();
+        vm.SelectedSource = vm.Sources.First(s => s.Id == "s1");
+        vm.Title = "Ролик";
+        vm.VideoPath = videoPath;
+        vm.RunChainAfterPublish = true;
+
+        await vm.PublishCommand.ExecuteAsync(null);
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(vm.IsStatusError, Is.False);
+            Assert.That(vm.StatusMessage, Does.Contain("пропущено"));
+        }
+
+        await secondInner.DidNotReceive().UploadAsync(
+            Arg.Any<MediaDto>(),
+            Arg.Any<Dictionary<string, string>>(),
+            Arg.Any<IProgress<UploadProgress>?>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    private abstract class DelegatingPlugin(string name, ISourceType inner) : ISourceType
+    {
+        public string Name => name;
+        public SyncDirection ChannelType => SyncDirection.Full;
+        public IEnumerable<SourceSettings> SettingsKeys => [];
+        public IAsyncEnumerable<MediaDto> GetMedia(Dictionary<string, string> settings, bool isFull, CancellationToken cancellationToken = default) => inner.GetMedia(settings, isFull, cancellationToken);
+        public Task<MediaDto?> GetMediaByIdAsync(string externalId, Dictionary<string, string> settings, CancellationToken cancellationToken = default) => inner.GetMediaByIdAsync(externalId, settings, cancellationToken);
+        public Task<MediaDto> DownloadAsync(string videoId, Dictionary<string, string> settings, IProgress<DownloadProgress>? progress = null, CancellationToken cancellationToken = default) => inner.DownloadAsync(videoId, settings, progress, cancellationToken);
+        public Task<UploadResult> UploadAsync(MediaDto media, Dictionary<string, string> settings, IProgress<UploadProgress>? progress = null, CancellationToken cancellationToken = default) => inner.UploadAsync(media, settings, progress, cancellationToken);
+        public Task<UploadResult> UpdateAsync(string externalId, MediaDto tempMedia, Dictionary<string, string> settings, CancellationToken cancellationToken = default) => inner.UpdateAsync(externalId, tempMedia, settings, cancellationToken);
+        public Task DeleteAsync(string externalId, Dictionary<string, string> settings, CancellationToken cancellationToken = default) => inner.DeleteAsync(externalId, settings, cancellationToken);
+    }
+
+    private sealed class RutubeTestPlugin(ISourceType inner) : DelegatingPlugin("Rutube", inner);
+    private sealed class VkTestPlugin(ISourceType inner) : DelegatingPlugin("VkVideo", inner);
 
     private static Source CreateSource(string id, string name, string typeId) =>
         new()

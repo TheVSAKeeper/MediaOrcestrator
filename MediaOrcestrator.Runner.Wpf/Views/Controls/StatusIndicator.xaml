@@ -86,6 +86,13 @@
                         <Setter Property="Foreground"
                                 Value="{DynamicResource Accent.Primary}" />
                     </DataTrigger>
+                    <DataTrigger Binding="{Binding Status, ElementName=Root}"
+                                 Value="Skipped">
+                        <Setter Property="Kind"
+                                Value="CircleSlash" />
+                        <Setter Property="Foreground"
+                                Value="{DynamicResource Fg.Muted}" />
+                    </DataTrigger>
                 </Style.Triggers>
             </Style>
         </iconPacks:PackIconLucide.Style>

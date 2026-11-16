@@ -63,19 +63,21 @@ public sealed partial class TransfersViewModel
 
         var failed = false;
         var cancelled = false;
+        var skipped = false;
         Exception? error = null;
 
         try
         {
             using (_actionHolder.BeginScope(action))
             {
-                var progress = new Progress<SyncAttemptStatus>(s => HandleAttemptStatus(node.Intent, node, s));
-                await _retryRunner.RunAsync(node.Intent.Media, node.Intent.Relation, progress, cancellationToken: cts.Token);
+                var progress = new DirectProgress<SyncAttemptStatus>(s => HandleAttemptStatus(node.Intent, node, s));
+                var outcome = await _retryRunner.RunAsync(node.Intent.Media, node.Intent.Relation, progress, cancellationToken: cts.Token);
+                skipped = outcome == SyncRunOutcome.Skipped;
                 action.ProgressPlus();
                 RunStepsCompleted = 1;
             }
 
-            StatusText = "Завершено";
+            StatusText = skipped ? "Пропущено" : "Завершено";
         }
         catch (OperationCanceledException)
         {
@@ -105,7 +107,7 @@ public sealed partial class TransfersViewModel
             }
             else
             {
-                action.Finish("Готово");
+                action.Finish(skipped ? "Пропущено" : "Готово");
             }
 
             IsRunning = false;
@@ -149,6 +151,7 @@ public sealed partial class TransfersViewModel
         var syncErrors = new List<Exception>();
         var cancelled = false;
         var stoppedByError = false;
+        var skippedSteps = 0;
         var relations = _orcestrator.GetRelations();
         var executor = new ParallelSyncExecutor(selectedRoots, relations);
         var nodeMap = BuildNodeMap();
@@ -165,11 +168,17 @@ public sealed partial class TransfersViewModel
                         StatusText = $"Обработка: {intent.Media.Title}";
                         action.Status = $"Обработка: {intent.Media.Title}";
 
-                        var progress = new Progress<SyncAttemptStatus>(status => HandleAttemptStatus(intent, node, status));
+                        var progress = new DirectProgress<SyncAttemptStatus>(status => HandleAttemptStatus(intent, node, status));
 
-                        await _retryRunner.RunAsync(intent.Media, intent.Relation, progress, cancellationToken: cts.Token);
+                        var outcome = await _retryRunner.RunAsync(intent.Media, intent.Relation, progress, cancellationToken: cts.Token);
                         action.ProgressPlus();
                         InvokeOnUi(() => RunStepsCompleted++);
+
+                        if (outcome == SyncRunOutcome.Skipped)
+                        {
+                            Interlocked.Increment(ref skippedSteps);
+                            return outcome;
+                        }
 
                         if (UploadIntervalEnabled && UploadIntervalMinutes is { } pauseMinutes)
                         {
@@ -179,6 +188,8 @@ public sealed partial class TransfersViewModel
 
                             await Task.Delay(TimeSpan.FromMinutes(pauseMinutes), cts.Token);
                         }
+
+                        return outcome;
                     },
                     cts.Token,
                     (intent, ex) =>
@@ -206,7 +217,7 @@ public sealed partial class TransfersViewModel
                     });
             }
 
-            StatusText = "Завершено";
+            StatusText = skippedSteps > 0 ? $"Завершено (пропущено: {skippedSteps})" : "Завершено";
             AppendJournal(TransferJournalLevel.Success, "Прогон завершён.");
         }
         catch (OperationCanceledException)
@@ -234,7 +245,7 @@ public sealed partial class TransfersViewModel
             }
             else
             {
-                action.Finish("Готово");
+                action.Finish(skippedSteps > 0 ? $"Готово (пропущено: {skippedSteps})" : "Готово");
             }
 
             IsRunning = false;
@@ -397,6 +408,18 @@ public sealed partial class TransfersViewModel
                 case SyncAttemptKind.Joined:
                     AppendJournal(TransferJournalLevel.Info, $"⏳ {intent.Media.Title}: операция уже выполняется, ждём");
                     break;
+
+                case SyncAttemptKind.Skipped:
+                    AppendJournal(TransferJournalLevel.Info, $"[Пропущено] {intent.Media.Title}: {status.Error?.Message}");
+
+                    if (node is not null)
+                    {
+                        ClearDescendantsSilent(node);
+                        FindGroupOf(node)?.Recompute();
+                        RecomputeCounts();
+                    }
+
+                    break;
             }
         });
     }
@@ -415,4 +438,9 @@ public sealed partial class TransfersViewModel
     }
 
     private void InvokeOnUi(Action action) => _dispatcher.Invoke(action);
+
+    private sealed class DirectProgress<T>(Action<T> onReport) : IProgress<T>
+    {
+        public void Report(T value) => onReport(value);
+    }
 }

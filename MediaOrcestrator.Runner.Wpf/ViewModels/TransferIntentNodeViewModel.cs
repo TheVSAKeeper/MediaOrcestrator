@@ -145,6 +145,12 @@ public sealed partial class TransferIntentNodeViewModel : ObservableObject
                 StatusTail = "[Ожидание: уже выполняется]";
                 ErrorTooltip = null;
                 break;
+
+            case SyncAttemptKind.Skipped:
+                StatusKind = TransferStatusKind.Skipped;
+                StatusTail = "[Пропущено]";
+                ErrorTooltip = status.Error?.Message;
+                break;
         }
     }
 }

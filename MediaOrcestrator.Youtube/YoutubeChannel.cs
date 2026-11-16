@@ -22,8 +22,8 @@ internal sealed class YoutubeChannel(
     YoutubeCommentsReadService commentsReadService,
     YoutubeYtDlpCommentsReadService ytDlpCommentsReadService,
     YoutubeUploadService uploadService,
-    YoutubeDownloadPolicy downloadPolicy,
-    YoutubeQuotaTracker quotaTracker)
+    YoutubeQuotaTracker quotaTracker,
+    YoutubeDownloadPolicy downloadPolicy)
     : ISourceType, IAuthenticatable, IToolConsumer, ISupportsComments, ISupportsPlaylists, ISupportsQuotaFreeMetadata, IReportsQuota
 {
     internal const string VideoUrlTemplate = "https://www.youtube.com/watch?v={0}";

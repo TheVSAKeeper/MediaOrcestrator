@@ -10,4 +10,5 @@ public enum TransferStatusKind
     Error = 5,
     NonRetriable = 6,
     Joined = 7,
+    Skipped = 8,
 }
