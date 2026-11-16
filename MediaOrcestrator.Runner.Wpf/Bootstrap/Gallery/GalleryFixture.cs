@@ -7,7 +7,7 @@ using System.IO;
 
 namespace MediaOrcestrator.Runner.Wpf.Bootstrap.Gallery;
 
-internal sealed record GalleryFixture(string Root, Paths Paths, string SettingsPath)
+internal sealed record GalleryFixture(string Root, Paths Paths, string SettingsPath, string SampleDocPath) : IDisposable
 {
     private const string FolderName = "MediaOrcestrator.Gallery";
     private const string HddSourceId = "hdd-archive";
@@ -41,21 +41,35 @@ internal sealed record GalleryFixture(string Root, Paths Paths, string SettingsP
 
     public static GalleryFixture Create(GalleryOptions options)
     {
-        var root = Path.Combine(Path.GetTempPath(), FolderName);
-
-        if (Directory.Exists(root))
-        {
-            Directory.Delete(root, true);
-        }
-
+        var root = Path.Combine(Path.GetTempPath(), FolderName, Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
 
         var databasePath = Path.Combine(root, "MyData.db");
 
-        using (var db = new LiteDatabase(databasePath))
+        using (var db = new LiteDatabase(databasePath, new BsonMapper()))
         {
             Seed(db);
         }
+
+        var docsDir = Path.Combine(root, "docs");
+        Directory.CreateDirectory(docsDir);
+        var sampleDocPath = Path.Combine(docsDir, "youtube-guide.md");
+        File.WriteAllText(
+            sampleDocPath,
+            """
+            # Настройка источника YouTube
+
+            Краткое руководство для стенда галереи и smoke-тестов.
+
+            ## Основные параметры
+
+            - **channel_id** – идентификатор канала или `@handle`.
+            - **js_runtime** – окружение запуска (`deno`), нужно для `yt-dlp`.
+
+            ```text
+            channel_id = "@keeper-chronicles"
+            ```
+            """);
 
         var paths = new Paths(
             options.PluginPath,
@@ -63,7 +77,24 @@ internal sealed record GalleryFixture(string Root, Paths Paths, string SettingsP
             Path.Combine(root, "temp"),
             Path.Combine(root, "state"));
 
-        return new(root, paths, Path.Combine(root, TomlSettingsFile.PrimaryFileName));
+        return new(root, paths, Path.Combine(root, TomlSettingsFile.PrimaryFileName), sampleDocPath);
+    }
+
+    public void Dispose()
+    {
+        try
+        {
+            if (Directory.Exists(Root))
+            {
+                Directory.Delete(Root, true);
+            }
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
     }
 
     private static void Seed(LiteDatabase db)

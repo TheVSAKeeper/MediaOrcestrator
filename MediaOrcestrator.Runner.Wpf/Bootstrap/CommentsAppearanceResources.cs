@@ -1,6 +1,7 @@
-﻿using System.Windows;
+﻿using MediaOrcestrator.Runner.Wpf.ViewModels.Comments;
+using System.Windows;
 
-namespace MediaOrcestrator.Runner.Wpf.ViewModels.Comments;
+namespace MediaOrcestrator.Runner.Wpf.Bootstrap;
 
 public static class CommentsAppearanceResources
 {

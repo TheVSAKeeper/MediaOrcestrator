@@ -8,7 +8,7 @@
         mc:Ignorable="d"
         d:DataContext="{d:DesignInstance vm:CoverTemplateEditorViewModel}"
         Title="Редактор шаблона обложки"
-        Icon="pack://application:,,,/icon.ico"
+        Icon="pack://application:,,,/MediaOrcestrator.Runner.Wpf;component/icon.ico"
         Width="980"
         Height="700"
         MinWidth="720"

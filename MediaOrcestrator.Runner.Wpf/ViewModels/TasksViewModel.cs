@@ -1,5 +1,6 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using KeepShell.Services.Platform;
 using MahApps.Metro.IconPacks;
 using MediaOrcestrator.Domain;
 using MediaOrcestrator.Runner.Wpf.Bootstrap;
@@ -17,6 +18,7 @@ public sealed partial class TasksViewModel : ObservableObject
     private readonly ActionHolder _actionHolder;
     private readonly IDialogService _dialogs;
     private readonly ISettingsStore _settings;
+    private readonly IUiDispatcher _dispatcher;
     private readonly Dictionary<Guid, ActionRowViewModel> _activeRows = [];
     private readonly Dictionary<Guid, ActionRowViewModel> _completedRows = [];
     private bool _suppressPersist;
@@ -56,11 +58,12 @@ public sealed partial class TasksViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(HasNoVisibleItems))]
     private bool _isCompletedExpanded;
 
-    public TasksViewModel(ActionHolder actionHolder, IDialogService dialogs, ISettingsStore settings)
+    public TasksViewModel(ActionHolder actionHolder, IDialogService dialogs, ISettingsStore settings, IUiDispatcher dispatcher)
     {
         _actionHolder = actionHolder;
         _dialogs = dialogs;
         _settings = settings;
+        _dispatcher = dispatcher;
         _actionHolder.Changed += OnActionsChanged;
         Active = [];
         Completed = [];
@@ -161,14 +164,7 @@ public sealed partial class TasksViewModel : ObservableObject
 
     private void OnActionsChanged(object? sender, EventArgs e)
     {
-        var app = Application.Current;
-
-        if (app is null)
-        {
-            return;
-        }
-
-        app.Dispatcher.BeginInvoke(Rebuild);
+        _dispatcher.Invoke(Rebuild);
     }
 
     private void Rebuild()
@@ -202,7 +198,7 @@ public sealed partial class TasksViewModel : ObservableObject
 
             if (!map.TryGetValue(action.Id, out var row))
             {
-                row = new(action, MarkRowDirty, OnRowExpandedChanged);
+                row = new(action, MarkRowDirty, OnRowExpandedChanged, _dispatcher);
                 map[action.Id] = row;
                 target.Insert(Math.Min(i, target.Count), row);
                 continue;

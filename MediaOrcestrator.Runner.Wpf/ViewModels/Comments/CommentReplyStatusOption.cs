@@ -1,5 +1,5 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
-using System.Windows;
+using KeepShell.Services.Platform;
 using System.Windows.Media;
 
 namespace MediaOrcestrator.Runner.Wpf.ViewModels.Comments;
@@ -16,11 +16,13 @@ public sealed record CommentLayoutOption(CommentsLayoutMode Mode, string Label)
 
 public sealed partial class CommentAuthorOptionViewModel : ObservableObject
 {
+    private readonly IUiDispatcher _dispatcher;
     private ImageSource? _avatarSource;
     private bool _avatarLoadStarted;
 
-    public CommentAuthorOptionViewModel(string id, string name, string? avatarUrl, bool isDefault)
+    public CommentAuthorOptionViewModel(string id, string name, string? avatarUrl, bool isDefault, IUiDispatcher dispatcher)
     {
+        _dispatcher = dispatcher;
         Id = id;
         Name = string.IsNullOrEmpty(name) ? "(без имени)" : name;
         AvatarUrl = avatarUrl;
@@ -75,7 +77,7 @@ public sealed partial class CommentAuthorOptionViewModel : ObservableObject
             return;
         }
 
-        await Application.Current.Dispatcher.InvokeAsync(() =>
+        await _dispatcher.InvokeAsync(() =>
         {
             _avatarSource = image;
             OnPropertyChanged(nameof(AvatarSource));

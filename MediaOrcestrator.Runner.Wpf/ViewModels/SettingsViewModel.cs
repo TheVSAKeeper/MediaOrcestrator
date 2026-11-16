@@ -96,11 +96,6 @@ public partial class SettingsViewModel : ObservableObject, IPageHeader
 
         Reset = new(Paths, preferences, theme, updates, mcp, mcpOptions);
 
-#if DEBUG
-        // TODO: перенести в тест, когда появится проект на KeepShell.Testing
-        Reset.EnsureExhaustive(Sections.Items);
-#endif
-
         Sections.Restore(store.GetStringValue(SelectedSectionKey));
         Sections.PropertyChanged += OnSectionsPropertyChanged;
 

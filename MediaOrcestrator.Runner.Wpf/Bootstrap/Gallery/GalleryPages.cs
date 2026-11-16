@@ -40,6 +40,16 @@ internal static class GalleryPages
             return AllKeys;
         }
 
+        if (requested.Count == 1 && string.Equals(requested[0], GalleryOptions.NoneValue, StringComparison.OrdinalIgnoreCase))
+        {
+            return [];
+        }
+
+        if (requested.Count == 1 && string.Equals(requested[0], GalleryOptions.AllValue, StringComparison.OrdinalIgnoreCase))
+        {
+            return AllKeys;
+        }
+
         var keys = new List<string>();
 
         foreach (var item in requested)

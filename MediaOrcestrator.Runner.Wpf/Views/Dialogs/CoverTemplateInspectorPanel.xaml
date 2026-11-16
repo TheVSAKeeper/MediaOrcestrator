@@ -1,0 +1,387 @@
+﻿<UserControl x:Class="MediaOrcestrator.Runner.Wpf.Views.Dialogs.CoverTemplateInspectorPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:MediaOrcestrator.Runner.Wpf.ViewModels"
+             xmlns:keepshell="https://schemas.keepshell.dev/wpf"
+             xmlns:domain="clr-namespace:MediaOrcestrator.Domain;assembly=MediaOrcestrator.Domain"
+             xmlns:iconPacks="http://metro.mahapps.com/winfx/xaml/iconpacks"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vm:CoverTemplateEditorViewModel}">
+
+    <UserControl.Resources>
+        <Style x:Key="SliderValue"
+               TargetType="TextBlock"
+               BasedOn="{StaticResource Form.Value}">
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="MinWidth" Value="36" />
+            <Setter Property="TextAlignment" Value="Right" />
+            <Setter Property="Margin" Value="8,0,0,0" />
+        </Style>
+
+        <Style x:Key="Field.Slider"
+               TargetType="Slider"
+               BasedOn="{StaticResource {x:Type Slider}}">
+            <Setter Property="Height" Value="{DynamicResource Control.Height.Default}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Disabled">
+        <StackPanel>
+            <Expander Style="{StaticResource Expander.Section}"
+                      Header="Шаблон"
+                      IsExpanded="{Binding IsTemplateSectionExpanded, Mode=TwoWay}">
+                <StackPanel>
+                    <TextBlock Text="Имя профиля"
+                               Style="{StaticResource Form.Label}"
+                               Margin="0,0,0,4" />
+                    <TextBox x:Name="ProfileNameBox"
+                             Style="{StaticResource TextBox.Form}"
+                             Text="{Binding ProfileName, UpdateSourceTrigger=PropertyChanged}"
+                             ToolTip="Под этим именем профиль сохранится в templates/covers."
+                             AutomationProperties.Name="Имя профиля шаблона" />
+
+                    <TextBlock Text="Картинка-шаблон"
+                               Style="{StaticResource Form.Label}" />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox Grid.Column="0"
+                                 Style="{StaticResource TextBox.Form}"
+                                 Text="{Binding TemplatePath, UpdateSourceTrigger=PropertyChanged}"
+                                 ToolTip="{Binding TemplatePath}"
+                                 AutomationProperties.Name="Путь к картинке-шаблону" />
+                        <Button Grid.Column="1"
+                                Style="{StaticResource Button.Ghost}"
+                                Content="Обзор"
+                                Command="{Binding BrowseTemplateCommand}"
+                                Height="{DynamicResource Control.Height.Default}"
+                                MinHeight="{DynamicResource Control.Height.Default}"
+                                Padding="{DynamicResource Padding.Control.Compact}"
+                                Margin="6,0,0,0" />
+                    </Grid>
+
+                    <TextBlock Text="Нумерация"
+                               Style="{StaticResource Form.Label}" />
+                    <RadioButton GroupName="NumberMode"
+                                 Content="Последовательно (от начального)"
+                                 IsChecked="{Binding IsSequential, Mode=OneWay}"
+                                 Command="{Binding SetNumberModeCommand}"
+                                 CommandParameter="{x:Static domain:CoverNumberMode.Sequential}"
+                                 Margin="0,2,0,2" />
+                    <keepshell:NumericSettingField Margin="20,2,0,6"
+                                                 Label="Начальный номер"
+                                                 Value="{Binding StartNumber, UpdateSourceTrigger=PropertyChanged}"
+                                                 ValueStringFormat="{}{0:0}"
+                                                 IncreaseCommand="{Binding IncreaseStartNumberCommand}"
+                                                 DecreaseCommand="{Binding DecreaseStartNumberCommand}"
+                                                 IncreaseAutomationName="Увеличить начальный номер"
+                                                 DecreaseAutomationName="Уменьшить начальный номер"
+                                                 Visibility="{Binding IsSequential, Converter={StaticResource BoolToVisibility}}" />
+
+                    <RadioButton GroupName="NumberMode"
+                                 Content="Из названия (по регулярке)"
+                                 IsChecked="{Binding IsTitleRegex, Mode=OneWay}"
+                                 Command="{Binding SetNumberModeCommand}"
+                                 CommandParameter="{x:Static domain:CoverNumberMode.TitleRegex}"
+                                 Margin="0,2,0,2" />
+                    <StackPanel Margin="20,2,0,0"
+                                Visibility="{Binding IsTitleRegex, Converter={StaticResource BoolToVisibility}}">
+                        <TextBox Style="{StaticResource TextBox.Form}"
+                                 Text="{Binding TitleRegexPattern, UpdateSourceTrigger=PropertyChanged}"
+                                 ToolTip="Группа (\d+) – номер из названия медиа."
+                                 AutomationProperties.Name="Регулярное выражение для номера" />
+                        <TextBlock Style="{StaticResource TextBlock.Subtle}"
+                                   FontSize="{DynamicResource Font.Size.S}"
+                                   TextWrapping="Wrap"
+                                   Margin="0,4,0,0"
+                                   Text="Превью использует «Номер для превью»; при заливке номер берётся из названия каждого видео." />
+                    </StackPanel>
+                </StackPanel>
+            </Expander>
+
+            <Border Height="1"
+                    Background="{DynamicResource Border.Subtle}"
+                    Margin="0,4,0,10" />
+
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0"
+                           Text="Текстовые слои"
+                           FontWeight="SemiBold"
+                           VerticalAlignment="Center" />
+                <StackPanel Grid.Column="1"
+                            Orientation="Horizontal">
+                    <Button Style="{StaticResource Button.Ghost}"
+                            Command="{Binding AddLayerCommand}"
+                            Padding="6,4"
+                            ToolTip="Добавить слой"
+                            AutomationProperties.Name="Добавить слой">
+                        <iconPacks:PackIconLucide Kind="Plus" Width="14" Height="14" />
+                    </Button>
+                    <Button Style="{StaticResource Button.Ghost}"
+                            Command="{Binding RemoveLayerCommand}"
+                            Padding="6,4"
+                            ToolTipService.ShowOnDisabled="True"
+                            ToolTip="Удалить слой (должен остаться хотя бы один)"
+                            AutomationProperties.Name="Удалить слой">
+                        <iconPacks:PackIconLucide Kind="Trash2" Width="14" Height="14" />
+                    </Button>
+                    <Button Style="{StaticResource Button.Ghost}"
+                            Command="{Binding MoveLayerUpCommand}"
+                            Padding="6,4"
+                            ToolTipService.ShowOnDisabled="True"
+                            ToolTip="Поднять слой (рисуется раньше)"
+                            AutomationProperties.Name="Поднять слой">
+                        <iconPacks:PackIconLucide Kind="ArrowUp" Width="14" Height="14" />
+                    </Button>
+                    <Button Style="{StaticResource Button.Ghost}"
+                            Command="{Binding MoveLayerDownCommand}"
+                            Padding="6,4"
+                            ToolTipService.ShowOnDisabled="True"
+                            ToolTip="Опустить слой (рисуется поверх)"
+                            AutomationProperties.Name="Опустить слой">
+                        <iconPacks:PackIconLucide Kind="ArrowDown" Width="14" Height="14" />
+                    </Button>
+                </StackPanel>
+            </Grid>
+
+            <Border Height="96"
+                    Margin="0,6,0,0"
+                    Background="{DynamicResource Bg.Surface}"
+                    BorderBrush="{DynamicResource Border.Subtle}"
+                    BorderThickness="1"
+                    CornerRadius="{DynamicResource Radius.S}">
+                <ListBox ItemsSource="{Binding Layers}"
+                         SelectedItem="{Binding SelectedLayer, Mode=TwoWay}"
+                         AlternationCount="999"
+                         Background="Transparent"
+                         BorderThickness="0"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock TextTrimming="CharacterEllipsis">
+                                <Run Text="{Binding (ItemsControl.AlternationIndex), RelativeSource={RelativeSource AncestorType=ListBoxItem}, Converter={StaticResource Increment}, Mode=OneWay}" />
+                                <Run Text=". " />
+                                <Run Text="{Binding DisplayLabel, Mode=OneWay}" />
+                            </TextBlock>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Border>
+
+            <TextBlock Text="Выберите слой, чтобы отредактировать его."
+                       Style="{StaticResource TextBlock.Subtle}"
+                       Margin="0,12,0,0"
+                       Visibility="{Binding HasSelectedLayer, Converter={StaticResource InverseBoolToVisibility}}" />
+
+            <StackPanel Margin="0,8,0,0"
+                        Visibility="{Binding HasSelectedLayer, Converter={StaticResource BoolToVisibility}}">
+                <Expander Style="{StaticResource Expander.Section}"
+                          Header="Текст"
+                          IsExpanded="True">
+                    <StackPanel>
+                        <TextBox Style="{StaticResource TextBox.Form}"
+                                 Text="{Binding SelectedLayer.TextTemplate, UpdateSourceTrigger=PropertyChanged}"
+                                 ToolTip="{}{number} подставит номер обложки."
+                                 AutomationProperties.Name="Текст слоя" />
+
+                        <TextBlock Text="Шрифт"
+                                   Style="{StaticResource Form.Label}" />
+                        <ComboBox Style="{StaticResource ComboBox.Form}"
+                                  ItemsSource="{Binding FontFamilies}"
+                                  SelectedItem="{Binding SelectedLayer.FontFamily, Mode=TwoWay}"
+                                  AutomationProperties.Name="Шрифт слоя" />
+
+                        <TextBlock Text="Начертание"
+                                   Style="{StaticResource Form.Label}" />
+                        <ComboBox Style="{StaticResource ComboBox.Form}"
+                                  ItemsSource="{Binding FontStyles}"
+                                  SelectedValuePath="Value"
+                                  SelectedValue="{Binding SelectedLayer.FontStyle, Mode=TwoWay}"
+                                  AutomationProperties.Name="Начертание шрифта" />
+                    </StackPanel>
+                </Expander>
+
+                <Expander Style="{StaticResource Expander.Section}"
+                          Header="Размер и обводка"
+                          IsExpanded="True">
+                    <StackPanel>
+                        <TextBlock Text="Размер, % высоты кадра"
+                                   Style="{StaticResource Form.Label}"
+                                   Margin="0,0,0,4" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Slider Grid.Column="0"
+                                    Style="{StaticResource Field.Slider}"
+                                    Minimum="1"
+                                    Maximum="100"
+                                    Value="{Binding SelectedLayer.FontSizePercent, Mode=TwoWay}"
+                                    AutomationProperties.Name="Размер шрифта в процентах" />
+                            <TextBlock Grid.Column="1"
+                                       Style="{StaticResource SliderValue}"
+                                       Text="{Binding SelectedLayer.FontSizePercent, StringFormat={}{0:0}}" />
+                        </Grid>
+
+                        <TextBlock Text="Обводка, % высоты кадра"
+                                   Style="{StaticResource Form.Label}" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Slider Grid.Column="0"
+                                    Style="{StaticResource Field.Slider}"
+                                    Minimum="0"
+                                    Maximum="15"
+                                    Value="{Binding SelectedLayer.StrokeWidthPercent, Mode=TwoWay}"
+                                    AutomationProperties.Name="Толщина обводки в процентах" />
+                            <TextBlock Grid.Column="1"
+                                       Style="{StaticResource SliderValue}"
+                                       Text="{Binding SelectedLayer.StrokeWidthPercent, StringFormat={}{0:0.##}}" />
+                        </Grid>
+                    </StackPanel>
+                </Expander>
+
+                <Expander Style="{StaticResource Expander.Section}"
+                          Header="Положение"
+                          IsExpanded="False">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal"
+                                    VerticalAlignment="Center">
+                            <TextBlock Text="X"
+                                       Style="{StaticResource TextBlock.Subtle}"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,6,0" />
+                            <TextBox Width="64"
+                                     Style="{StaticResource TextBox.Form}"
+                                     Text="{Binding SelectedLayer.TextXPercent, StringFormat={}{0:0}}"
+                                     AutomationProperties.Name="Позиция по горизонтали, %" />
+                            <TextBlock Text="Y"
+                                       Style="{StaticResource TextBlock.Subtle}"
+                                       VerticalAlignment="Center"
+                                       Margin="14,0,6,0" />
+                            <TextBox Width="64"
+                                     Style="{StaticResource TextBox.Form}"
+                                     Text="{Binding SelectedLayer.TextYPercent, StringFormat={}{0:0}}"
+                                     AutomationProperties.Name="Позиция по вертикали, %" />
+                            <TextBlock Text="%"
+                                       Style="{StaticResource TextBlock.Subtle}"
+                                       VerticalAlignment="Center"
+                                       Margin="6,0,0,0" />
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource TextBlock.Subtle}"
+                                   TextWrapping="Wrap"
+                                   Margin="0,6,0,0"
+                                   Text="Или перетащите номер мышью прямо по превью." />
+                    </StackPanel>
+                </Expander>
+
+                <Expander Style="{StaticResource Expander.Section}"
+                          Header="Цвета"
+                          IsExpanded="False">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="14" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="Цвет текста"
+                                       Style="{StaticResource Form.Label}"
+                                       Margin="0,0,0,4" />
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Button x:Name="FillSwatchButton"
+                                        Grid.Column="0"
+                                        Style="{StaticResource Button.Ghost}"
+                                        Command="{Binding PickFillColorCommand}"
+                                        Padding="2"
+                                        Margin="0,0,6,0"
+                                        ToolTip="Выбрать цвет текста"
+                                        AutomationProperties.Name="Выбрать цвет текста">
+                                    <Border Width="28"
+                                            Height="22"
+                                            CornerRadius="{DynamicResource Radius.S}"
+                                            BorderBrush="{DynamicResource Border.Default}"
+                                            BorderThickness="1"
+                                            Background="{Binding SelectedLayer.FillBrush}" />
+                                </Button>
+                                <Popup PlacementTarget="{Binding ElementName=FillSwatchButton}"
+                                       Placement="Bottom"
+                                       StaysOpen="False"
+                                       AllowsTransparency="True"
+                                       PopupAnimation="Fade"
+                                       IsOpen="{Binding IsFillColorPickerOpen, Mode=TwoWay}">
+                                    <ContentControl Content="{Binding FillColorPicker}"
+                                                    Margin="0,4,0,0" />
+                                </Popup>
+                                <TextBox Grid.Column="1"
+                                         Style="{StaticResource TextBox.Form}"
+                                         Text="{Binding SelectedLayer.FillColorHex, UpdateSourceTrigger=PropertyChanged}"
+                                         ToolTip="ARGB hex, например FFFFFFFF (непрозрачный белый). Свотч слева открывает пикер."
+                                         AutomationProperties.Name="Цвет текста, ARGB hex" />
+                            </Grid>
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="Цвет обводки"
+                                       Style="{StaticResource Form.Label}"
+                                       Margin="0,0,0,4" />
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Button x:Name="StrokeSwatchButton"
+                                        Grid.Column="0"
+                                        Style="{StaticResource Button.Ghost}"
+                                        Command="{Binding PickStrokeColorCommand}"
+                                        Padding="2"
+                                        Margin="0,0,6,0"
+                                        ToolTip="Выбрать цвет обводки"
+                                        AutomationProperties.Name="Выбрать цвет обводки">
+                                    <Border Width="28"
+                                            Height="22"
+                                            CornerRadius="{DynamicResource Radius.S}"
+                                            BorderBrush="{DynamicResource Border.Default}"
+                                            BorderThickness="1"
+                                            Background="{Binding SelectedLayer.StrokeBrush}" />
+                                </Button>
+                                <Popup PlacementTarget="{Binding ElementName=StrokeSwatchButton}"
+                                       Placement="Bottom"
+                                       StaysOpen="False"
+                                       AllowsTransparency="True"
+                                       PopupAnimation="Fade"
+                                       IsOpen="{Binding IsStrokeColorPickerOpen, Mode=TwoWay}">
+                                    <ContentControl Content="{Binding StrokeColorPicker}"
+                                                    Margin="0,4,0,0" />
+                                </Popup>
+                                <TextBox Grid.Column="1"
+                                         Style="{StaticResource TextBox.Form}"
+                                         Text="{Binding SelectedLayer.StrokeColorHex, UpdateSourceTrigger=PropertyChanged}"
+                                         ToolTip="ARGB hex, например FF000000 (непрозрачный чёрный). Свотч слева открывает пикер."
+                                         AutomationProperties.Name="Цвет обводки, ARGB hex" />
+                            </Grid>
+                        </StackPanel>
+                    </Grid>
+                </Expander>
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

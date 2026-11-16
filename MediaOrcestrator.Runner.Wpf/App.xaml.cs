@@ -1,22 +1,13 @@
 ﻿using KeepShell.Automation;
 using KeepShell.Diagnostics;
 using KeepShell.Mcp;
-using LiteDB;
 using MediaOrcestrator.Domain;
-using MediaOrcestrator.Domain.Comments;
-using MediaOrcestrator.Domain.Merging;
-using MediaOrcestrator.Modules;
 using MediaOrcestrator.Runner.Wpf.Bootstrap;
 using MediaOrcestrator.Runner.Wpf.Bootstrap.Gallery;
 using MediaOrcestrator.Runner.Wpf.Mcp;
-using MediaOrcestrator.Runner.Wpf.MediaContextMenu;
-using MediaOrcestrator.Runner.Wpf.MediaContextMenu.Actions;
 using MediaOrcestrator.Runner.Wpf.Services;
-using MediaOrcestrator.Runner.Wpf.Services.Diagnostics;
 using MediaOrcestrator.Runner.Wpf.ViewModels;
-using MediaOrcestrator.Runner.Wpf.ViewModels.Comments;
 using MediaOrcestrator.Runner.Wpf.Views;
-using MediaOrcestrator.Runner.Wpf.Views.Comments;
 using ErrorReportWindow = KeepShell.Views.ErrorReportWindow;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -98,7 +89,7 @@ public partial class App : Application
 
             _host = Host.CreateDefaultBuilder()
                 .UseSerilog((_, _, configuration) => ConfigureSerilog(configuration, loggingOptions))
-                .ConfigureServices(services => ConfigureServices(services, paths, settingsPath, _logSink, loggingOptions))
+                .ConfigureServices(services => ServiceRegistration.AddMediaOrcestrator(services, paths, settingsPath, _logSink, loggingOptions))
                 .Build();
 
             Log.Information("MediaOrcestrator.Runner.Wpf запускается...");
@@ -180,7 +171,7 @@ public partial class App : Application
                 _host.Services.GetRequiredService<ShellViewModel>().HandleStartupCommand(_startupCommand);
             }
 
-            PreloadViewModelsInBackground();
+            StartupPreloader.StartInBackground(_host.Services, Dispatcher);
 
             if (updaterCheck.HasErrors)
             {
@@ -322,208 +313,6 @@ public partial class App : Application
         }
     }
 
-    private void PreloadViewModelsInBackground()
-    {
-        if (_host is null)
-        {
-            return;
-        }
-
-        var actionHolder = _host.Services.GetRequiredService<ActionHolder>();
-        var sources = _host.Services.GetRequiredService<SourcesRelationsViewModel>();
-        var media = _host.Services.GetRequiredService<MediaViewModel>();
-        var audit = _host.Services.GetRequiredService<AuditViewModel>();
-        var comments = _host.Services.GetRequiredService<CommentsViewModel>();
-        var transfers = _host.Services.GetRequiredService<TransfersViewModel>();
-        var tools = _host.Services.GetRequiredService<ToolsViewModel>();
-        var updateManager = _host.Services.GetRequiredService<AppUpdateManager>();
-        var appUpdate = _host.Services.GetRequiredService<AppUpdateViewModel>();
-        var preloadSignal = _host.Services.GetRequiredService<PreloadCompletionSignal>();
-        var performanceMonitor = _host.Services.GetRequiredService<PerformanceMonitor>();
-
-        string? appUpdateNote = null;
-
-        var dbSteps = new PreloadStep[]
-        {
-            new("Источники и связи", _ => sources.EnsureLoadedAsync()),
-            new("Медиа", _ => media.EnsureLoadedAsync()),
-            new("Аудит источников", _ => audit.EnsureLoadedAsync()),
-            new("Комментарии", _ => comments.EnsureLoadedAsync()),
-            new("План передач", _ => transfers.EnsureLoadedAsync()),
-        };
-
-        var ioSteps = new PreloadStep[]
-        {
-            new("Проверка инструментов", _ => SafeCheckToolsAsync(tools)),
-            new("Проверка обновлений приложения", async ct =>
-            {
-                var note = await SafeCheckAppUpdateAsync(updateManager, appUpdate, ct);
-
-                if (!string.IsNullOrWhiteSpace(note))
-                {
-                    appUpdateNote = note;
-                }
-            }),
-            new("Прогрев редактора ответов", _ => SafePreheatReplyEditorAsync()),
-        };
-
-        var totalSteps = dbSteps.Length + ioSteps.Length;
-
-        _ = Task.Run(async () =>
-        {
-            var cts = new CancellationTokenSource();
-            var action = actionHolder.Register(
-                "Предзагрузка данных",
-                "Подготовка…",
-                progressMax: totalSteps,
-                ctx: cts,
-                kind: ActionKind.Other);
-
-            var failed = 0;
-
-            try
-            {
-                performanceMonitor.SetPhase("Предзагрузка");
-                using var scope = actionHolder.BeginScope(action);
-
-                var ioTasks = ioSteps
-                    .Select(step => Task.Run(async () =>
-                    {
-                        if (!await RunStepAsync(actionHolder, action, step, cts.Token))
-                        {
-                            Interlocked.Increment(ref failed);
-                        }
-                    }, cts.Token))
-                    .ToArray();
-
-                foreach (var step in dbSteps)
-                {
-                    if (!await RunStepAsync(actionHolder, action, step, cts.Token))
-                    {
-                        failed++;
-                    }
-                }
-
-                await Task.WhenAll(ioTasks);
-
-                var finalStatus = appUpdateNote
-                    ?? (failed > 0 ? $"Готово, шагов с ошибками: {failed}" : "Готово");
-
-                action.Finish(finalStatus);
-                Log.Information("Фоновая предзагрузка данных завершена (ошибок шагов: {Failed})", failed);
-            }
-            catch (OperationCanceledException)
-            {
-                action.MarkCancelled("Отменено");
-            }
-            catch (Exception ex)
-            {
-                Log.Warning(ex, "Фоновая предзагрузка данных прервана");
-                action.Fail("Ошибка: " + ex.Message, ex);
-            }
-            finally
-            {
-                performanceMonitor.SetPhase(null);
-                preloadSignal.Complete();
-                cts.Dispose();
-            }
-        });
-    }
-
-    private static async Task<bool> RunStepAsync(
-        ActionHolder actionHolder,
-        ActionHolder.RunningAction parent,
-        PreloadStep step,
-        CancellationToken token)
-    {
-        var stepCts = CancellationTokenSource.CreateLinkedTokenSource(token);
-        var child = actionHolder.Register(
-            step.Status,
-            "Выполняется…",
-            progressMax: 1,
-            ctx: stepCts,
-            kind: ActionKind.Other,
-            parent: parent);
-
-        try
-        {
-            using var scope = actionHolder.BeginScope(child);
-            await step.Action(stepCts.Token);
-            child.SetProgress(1);
-            child.Finish("Готово");
-            return true;
-        }
-        catch (OperationCanceledException)
-        {
-            child.MarkCancelled("Отменено");
-            throw;
-        }
-        catch (Exception ex)
-        {
-            Log.Warning(ex, "Шаг предзагрузки «{Step}» не удался", step.Status);
-            child.Fail("Ошибка: " + ex.Message, ex);
-            return false;
-        }
-        finally
-        {
-            actionHolder.ProgressPlus(parent.Id);
-        }
-    }
-
-    private sealed record PreloadStep(string Status, Func<CancellationToken, Task> Action);
-
-    private static async Task SafePreheatReplyEditorAsync()
-    {
-        try
-        {
-            await Current.Dispatcher.InvokeAsync(
-                () => new ReplyEditorView(),
-                System.Windows.Threading.DispatcherPriority.Background);
-        }
-        catch (Exception ex)
-        {
-            Log.Warning(ex, "Прогрев ReplyEditorView не удался");
-        }
-    }
-
-    private static async Task SafeCheckToolsAsync(ToolsViewModel tools)
-    {
-        try
-        {
-            await tools.EnsureCheckedAsync();
-        }
-        catch (Exception ex)
-        {
-            Log.Warning(ex, "Фоновая проверка инструментов не удалась");
-        }
-    }
-
-    private static async Task<string?> SafeCheckAppUpdateAsync(AppUpdateManager updateManager, AppUpdateViewModel viewModel, CancellationToken token)
-    {
-        try
-        {
-            var update = await updateManager.CheckForUpdateAsync(token);
-            viewModel.SetPendingUpdate(update);
-
-            if (update is null)
-            {
-                return null;
-            }
-
-            Log.Information("Доступно обновление приложения: {Version}", update.Version);
-            return $"Доступно обновление приложения: {update.Version}";
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            Log.Warning(ex, "Фоновая проверка обновлений приложения не удалась");
-            return null;
-        }
-    }
-
     private static KeepShellLoggingOptions BuildLoggingOptions(string logsDirectory)
     {
         return new()
@@ -569,16 +358,17 @@ public partial class App : Application
         AppThemes.Register();
 
         var exitCode = 1;
+        GalleryFixture? fixture = null;
 
         try
         {
             var options = GalleryOptions.Parse(args, Path.Combine(AppContext.BaseDirectory, GalleryRunner.FolderName));
-            var fixture = GalleryFixture.Create(options);
+            fixture = GalleryFixture.Create(options);
             var loggingOptions = BuildLoggingOptions(Path.Combine(fixture.Root, "logs"));
 
             _host = Host.CreateDefaultBuilder()
                 .UseSerilog((_, _, configuration) => ConfigureSerilog(configuration, loggingOptions))
-                .ConfigureServices(services => ConfigureServices(services, fixture.Paths, fixture.SettingsPath, _logSink, loggingOptions))
+                .ConfigureServices(services => ServiceRegistration.AddMediaOrcestrator(services, fixture.Paths, fixture.SettingsPath, _logSink, loggingOptions))
                 .Build();
 
             ThemeManager.Apply(AppThemes.LightKey);
@@ -588,13 +378,32 @@ public partial class App : Application
             await Task.Run(_host.Services.GetRequiredService<Orcestrator>().Init);
 
             var logger = _host.Services.GetRequiredService<ILogger<App>>();
-            var host = GalleryHost.Create(_host.Services, options);
+            var host = GalleryHost.Create(_host.Services, fixture, options, logger);
 
             exitCode = await GalleryRunner.RunAsync(host, options.Arguments, new GalleryJournal(logger));
         }
         catch (Exception ex)
         {
             Log.Fatal(ex, "Галерея не отрисована");
+        }
+        finally
+        {
+            if (_host is not null)
+            {
+                try
+                {
+                    await _host.StopAsync();
+                    _host.Dispose();
+                }
+                catch
+                {
+                }
+
+                _host = null;
+            }
+
+            await Log.CloseAndFlushAsync();
+            fixture?.Dispose();
         }
 
         Shutdown(exitCode);
@@ -612,194 +421,5 @@ public partial class App : Application
         }
 
         return assembly.GetName().Version?.ToString() ?? "–";
-    }
-
-    private static void ConfigureServices(
-        IServiceCollection services,
-        Paths paths,
-        string settingsPath,
-        WpfLogSink logSink,
-        KeepShellLoggingOptions loggingOptions)
-    {
-        services.AddSingleton(paths);
-        services.AddSingleton(logSink);
-        services.AddSingleton(loggingOptions);
-
-        services.AddSingleton<LiteDatabase>(_ => new(paths.DatabasePath));
-        services.AddSingleton<DatabaseBackupService>(sp =>
-            new(sp.GetRequiredService<LiteDatabase>(),
-                paths.DatabasePath,
-                sp.GetRequiredService<ILogger<DatabaseBackupService>>()));
-
-        services.AddSingleton<PluginManager>();
-
-        services.AddHttpClient("GitHub", client =>
-        {
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("MediaOrcestrator/1.0");
-            client.Timeout = TimeSpan.FromSeconds(30);
-        });
-
-        services.AddHttpClient("Preview", client =>
-        {
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("MediaOrcestrator/1.0");
-            client.Timeout = TimeSpan.FromSeconds(30);
-        });
-
-        services.AddSingleton<GitHubReleaseProvider>();
-        services.AddSingleton<IReleaseProvider>(sp => sp.GetRequiredService<GitHubReleaseProvider>());
-        services.AddSingleton<ToolVersionDetector>();
-        services.AddSingleton<ToolInstaller>();
-        services.AddSingleton<ToolManager>(sp =>
-            new(Path.Combine(AppContext.BaseDirectory, "tools"),
-                sp.GetRequiredService<IReleaseProvider>(),
-                sp.GetRequiredService<ToolVersionDetector>(),
-                sp.GetRequiredService<ToolInstaller>(),
-                sp.GetRequiredService<ILogger<ToolManager>>()));
-        services.AddSingleton<IToolPathProvider>(sp => sp.GetRequiredService<ToolManager>());
-        services.AddSingleton<VideoTranscoder>();
-
-        services.AddSingleton<TempManager>(sp =>
-            new(paths.TempPath,
-                sp.GetRequiredService<LiteDatabase>(),
-                sp.GetRequiredService<ILogger<TempManager>>()));
-
-        services.AddSingleton<StateManager>(sp =>
-            new(paths.StatePath,
-                sp.GetRequiredService<LiteDatabase>(),
-                sp.GetRequiredService<ILogger<StateManager>>()));
-
-        services.AddSingleton<ActionHolder>();
-        services.AddSingleton<Orcestrator>();
-        services.AddSingleton<PlaylistPublisher>();
-
-        services.AddSingleton<CommentsRepository>();
-        services.AddSingleton<CommentsService>();
-        services.AddSingleton<MediaMergeService>();
-        services.AddSingleton<SyncRetryRunner>();
-        services.AddSingleton<BatchRenameService>();
-        services.AddSingleton<CoverGenerator>();
-        services.AddSingleton<CoverTemplateStore>();
-        services.AddSingleton<ICoverTemplateEditorWindowService, CoverTemplateEditorWindowService>();
-        services.AddSingleton<BatchPreviewService>();
-        services.AddSingleton<SyncPlanner>();
-        services.AddSingleton<DatabaseMaintenanceService>(sp =>
-        {
-            var fullDbPath = Path.GetFullPath(paths.DatabasePath);
-            var backupsPath = Path.Combine(Path.GetDirectoryName(fullDbPath)!, "backups");
-            var logsPath = Path.Combine(AppContext.BaseDirectory, "logs");
-
-            return new(sp.GetRequiredService<LiteDatabase>(),
-                sp.GetRequiredService<DatabaseBackupService>(),
-                paths.DatabasePath,
-                paths.TempPath,
-                logsPath,
-                backupsPath,
-                sp.GetRequiredService<ILogger<DatabaseMaintenanceService>>());
-        });
-
-        services.AddSingleton(sp =>
-        {
-            var updates = sp.GetRequiredService<UpdatePreferences>();
-
-            return new ErrorReportOptions
-            {
-                IssueRepo = () => updates.Repo,
-                LogFileGlobs = ["wpf-*.log"],
-                SessionStartMarker = "MediaOrcestrator.Runner.Wpf",
-            };
-        });
-        services.AddSingleton<ErrorReportService>();
-        services.AddSingleton<AppUpdateManager>(sp =>
-        {
-            var updates = sp.GetRequiredService<UpdatePreferences>();
-
-            return new(sp.GetRequiredService<IReleaseProvider>(),
-                () => updates.Repo,
-                "MediaOrcestrator-Wpf",
-                sp.GetRequiredService<ILogger<AppUpdateManager>>());
-        });
-
-        PluginLoader.Configure(services, paths.PluginPath);
-
-        services.AddSingleton<ISettingsStore>(_ => new SettingsStore(settingsPath));
-
-        var fullDbPath = Path.GetFullPath(paths.DatabasePath);
-        var dataDirectory = Path.GetDirectoryName(fullDbPath)!;
-        var baseDirectory = Path.GetFullPath(AppContext.BaseDirectory);
-
-        services.AddKeepShell();
-        services.AddKeepShellToasts();
-        services.AddKeepShellDiagnostics(new DiagnosticsOptions
-        {
-            AppName = "MediaOrcestrator",
-            AppVersion = ResolveAppVersion(),
-            DataDirectory = dataDirectory,
-            PortableStorage = dataDirectory.StartsWith(baseDirectory, StringComparison.OrdinalIgnoreCase),
-        });
-        services.AddSingleton<IDiagnosticsSecretSource, MediaOrcestratorSecretSource>();
-        services.AddSingleton<IDiagnosticsBundleSource, MediaOrcestratorBundleSource>();
-        services.AddSingleton<IDiagnosticsCard, DatabaseDiagnosticsCard>();
-        services.AddSingleton<IDiagnosticsCard, SourcesPluginsDiagnosticsCard>();
-        services.AddSingleton<IDiagnosticsCard, ToolsDiagnosticsCard>();
-        services.AddSingleton<IDiagnosticsCard, StoragePathsDiagnosticsCard>();
-        services.AddSingleton<MediaOrcestratorAutomation>();
-        services.AddKeepShellMcp<ShellViewModel>(new McpServerOptions
-        {
-            ServerName = "mediaorcestrator",
-            AppName = "MediaOrcestrator",
-            AppVersion = ResolveAppVersion(),
-            DefaultPort = 7655,
-            ShotsDirectory = Path.Combine(AppContext.BaseDirectory, "shots"),
-            ToolTypes = [typeof(MediaOrcestratorTools)],
-            ConfigureTools = static (provider, tools) => tools.AddSingleton(provider.GetRequiredService<MediaOrcestratorAutomation>()),
-        });
-        services.AddSingleton<IAuthUI, WpfAuthUI>();
-        services.AddSingleton<INavigationService, NavigationService>();
-        services.AddSingleton<IAppLifetime, AppLifetime>();
-        services.AddSingleton<MediaActionContextFactory>();
-        services.AddSingleton<MediaContextMenuBuilder>();
-        services.AddSingleton<IMediaMenuAction, MetadataAction>();
-        services.AddSingleton<IMediaMenuAction, SyncAction>();
-        services.AddSingleton<IMediaMenuAction, SkipAction>();
-        services.AddSingleton<IMediaMenuAction, SkipPlanAction>();
-        services.AddSingleton<IMediaMenuAction, EditAction>();
-        services.AddSingleton<IMediaMenuAction, CopyDetailsAction>();
-        services.AddSingleton<IMediaMenuAction, OpenExternalAction>();
-        services.AddSingleton<IMediaMenuAction, DeleteAction>();
-        services.AddSingleton<IMediaMenuAction, ConvertAction>();
-
-        services.AddSingleton<ShellPreferences>();
-        services.AddSingleton<UpdatePreferences>();
-        services.AddSingleton<ThemeViewModel>();
-        services.AddSingleton<MediaViewModel>();
-        services.AddSingleton<AuditViewModel>();
-        services.AddSingleton<TransfersViewModel>();
-        services.AddSingleton<PublishViewModel>();
-        services.AddSingleton<SettingsViewModel>();
-        services.AddSingleton<TasksViewModel>();
-        services.AddSingleton<ToolsViewModel>();
-        services.AddSingleton<LogsViewModel>();
-        services.AddSingleton<CleanupAndBackupsViewModel>();
-        services.AddSingleton<MaintenanceHubViewModel>();
-        services.AddSingleton<SourcesRelationsViewModel>();
-        services.AddSingleton<CommentsViewModel>();
-        services.AddSingleton<BatchRenameSubViewModel>();
-        services.AddSingleton<BatchPreviewSubViewModel>();
-        services.AddSingleton<MergeDuplicatesSubViewModel>();
-        services.AddSingleton<ResolveConflictsSubViewModel>();
-        services.AddSingleton<OperationsViewModel>();
-        services.AddSingleton<MaintenanceViewModel>();
-        services.AddSingleton<DatabaseCleanupViewModel>();
-        services.AddSingleton<ChronologyViewModel>();
-        services.AddSingleton<AboutViewModel>();
-        services.AddSingleton<AppUpdateViewModel>();
-        services.AddTransient<SourceSettingsViewModel>();
-        services.AddSingleton<ShellViewModel>();
-        services.AddSingleton<MainWindow>();
-
-        services.AddSingleton<PreloadCompletionSignal>();
-        services.AddHostedService<AutoSyncHostedService>();
-        services.AddHostedService<ToastNotificationService>();
-        services.AddHostedService<ChildProcessSampler>();
     }
 }

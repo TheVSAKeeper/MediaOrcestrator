@@ -1,11 +1,11 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using KeepShell.Services.Platform;
 using MediaOrcestrator.Domain;
 using MediaOrcestrator.Modules;
 using MediaOrcestrator.Runner.Wpf.Bootstrap;
 using System.ComponentModel;
 using System.Windows.Data;
-using System.Windows.Threading;
 
 namespace MediaOrcestrator.Runner.Wpf.ViewModels;
 
@@ -20,7 +20,7 @@ public sealed partial class MediaFilterViewModel : ObservableObject
     private static readonly TimeSpan SearchDebounce = TimeSpan.FromMilliseconds(300);
 
     private readonly ISettingsStore _settings;
-    private readonly DispatcherTimer _searchDebounceTimer;
+    private readonly IUiTimer _searchDebounceTimer;
 
     private readonly List<Source> _allSources = [];
     private readonly List<Media> _allMedias = [];
@@ -30,7 +30,7 @@ public sealed partial class MediaFilterViewModel : ObservableObject
     private HashSet<string> _activeRelationSourceIds = new(StringComparer.OrdinalIgnoreCase);
     private bool _suppressFilterPersist;
 
-    public MediaFilterViewModel(ISettingsStore settings)
+    public MediaFilterViewModel(ISettingsStore settings, IUiDispatcher dispatcher)
     {
         _settings = settings;
 
@@ -45,12 +45,7 @@ public sealed partial class MediaFilterViewModel : ObservableObject
         MetadataColumnFiltersView.SortDescriptions.Add(new SortDescription(nameof(FilterOptionViewModel.Title), ListSortDirection.Ascending));
         MetadataColumnFiltersView.Filter = MetadataColumnVisible;
 
-        _searchDebounceTimer = new(DispatcherPriority.Background)
-        {
-            Interval = SearchDebounce,
-        };
-
-        _searchDebounceTimer.Tick += OnSearchDebounceTick;
+        _searchDebounceTimer = dispatcher.CreateTimer(SearchDebounce, OnSearchDebounceTick);
     }
 
     [ObservableProperty]
@@ -79,6 +74,13 @@ public sealed partial class MediaFilterViewModel : ObservableObject
 
     public event EventHandler? ColumnsAffected;
 
+    internal void SetSearchImmediateForAutomation(string searchText)
+    {
+        SearchText = searchText;
+        _searchDebounceTimer.Stop();
+        FiltersChanged?.Invoke(this, EventArgs.Empty);
+    }
+
     [RelayCommand]
     private void ClearSearch()
     {
@@ -91,7 +93,7 @@ public sealed partial class MediaFilterViewModel : ObservableObject
         _searchDebounceTimer.Start();
     }
 
-    private void OnSearchDebounceTick(object? sender, EventArgs e)
+    private void OnSearchDebounceTick()
     {
         _searchDebounceTimer.Stop();
         FiltersChanged?.Invoke(this, EventArgs.Empty);

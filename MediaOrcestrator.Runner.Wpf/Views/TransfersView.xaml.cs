@@ -39,8 +39,7 @@ public partial class TransfersView : UserControl, IView<TransfersViewModel>
 
     private void OnSearchFocusRequested(object? sender, EventArgs e)
     {
-        SearchBox.Focus();
-        SearchBox.SelectAll();
+        ToolbarPanel.FocusSearch();
     }
 
     private void OnSizeChanged(object sender, SizeChangedEventArgs e)

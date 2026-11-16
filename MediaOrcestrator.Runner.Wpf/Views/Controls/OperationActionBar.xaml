@@ -19,7 +19,7 @@
                      Height="6"
                      Minimum="0"
                      Maximum="{Binding ProgressMax, ElementName=Root}"
-                     Value="{Binding ProgressValue, ElementName=Root}"
+                     Value="{Binding ProgressValue, ElementName=Root, Mode=OneWay}"
                      Margin="{DynamicResource Margin.RowGap}"
                      Visibility="{Binding IsBusy, ElementName=Root, Converter={StaticResource BoolToVisibility}}" />
 

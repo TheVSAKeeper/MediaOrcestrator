@@ -13,10 +13,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
@@ -30,8 +27,11 @@
                    TextWrapping="Wrap"
                    Text="Какие медиа выбранных источников будут опрошены на свежие комментарии." />
 
-        <Grid Grid.Row="2"
-              Margin="0,0,0,12">
+        <ScrollViewer Grid.Row="2"
+                      VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled">
+            <StackPanel>
+                <Grid Margin="0,0,0,12">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="240" />
                 <ColumnDefinition Width="*" />
@@ -70,92 +70,92 @@
             </Grid>
         </Grid>
 
-        <Grid Grid.Row="3"
-              Margin="0,0,0,12">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="240" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
-            <StackPanel>
-                <TextBlock Text="Только последние N медиа"
-                           FontWeight="SemiBold" />
-                <TextBlock Style="{StaticResource TextBlock.Subtle}"
-                           Margin="0,2,0,0"
-                           Text="0 – все медиа источника." />
-            </StackPanel>
-            <Grid Grid.Column="1"
-                  VerticalAlignment="Center"
-                  HorizontalAlignment="Left">
-                <TextBox Style="{StaticResource TextBox.Numeric}"
-                         Width="140"
-                         Text="{Binding OnlyRecent, UpdateSourceTrigger=PropertyChanged}" />
-                <StackPanel HorizontalAlignment="Right"
-                            VerticalAlignment="Center"
-                            Margin="0,0,1,0">
-                    <RepeatButton Style="{StaticResource RepeatButton.Stepper}"
-                                  AutomationProperties.Name="Увеличить количество медиа"
-                                  Command="{Binding IncreaseOnlyRecentCommand}">
-                        <iconPacks:PackIconLucide Kind="ChevronUp"
-                                                  Width="8"
-                                                  Height="8" />
-                    </RepeatButton>
-                    <RepeatButton Style="{StaticResource RepeatButton.Stepper}"
-                                  AutomationProperties.Name="Уменьшить количество медиа"
-                                  Command="{Binding DecreaseOnlyRecentCommand}">
-                        <iconPacks:PackIconLucide Kind="ChevronDown"
-                                                  Width="8"
-                                                  Height="8" />
-                    </RepeatButton>
-                </StackPanel>
-            </Grid>
-        </Grid>
+                <Grid Margin="0,0,0,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="240" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="Только последние N медиа"
+                                   FontWeight="SemiBold" />
+                        <TextBlock Style="{StaticResource TextBlock.Subtle}"
+                                   Margin="0,2,0,0"
+                                   Text="0 – все медиа источника." />
+                    </StackPanel>
+                    <Grid Grid.Column="1"
+                          VerticalAlignment="Center"
+                          HorizontalAlignment="Left">
+                        <TextBox Style="{StaticResource TextBox.Numeric}"
+                                 Width="140"
+                                 Text="{Binding OnlyRecent, UpdateSourceTrigger=PropertyChanged}" />
+                        <StackPanel HorizontalAlignment="Right"
+                                    VerticalAlignment="Center"
+                                    Margin="0,0,1,0">
+                            <RepeatButton Style="{StaticResource RepeatButton.Stepper}"
+                                          AutomationProperties.Name="Увеличить количество медиа"
+                                          Command="{Binding IncreaseOnlyRecentCommand}">
+                                <iconPacks:PackIconLucide Kind="ChevronUp"
+                                                          Width="8"
+                                                          Height="8" />
+                            </RepeatButton>
+                            <RepeatButton Style="{StaticResource RepeatButton.Stepper}"
+                                          AutomationProperties.Name="Уменьшить количество медиа"
+                                          Command="{Binding DecreaseOnlyRecentCommand}">
+                                <iconPacks:PackIconLucide Kind="ChevronDown"
+                                                          Width="8"
+                                                          Height="8" />
+                            </RepeatButton>
+                        </StackPanel>
+                    </Grid>
+                </Grid>
 
-        <Grid Grid.Row="4"
-              Margin="0,0,0,12">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="240" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
-            <StackPanel>
-                <TextBlock Text="Параллельных загрузок"
-                           FontWeight="SemiBold" />
-                <TextBlock Style="{StaticResource TextBlock.Subtle}"
-                           Margin="0,2,0,0">
-                    <Run Text="Внутри источника, от " />
-                    <Run Text="{Binding ParallelismMin, Mode=OneWay}" />
-                    <Run Text=" до " />
-                    <Run Text="{Binding ParallelismMax, Mode=OneWay}" />
-                    <Run Text="." />
-                </TextBlock>
+                <Grid Margin="0,0,0,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="240" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="Параллельных загрузок"
+                                   FontWeight="SemiBold" />
+                        <TextBlock Style="{StaticResource TextBlock.Subtle}"
+                                   Margin="0,2,0,0">
+                            <Run Text="Внутри источника, от " />
+                            <Run Text="{Binding ParallelismMin, Mode=OneWay}" />
+                            <Run Text=" до " />
+                            <Run Text="{Binding ParallelismMax, Mode=OneWay}" />
+                            <Run Text="." />
+                        </TextBlock>
+                    </StackPanel>
+                    <Grid Grid.Column="1"
+                          VerticalAlignment="Center"
+                          HorizontalAlignment="Left">
+                        <TextBox Style="{StaticResource TextBox.Numeric}"
+                                 Width="140"
+                                 Text="{Binding MaxParallelism, UpdateSourceTrigger=PropertyChanged}" />
+                        <StackPanel HorizontalAlignment="Right"
+                                    VerticalAlignment="Center"
+                                    Margin="0,0,1,0">
+                            <RepeatButton Style="{StaticResource RepeatButton.Stepper}"
+                                          AutomationProperties.Name="Увеличить параллельность"
+                                          Command="{Binding IncreaseMaxParallelismCommand}">
+                                <iconPacks:PackIconLucide Kind="ChevronUp"
+                                                          Width="8"
+                                                          Height="8" />
+                            </RepeatButton>
+                            <RepeatButton Style="{StaticResource RepeatButton.Stepper}"
+                                          AutomationProperties.Name="Уменьшить параллельность"
+                                          Command="{Binding DecreaseMaxParallelismCommand}">
+                                <iconPacks:PackIconLucide Kind="ChevronDown"
+                                                          Width="8"
+                                                          Height="8" />
+                            </RepeatButton>
+                        </StackPanel>
+                    </Grid>
+                </Grid>
             </StackPanel>
-            <Grid Grid.Column="1"
-                  VerticalAlignment="Center"
-                  HorizontalAlignment="Left">
-                <TextBox Style="{StaticResource TextBox.Numeric}"
-                         Width="140"
-                         Text="{Binding MaxParallelism, UpdateSourceTrigger=PropertyChanged}" />
-                <StackPanel HorizontalAlignment="Right"
-                            VerticalAlignment="Center"
-                            Margin="0,0,1,0">
-                    <RepeatButton Style="{StaticResource RepeatButton.Stepper}"
-                                  AutomationProperties.Name="Увеличить параллельность"
-                                  Command="{Binding IncreaseMaxParallelismCommand}">
-                        <iconPacks:PackIconLucide Kind="ChevronUp"
-                                                  Width="8"
-                                                  Height="8" />
-                    </RepeatButton>
-                    <RepeatButton Style="{StaticResource RepeatButton.Stepper}"
-                                  AutomationProperties.Name="Уменьшить параллельность"
-                                  Command="{Binding DecreaseMaxParallelismCommand}">
-                        <iconPacks:PackIconLucide Kind="ChevronDown"
-                                                  Width="8"
-                                                  Height="8" />
-                    </RepeatButton>
-                </StackPanel>
-            </Grid>
-        </Grid>
+        </ScrollViewer>
 
-        <StackPanel Grid.Row="6"
+        <StackPanel Grid.Row="3"
                     Orientation="Horizontal"
                     HorizontalAlignment="Right"
                     Margin="0,16,0,0">

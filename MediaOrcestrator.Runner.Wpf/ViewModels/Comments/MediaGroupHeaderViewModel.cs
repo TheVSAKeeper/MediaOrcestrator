@@ -1,6 +1,6 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using System.Windows;
+using KeepShell.Services.Platform;
 using System.Windows.Media;
 
 namespace MediaOrcestrator.Runner.Wpf.ViewModels.Comments;
@@ -8,6 +8,7 @@ namespace MediaOrcestrator.Runner.Wpf.ViewModels.Comments;
 public sealed partial class MediaGroupHeaderViewModel : ObservableObject, ICommentsRowViewModel
 {
     private readonly Func<MediaGroupHeaderViewModel, Task> _refreshAllHandler;
+    private readonly IUiDispatcher _dispatcher;
     private ImageSource? _thumbnailSource;
     private bool _thumbnailLoadStarted;
 
@@ -22,9 +23,11 @@ public sealed partial class MediaGroupHeaderViewModel : ObservableObject, IComme
         Func<MediaGroupHeaderViewModel, Task> refreshAllHandler,
         Func<MediaGroupSourceActionViewModel, Task> refreshOneHandler,
         Func<MediaGroupSourceActionViewModel, Task> openOneHandler,
+        IUiDispatcher dispatcher,
         string? thumbnailUrl = null)
     {
         _refreshAllHandler = refreshAllHandler;
+        _dispatcher = dispatcher;
         GroupKey = groupKey;
         MediaTitle = mediaTitle;
         CommentsCount = commentsCount;
@@ -119,7 +122,7 @@ public sealed partial class MediaGroupHeaderViewModel : ObservableObject, IComme
             return;
         }
 
-        await Application.Current.Dispatcher.InvokeAsync(() =>
+        await _dispatcher.InvokeAsync(() =>
         {
             _thumbnailSource = image;
             OnPropertyChanged(nameof(ThumbnailSource));

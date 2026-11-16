@@ -9,9 +9,9 @@ internal static class UpdaterLogChecker
     private const string ErrorMarker = "ОШИБКА";
     private const string RollbackMarker = "Откат завершён.";
 
-    public static UpdaterLogCheck Check()
+    public static UpdaterLogCheck Check(string? baseDirectory = null)
     {
-        var logPath = Path.Combine(AppContext.BaseDirectory, "updater.log");
+        var logPath = Path.Combine(baseDirectory ?? AppContext.BaseDirectory, "updater.log");
 
         if (!File.Exists(logPath))
         {

@@ -4,6 +4,7 @@ using KeepShell.Services.Platform;
 using MediaOrcestrator.Domain;
 using MediaOrcestrator.Runner.Wpf.Bootstrap;
 using MediaOrcestrator.Runner.Wpf.MediaContextMenu;
+using MediaOrcestrator.Runner.Wpf.Services;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 using System.Windows.Input;
@@ -37,6 +38,8 @@ public sealed partial class MediaViewModel : ObservableObject, IMediaActionUi, I
     private readonly ActionHolder _actionHolder;
     private readonly ISettingsStore _settings;
     private readonly ILogger<MediaViewModel> _logger;
+    private readonly IUiDispatcher _dispatcher;
+    private readonly IPageRenderProbe _renderProbe;
     private readonly List<Source> _allSources = [];
     private readonly List<Media> _allMedias = [];
     private readonly List<SourceSyncRelation> _allRelations = [];
@@ -54,16 +57,20 @@ public sealed partial class MediaViewModel : ObservableObject, IMediaActionUi, I
         ILoggerFactory loggerFactory,
         ILogger<MediaViewModel> logger,
         IShellLauncher shellLauncher,
-        IClipboardService clipboard)
+        IClipboardService clipboard,
+        IUiDispatcher dispatcher,
+        IPageRenderProbe renderProbe)
     {
         _orcestrator = orcestrator;
         _actionHolder = actionHolder;
         _settings = settings;
         _logger = logger;
+        _dispatcher = dispatcher;
+        _renderProbe = renderProbe;
 
         Inspector = new(loggerFactory.CreateLogger<MediaInspectorViewModel>(), settings, shellLauncher, clipboard);
-        Filter = new(settings);
-        Grid = new(Filter, Inspector, actionContextFactory, this, contextMenuBuilder, settings, () => _allSources)
+        Filter = new(settings, dispatcher);
+        Grid = new(Filter, Inspector, actionContextFactory, this, contextMenuBuilder, settings, () => _allSources, dispatcher)
         {
             PublishMetric = PublishRenderMetric,
         };
@@ -198,9 +205,18 @@ public sealed partial class MediaViewModel : ObservableObject, IMediaActionUi, I
         IsInspectorCollapsed = !IsInspectorCollapsed;
     }
 
+    internal void SetBusyForAutomation(bool isBusy, double progressValue = 0, double progressMax = 100, string? statusCaption = null)
+    {
+        IsBusy = isBusy;
+        IsIndeterminate = false;
+        ProgressMax = progressMax;
+        ProgressValue = progressValue;
+        StatusCaption = statusCaption;
+    }
+
     void IMediaActionUi.SetLoading(bool isLoading)
     {
-        Dispatch(() => Grid.IsLoading = isLoading);
+        _dispatcher.Invoke(() => Grid.IsLoading = isLoading);
     }
 
     void IMediaActionUi.NotifyDataChanged()
@@ -220,7 +236,7 @@ public sealed partial class MediaViewModel : ObservableObject, IMediaActionUi, I
 
     void IMediaActionUi.ShowConvertProgress(double percent, string text)
     {
-        Dispatch(() =>
+        _dispatcher.Invoke(() =>
         {
             IsBusy = true;
             IsIndeterminate = false;
@@ -232,7 +248,7 @@ public sealed partial class MediaViewModel : ObservableObject, IMediaActionUi, I
 
     void IMediaActionUi.HideConvertProgress()
     {
-        Dispatch(() =>
+        _dispatcher.Invoke(() =>
         {
             IsBusy = false;
             ProgressValue = 0;
@@ -244,7 +260,7 @@ public sealed partial class MediaViewModel : ObservableObject, IMediaActionUi, I
 
     void IMediaActionUi.RegisterConvertCancellation(CancellationTokenSource? cts)
     {
-        Dispatch(() =>
+        _dispatcher.Invoke(() =>
         {
             _convertCts = cts;
             CancelConvertCommand.NotifyCanExecuteChanged();
@@ -290,14 +306,7 @@ public sealed partial class MediaViewModel : ObservableObject, IMediaActionUi, I
         var relations = _orcestrator.GetRelations();
         swDb.Stop();
 
-        var dispatcher = System.Windows.Application.Current?.Dispatcher;
-
-        if (dispatcher is null)
-        {
-            return new(swDb.ElapsedMilliseconds, 0, new(0, 0, 0));
-        }
-
-        var apply = await dispatcher.InvokeAsync(() => ApplyDomainData(sources, medias, relations));
+        var apply = await _dispatcher.InvokeAsync(() => ApplyDomainData(sources, medias, relations));
         var (filtersMs, build) = apply;
         return new(swDb.ElapsedMilliseconds, filtersMs, build);
     }
@@ -322,23 +331,7 @@ public sealed partial class MediaViewModel : ObservableObject, IMediaActionUi, I
 
     private void PublishRenderMetric(IReadOnlyList<PageRenderStage> vmStages, long vmMs)
     {
-        if (System.Windows.Application.Current?.Dispatcher is null)
-        {
-            ApplyMetric(vmStages, vmMs, renderMs: 0);
-            return;
-        }
-
-        var renderSw = Stopwatch.StartNew();
-        EventHandler? handler = null;
-
-        handler = (_, _) =>
-        {
-            CompositionTarget.Rendering -= handler;
-            renderSw.Stop();
-            ApplyMetric(vmStages, vmMs, renderSw.ElapsedMilliseconds);
-        };
-
-        CompositionTarget.Rendering += handler;
+        _renderProbe.MeasureNextFrame(renderMs => ApplyMetric(vmStages, vmMs, renderMs));
     }
 
     private void ApplyMetric(IReadOnlyList<PageRenderStage> vmStages, long vmMs, long renderMs)
@@ -383,20 +376,6 @@ public sealed partial class MediaViewModel : ObservableObject, IMediaActionUi, I
         finally
         {
             _suppressPrefPersist = false;
-        }
-    }
-
-    private static void Dispatch(Action action)
-    {
-        var dispatcher = System.Windows.Application.Current?.Dispatcher;
-
-        if (dispatcher is null || dispatcher.CheckAccess())
-        {
-            action();
-        }
-        else
-        {
-            dispatcher.BeginInvoke(action);
         }
     }
 }

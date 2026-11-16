@@ -5,7 +5,6 @@ using MediaOrcestrator.Domain;
 using MediaOrcestrator.Runner.Wpf.Bootstrap;
 using MediaOrcestrator.Runner.Wpf.Services;
 using Microsoft.Extensions.Logging;
-using System.Windows;
 
 namespace MediaOrcestrator.Runner.Wpf.ViewModels;
 
@@ -18,6 +17,7 @@ public sealed partial class AppUpdateViewModel : ObservableObject
     private readonly ISettingsStore _settings;
     private readonly ILogger<AppUpdateViewModel> _logger;
     private readonly IShellLauncher _shellLauncher;
+    private readonly IUiDispatcher _dispatcher;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasPendingUpdate))]
@@ -38,13 +38,15 @@ public sealed partial class AppUpdateViewModel : ObservableObject
         IDialogService dialogs,
         ISettingsStore settings,
         ILogger<AppUpdateViewModel> logger,
-        IShellLauncher shellLauncher)
+        IShellLauncher shellLauncher,
+        IUiDispatcher? dispatcher = null)
     {
         _updateManager = updateManager;
         _dialogs = dialogs;
         _settings = settings;
         _logger = logger;
         _shellLauncher = shellLauncher;
+        _dispatcher = dispatcher ?? new UiDispatcher();
     }
 
     public bool HasPendingUpdate => PendingUpdate is not null;
@@ -112,16 +114,7 @@ public sealed partial class AppUpdateViewModel : ObservableObject
             return;
         }
 
-        var dispatcher = Application.Current?.Dispatcher;
-
-        if (dispatcher is not null && !dispatcher.CheckAccess())
-        {
-            dispatcher.BeginInvoke(() => PendingUpdate = update);
-        }
-        else
-        {
-            PendingUpdate = update;
-        }
+        _dispatcher.Invoke(() => PendingUpdate = update);
     }
 
     [RelayCommand(CanExecute = nameof(HasPendingUpdate))]

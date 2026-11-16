@@ -5,8 +5,6 @@ using MediaOrcestrator.Domain;
 using MediaOrcestrator.Modules;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
-using System.IO;
-using System.Text;
 
 namespace MediaOrcestrator.Runner.Wpf.ViewModels;
 
@@ -27,6 +25,7 @@ public sealed partial class ChronologyViewModel : ObservableObject, IPageHeader
     private readonly IClipboardService _clipboard;
 
     private ChronologyPlan? _plan;
+    private bool _suppressRecount;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(BuildCommand))]
@@ -54,8 +53,6 @@ public sealed partial class ChronologyViewModel : ObservableObject, IPageHeader
 
     [ObservableProperty]
     private int _firstNCount = 200;
-
-    private bool _suppressRecount;
 
     [ObservableProperty]
     private bool _isPlaylistExpanded;
@@ -151,60 +148,13 @@ public sealed partial class ChronologyViewModel : ObservableObject, IPageHeader
     }
 
     [RelayCommand]
-    private void RefreshSources()
-    {
-        LoadSources();
-    }
-
-    [RelayCommand]
-    private async Task LoadPlaylists()
-    {
-        var owner = OwnerSource?.Source;
-        if (owner is null)
-        {
-            return;
-        }
-
-        IsLoadingPlaylists = true;
-        try
-        {
-            var previousId = SelectedPlaylist?.Id;
-            var playlists = await Task.Run(() => _publisher.GetPlaylistsAsync(owner));
-
-            ExistingPlaylists.Clear();
-            foreach (var playlist in playlists)
-            {
-                ExistingPlaylists.Add(playlist);
-            }
-
-            SelectedPlaylist = ExistingPlaylists.FirstOrDefault(p => p.Id == previousId) ?? ExistingPlaylists.FirstOrDefault();
-
-            if (ExistingPlaylists.Count == 0)
-            {
-                _dialogs.Info("Плейлисты", "У выбранного аккаунта нет плейлистов – создайте новый.");
-            }
-        }
-        catch (Exception exception)
-        {
-            _dialogs.Error("Не удалось загрузить плейлисты", exception.Message);
-        }
-        finally
-        {
-            IsLoadingPlaylists = false;
-        }
-    }
+    private void RefreshSources() => LoadSources();
 
     [RelayCommand(CanExecute = nameof(CanBuild))]
-    private Task Build()
-    {
-        return BuildCore(false, CancellationToken.None);
-    }
+    private Task Build() => BuildCore(false, CancellationToken.None);
 
     [RelayCommand(IncludeCancelCommand = true, CanExecute = nameof(CanBuild))]
-    private Task BackfillDates(CancellationToken cancellationToken)
-    {
-        return BuildCore(true, cancellationToken);
-    }
+    private Task BackfillDates(CancellationToken cancellationToken) => BuildCore(true, cancellationToken);
 
     private bool CanBuild() => !IsLoading;
 
@@ -258,68 +208,10 @@ public sealed partial class ChronologyViewModel : ObservableObject, IPageHeader
     }
 
     [RelayCommand(CanExecute = nameof(HasResults))]
-    private void ExportM3u()
-    {
-        if (_plan is null)
-        {
-            return;
-        }
-
-        var request = new FileSaveRequest("Сохранить плейлист", "Плейлист M3U (*.m3u)|*.m3u")
-        {
-            FileName = "chronology.m3u",
-            DefaultExtension = "m3u",
-        };
-
-        var path = _filePicker.SaveFile(request);
-
-        if (path is null)
-        {
-            return;
-        }
-
-        try
-        {
-            File.WriteAllText(path, _plan.ToM3u(), new UTF8Encoding(false));
-            _dialogs.Info("Готово", $"Сохранено: {path}");
-        }
-        catch (Exception exception)
-        {
-            _dialogs.Error("Не удалось сохранить", exception.Message);
-        }
-    }
+    private void SelectAll() => SetAllSelected(_ => true);
 
     [RelayCommand(CanExecute = nameof(HasResults))]
-    private void CopyLinks()
-    {
-        if (_plan is null)
-        {
-            return;
-        }
-
-        var count = _plan.Items.Count(i => !string.IsNullOrEmpty(i.Url));
-
-        if (_clipboard.TrySetText(_plan.ToUrlList()))
-        {
-            _dialogs.Info("Скопировано", $"Ссылок в буфере обмена: {count}");
-        }
-        else
-        {
-            _dialogs.Error("Не удалось скопировать", "Буфер обмена занят другим приложением – попробуй ещё раз.");
-        }
-    }
-
-    [RelayCommand(CanExecute = nameof(HasResults))]
-    private void SelectAll()
-    {
-        SetAllSelected(_ => true);
-    }
-
-    [RelayCommand(CanExecute = nameof(HasResults))]
-    private void SelectNone()
-    {
-        SetAllSelected(_ => false);
-    }
+    private void SelectNone() => SetAllSelected(_ => false);
 
     [RelayCommand(CanExecute = nameof(HasResults))]
     private void SelectFirstN()
@@ -382,102 +274,6 @@ public sealed partial class ChronologyViewModel : ObservableObject, IPageHeader
         SelectedCount = Items.Count(i => i.IsSelected);
     }
 
-    [RelayCommand(CanExecute = nameof(CanCreatePlaylist))]
-    private async Task CreatePlaylist()
-    {
-        var owner = OwnerSource?.Source;
-        if (owner is null)
-        {
-            return;
-        }
-
-        var videoIds = Items
-            .Where(i => i.IsSelected && !string.IsNullOrEmpty(i.ExternalId))
-            .Select(i => i.ExternalId)
-            .ToList();
-
-        if (videoIds.Count == 0)
-        {
-            return;
-        }
-
-        const string quotaNote = "Добавление ограничено суточной квотой YouTube API (~200 видео в сутки). При исчерпании дозалейте позже – дубли не добавятся.";
-
-        bool confirmed;
-        if (AppendToExisting)
-        {
-            if (SelectedPlaylist is null)
-            {
-                return;
-            }
-
-            confirmed = _dialogs.Confirm("Дозалить в плейлист",
-                $"В плейлист «{SelectedPlaylist.Title}» под аккаунтом «{owner.TitleFull}» будет добавлено до {videoIds.Count} видео (уже присутствующие пропустятся).\n\n{quotaNote}");
-        }
-        else
-        {
-            confirmed = _dialogs.Confirm("Создать плейлист на YouTube",
-                $"Будет создан плейлист «{PlaylistTitle}» ({SelectedPrivacy.Label}) под аккаунтом «{owner.TitleFull}», в него добавится {videoIds.Count} видео.\n\n{quotaNote}");
-        }
-
-        if (!confirmed)
-        {
-            return;
-        }
-
-        try
-        {
-            var result = AppendToExisting
-                ? await _publisher.AppendAsync(owner, SelectedPlaylist!.Id, SelectedPlaylist.Title, videoIds)
-                : await _publisher.CreateAsync(owner, PlaylistTitle, SelectedPrivacy.Value, videoIds);
-
-            if (result is null)
-            {
-                return;
-            }
-
-            var lines = new List<string> { $"Добавлено: {result.AddedCount}" };
-
-            if (result.AlreadyPresentCount > 0)
-            {
-                lines.Add($"Уже были в плейлисте: {result.AlreadyPresentCount}");
-            }
-
-            if (result.QuotaExhausted)
-            {
-                lines.Add("Квота YouTube исчерпана – дозалейте остаток позже, дубли не добавятся.");
-            }
-
-            if (!string.IsNullOrEmpty(result.Url))
-            {
-                lines.Add(result.Url);
-            }
-
-            _dialogs.Info(AppendToExisting ? "Дозалив завершён" : "Плейлист создан", string.Join("\n\n", lines));
-
-            if (AppendToExisting)
-            {
-                LoadPlaylistsCommand.Execute(null);
-            }
-        }
-        catch (Exception exception)
-        {
-            _dialogs.Error("Не удалось обновить плейлист", exception.Message);
-        }
-    }
-
-    private bool CanCreatePlaylist()
-    {
-        if (!HasResults || OwnerSource is null || SelectedCount == 0)
-        {
-            return false;
-        }
-
-        return AppendToExisting
-            ? SelectedPlaylist is not null
-            : !string.IsNullOrWhiteSpace(PlaylistTitle);
-    }
-
     private void LoadSources()
     {
         var previouslySelected = Sources.Where(s => s.IsSelected).Select(s => s.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -494,37 +290,3 @@ public sealed partial class ChronologyViewModel : ObservableObject, IPageHeader
         OwnerSource = Sources.FirstOrDefault(s => s.Id == previousOwnerId) ?? Sources.FirstOrDefault();
     }
 }
-
-public sealed partial class ChronologySourceItem(Source source) : ObservableObject
-{
-    [ObservableProperty]
-    private bool _isSelected;
-
-    public Source Source => source;
-
-    public string Id => source.Id;
-
-    public string Title => source.TitleFull;
-}
-
-public sealed partial class ChronologyRowViewModel(int index, ChronologyItem item, string sourceTitle) : ObservableObject
-{
-    [ObservableProperty]
-    private bool _isSelected = true;
-
-    public int Index => index;
-
-    public string Title => item.Title;
-
-    public string SourceTitle => sourceTitle;
-
-    public string ExternalId => item.ExternalId;
-
-    public string? Url => item.Url;
-
-    public string DateText => item.PublishedAt?.ToLocalTime().ToString("yyyy-MM-dd") ?? "– нет даты –";
-
-    public bool HasDate => item.PublishedAt is not null;
-}
-
-public sealed record PrivacyOption(PlaylistPrivacy Value, string Label);

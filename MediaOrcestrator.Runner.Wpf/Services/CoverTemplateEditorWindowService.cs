@@ -13,6 +13,7 @@ public sealed class CoverTemplateEditorWindowService : ICoverTemplateEditorWindo
     private readonly CoverTemplateStore _store;
     private readonly IDialogService _dialogs;
     private readonly IFilePicker _filePicker;
+    private readonly IUiDispatcher _dispatcher;
 
     private CoverTemplateEditorWindow? _window;
     private CoverTemplateEditorViewModel? _activeViewModel;
@@ -24,12 +25,14 @@ public sealed class CoverTemplateEditorWindowService : ICoverTemplateEditorWindo
         CoverGenerator generator,
         CoverTemplateStore store,
         IDialogService dialogs,
-        IFilePicker filePicker)
+        IFilePicker filePicker,
+        IUiDispatcher dispatcher)
     {
         _generator = generator;
         _store = store;
         _dialogs = dialogs;
         _filePicker = filePicker;
+        _dispatcher = dispatcher;
     }
 
     public bool IsActiveCaller(CoverProfilePickerViewModel picker) => ReferenceEquals(_activeCaller, picker);
@@ -69,6 +72,7 @@ public sealed class CoverTemplateEditorWindowService : ICoverTemplateEditorWindo
             _store,
             _dialogs,
             _filePicker,
+            _dispatcher,
             initial,
             profileName,
             sampleTitle);

@@ -1,6 +1,5 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
-using MahApps.Metro.IconPacks;
+using KeepShell.Services.Platform;
 using MediaOrcestrator.Domain;
 using MediaOrcestrator.Modules;
 using MediaOrcestrator.Runner.Wpf.Bootstrap;
@@ -10,7 +9,6 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Windows.Data;
-using System.Windows.Media;
 
 namespace MediaOrcestrator.Runner.Wpf.ViewModels;
 
@@ -30,10 +28,8 @@ public sealed partial class MediaGridViewModel : ObservableObject
     public const string TitleColumnKey = "title";
 
     private const string SyncMenuTextPrefix = "Синхронизировать ";
-
     private const string MetadataColumnKeyPrefix = "meta:";
     private const string SourceColumnKeyPrefix = "source:";
-
     private const double MinPersistedColumnWidth = 20;
     private const double MaxPersistedColumnWidth = 2000;
 
@@ -50,10 +46,9 @@ public sealed partial class MediaGridViewModel : ObservableObject
     private readonly MediaContextMenuBuilder _contextMenuBuilder;
     private readonly Func<IReadOnlyList<Source>> _allSourcesProvider;
 
-    private readonly System.Windows.Threading.DispatcherTimer _selectionDebounceTimer;
+    private readonly IUiTimer _selectionDebounceTimer;
     private readonly List<Media> _allMedias = [];
     private readonly Dictionary<string, double> _columnWidths = new(StringComparer.Ordinal);
-
     private readonly List<MediaRowViewModel> _selectionOrder = [];
 
     private bool _suppressPrefPersist;
@@ -65,7 +60,8 @@ public sealed partial class MediaGridViewModel : ObservableObject
         IMediaActionUi actionUi,
         MediaContextMenuBuilder contextMenuBuilder,
         ISettingsStore settings,
-        Func<IReadOnlyList<Source>> allSourcesProvider)
+        Func<IReadOnlyList<Source>> allSourcesProvider,
+        IUiDispatcher dispatcher)
     {
         _filter = filter;
         _inspector = inspector;
@@ -84,12 +80,7 @@ public sealed partial class MediaGridViewModel : ObservableObject
         RowsView = CollectionViewSource.GetDefaultView(Rows);
         RowsView.Filter = OnFilterRow;
 
-        _selectionDebounceTimer = new(System.Windows.Threading.DispatcherPriority.Background)
-        {
-            Interval = SelectionDebounce,
-        };
-
-        _selectionDebounceTimer.Tick += OnSelectionDebounceTick;
+        _selectionDebounceTimer = dispatcher.CreateTimer(SelectionDebounce, OnSelectionDebounceTick);
 
         _filter.FiltersChanged += OnFilterFiltersChanged;
         _filter.ColumnsAffected += OnFilterColumnsAffected;
@@ -142,6 +133,12 @@ public sealed partial class MediaGridViewModel : ObservableObject
     [ObservableProperty]
     private string _multiSummaryText = string.Empty;
 
+    public event EventHandler? ColumnsChanged;
+
+    public event EventHandler? AutoFitColumnsRequested;
+
+    public event EventHandler? RequestExpandInspector;
+
     public RangeObservableCollection<MediaRowViewModel> Rows { get; }
 
     public ICollectionView RowsView { get; }
@@ -155,10 +152,6 @@ public sealed partial class MediaGridViewModel : ObservableObject
     public RangeObservableCollection<MetadataColumnInfo> MetadataColumns { get; }
 
     public IReadOnlyDictionary<string, IReadOnlyList<SeriesSourceCoverage>> SeriesCoverage { get; private set; } = EmptyCoverage;
-
-    public event EventHandler? ColumnsChanged;
-
-    public event EventHandler? AutoFitColumnsRequested;
 
     public RangeObservableCollection<MultiSourceTally> MultiSourceTallies { get; } = [];
 
@@ -216,351 +209,86 @@ public sealed partial class MediaGridViewModel : ObservableObject
 
     public bool IsViewCustomized => IsCompact || IsGrouped || IsSourceHeaderCompact;
 
-    public void BuildContextMenu(MediaRowViewModel? triggerRow, Source? specificSource)
+    public Action<IReadOnlyList<PageRenderStage>, long>? PublishMetric { get; set; }
+
+    internal void RefreshViewForAutomation()
     {
-        if (triggerRow is not null && !triggerRow.IsSelected)
-        {
-            foreach (var row in Rows)
-            {
-                row.IsSelected = false;
-            }
-
-            triggerRow.IsSelected = true;
-        }
-
-        var selected = Rows.Where(r => r.IsSelected).Select(r => r.Media).ToList();
-
-        if (selected.Count == 0 && triggerRow is not null)
-        {
-            selected.Add(triggerRow.Media);
-        }
-
-        ContextMenuItems = BuildMenu(selected, specificSource, includeAsync: true);
-        OnPropertyChanged(nameof(ContextMenuItems));
-    }
-
-    private void BuildPanelActions()
-    {
-        var selected = Rows.Where(r => r.IsSelected).Select(r => r.Media).ToList();
-
-        PanelActionItems = BuildMenu(selected, null, includeAsync: false);
-
-        var primary = PanelActionItems
-            .Where(i => !i.IsSeparator && (i.HasChildren || i.Command is not null) && i.Icon != PackIconLucideKind.Trash2)
-            .ToList();
-
-        PrimaryActionGroups = BuildActionGroups(primary);
-        TransferMenuItems = BuildTransferMenu();
-
-        OnPropertyChanged(nameof(PanelActionItems));
-        OnPropertyChanged(nameof(HasPanelActions));
-        OnPropertyChanged(nameof(PrimaryActionGroups));
-        OnPropertyChanged(nameof(HasPrimaryActions));
-        OnPropertyChanged(nameof(TransferMenuItems));
-    }
-
-    private ObservableCollection<MediaMenuItemViewModel> BuildTransferMenu()
-    {
-        var items = new ObservableCollection<MediaMenuItemViewModel>();
-
-        foreach (var item in PanelActionItems.Where(i => i.IsTransferAction))
-        {
-            items.Add(new()
-            {
-                Text = item.Text.StartsWith(SyncMenuTextPrefix, StringComparison.Ordinal)
-                    ? item.Text[SyncMenuTextPrefix.Length..]
-                    : item.Text,
-                Icon = item.Icon,
-                GlyphBrush = item.GlyphBrush,
-                Tooltip = item.Tooltip,
-                IsEnabled = item.IsEnabled,
-                Command = item.Command,
-            });
-        }
-
-        if (items.Count > 0)
-        {
-            items.Add(MediaMenuItemViewModel.Separator());
-        }
-
-        items.Add(new()
-        {
-            Text = "Создать связь",
-            Icon = PackIconLucideKind.Plus,
-            Tooltip = "Открыть раздел «Источники и связи»",
-            Command = CreateRelationCommand,
-        });
-
-        return items;
-    }
-
-    private static IReadOnlyList<PrimaryActionGroup> BuildActionGroups(IReadOnlyList<MediaMenuItemViewModel> topLevel)
-    {
-        var groups = new List<PrimaryActionGroup>();
-
-        foreach (var byIcon in topLevel.GroupBy(i => i.IconOrDefault))
-        {
-            var members = byIcon.ToList();
-            var choices = new List<MediaMenuItemViewModel>();
-
-            foreach (var member in members)
-            {
-                if (member is { HasChildren: true, Children: not null })
-                {
-                    choices.AddRange(member.Children.Where(c => !c.IsSeparator));
-                }
-                else
-                {
-                    choices.Add(member);
-                }
-            }
-
-            if (choices.Count == 0)
-            {
-                continue;
-            }
-
-            groups.Add(new PrimaryActionGroup
-            {
-                Icon = byIcon.Key,
-                Brush = members[0].GlyphBrush,
-                Label = string.Join(" · ", members.Select(m => m.Text)),
-                Choices = choices,
-            });
-        }
-
-        return groups;
-    }
-
-    private ObservableCollection<MediaMenuItemViewModel> BuildMenu(List<Media> selected, Source? specificSource, bool includeAsync)
-    {
-        if (selected.Count == 0)
-        {
-            return [];
-        }
-
-        var selection = new MediaSelection(selected, specificSource)
-        {
-            InSelectionOrder = OrderBySelection(selected),
-            GridSources = ColumnSources.ToList(),
-        };
-
-        var ctx = _actionContextFactory.Create(_actionUi);
-
-        return _contextMenuBuilder.Build(selection, ctx, includeAsync);
-    }
-
-    private IReadOnlyList<Media> OrderBySelection(IReadOnlyList<Media> selected)
-    {
-        if (selected.Count < 2)
-        {
-            return selected;
-        }
-
-        var rank = new Dictionary<Media, int>(_selectionOrder.Count);
-
-        for (var i = 0; i < _selectionOrder.Count; i++)
-        {
-            rank[_selectionOrder[i].Media] = i;
-        }
-
-        return selected
-            .OrderBy(m => rank.TryGetValue(m, out var r) ? r : int.MaxValue)
-            .ToList();
-    }
-
-    [RelayCommand]
-    private void OpenInspector(MediaRowViewModel? row)
-    {
-        if (row is null)
-        {
-            return;
-        }
-
-        foreach (var other in Rows)
-        {
-            other.IsSelected = ReferenceEquals(other, row);
-        }
-
-        RequestExpandInspector?.Invoke(this, EventArgs.Empty);
-
-        UpdateSelectionState();
-    }
-
-    [RelayCommand]
-    private void ClearSelection()
-    {
-        foreach (var row in Rows)
-        {
-            row.IsSelected = false;
-        }
-
-        UpdateSelectionState();
-    }
-
-    [RelayCommand]
-    private void CreateRelation()
-    {
-        _actionContextFactory.Create(_actionUi).Navigation.OpenSourcesGraph();
-    }
-
-    [RelayCommand]
-    private void OpenRenameOperation() => OpenOperation(OperationsTab.Rename);
-
-    [RelayCommand]
-    private void OpenPreviewOperation() => OpenOperation(OperationsTab.Preview);
-
-    [RelayCommand]
-    private void OpenMergeOperation() => OpenOperation(OperationsTab.Merge);
-
-    private void OpenOperation(OperationsTab tab)
-    {
-        var selected = Rows.Where(r => r.IsSelected).Select(r => r.Media).ToList();
-
-        if (selected.Count == 0)
-        {
-            return;
-        }
-
-        _actionContextFactory.Create(_actionUi).Navigation.OpenOperations(tab, OrderBySelection(selected));
-    }
-
-    [RelayCommand]
-    private void ToggleAllRowsSelection(bool value)
-    {
-        foreach (var row in Rows)
-        {
-            row.IsSelected = value;
-        }
-    }
-
-    public event EventHandler? RequestExpandInspector;
-
-    partial void OnIsCompactChanged(bool value)
-    {
-        foreach (var row in Rows)
-        {
-            row.IsCompact = value;
-        }
-
-        if (!_suppressPrefPersist)
-        {
-            _settings.SetValue(CompactSettingKey, value ? "true" : "false");
-        }
-    }
-
-    partial void OnIsSourceHeaderCompactChanged(bool value)
-    {
-        if (!_suppressPrefPersist)
-        {
-            _settings.SetValue(SourceHeaderCompactSettingKey, value ? "true" : "false");
-        }
-
-        ColumnsChanged?.Invoke(this, EventArgs.Empty);
-    }
-
-    partial void OnSourceHeaderCompactLengthChanged(int value)
-    {
-        if (!_suppressPrefPersist)
-        {
-            _settings.SetValue(SourceHeaderCompactLengthSettingKey, value.ToString(System.Globalization.CultureInfo.InvariantCulture));
-        }
-
-        if (IsSourceHeaderCompact)
-        {
-            ColumnsChanged?.Invoke(this, EventArgs.Empty);
-        }
-    }
-
-    [RelayCommand(CanExecute = nameof(CanDecreaseSourceHeaderLength))]
-    private void DecreaseSourceHeaderLength()
-    {
-        SourceHeaderCompactLength = Math.Max(MinSourceHeaderCompactLength, SourceHeaderCompactLength - 1);
-    }
-
-    private bool CanDecreaseSourceHeaderLength() => SourceHeaderCompactLength > MinSourceHeaderCompactLength;
-
-    [RelayCommand(CanExecute = nameof(CanIncreaseSourceHeaderLength))]
-    private void IncreaseSourceHeaderLength()
-    {
-        SourceHeaderCompactLength = Math.Min(MaxSourceHeaderCompactLength, SourceHeaderCompactLength + 1);
-    }
-
-    private bool CanIncreaseSourceHeaderLength() => SourceHeaderCompactLength < MaxSourceHeaderCompactLength;
-
-    [RelayCommand]
-    private void AutoFitColumns()
-    {
-        AutoFitColumnsRequested?.Invoke(this, EventArgs.Empty);
-    }
-
-    partial void OnIsGroupedChanged(bool value)
-    {
-        if (!_suppressPrefPersist)
-        {
-            _settings.SetValue(GroupedSettingKey, value ? "true" : "false");
-        }
-
-        ApplyGrouping();
-    }
-
-    private void ApplyGrouping()
-    {
-        if (RowsView is not ListCollectionView list)
-        {
-            return;
-        }
-
-        using (list.DeferRefresh())
-        {
-            if (IsGrouped)
-            {
-                BuildSeriesCoverage();
-
-                if (list.GroupDescriptions.Count == 0)
-                {
-                    list.GroupDescriptions.Add(new PropertyGroupDescription(nameof(MediaRowViewModel.SeriesName)));
-                }
-            }
-            else
-            {
-                list.GroupDescriptions.Clear();
-                ClearSeriesCoverage();
-            }
-
-            ApplySortCore();
-        }
-
+        RowsView.Refresh();
+        OnPropertyChanged(nameof(TotalCount));
         OnPropertyChanged(nameof(VisibleCount));
+        OnPropertyChanged(nameof(IsDatabaseEmpty));
         OnPropertyChanged(nameof(ShowEmptyState));
     }
 
-    private static int CompareSeries(MediaRowViewModel a, MediaRowViewModel b)
-    {
-        if (a.IsNoSeries != b.IsNoSeries)
-        {
-            return a.IsNoSeries ? 1 : -1;
-        }
+    public static string MetadataColumnKey(string columnId) => MetadataColumnKeyPrefix + columnId;
 
-        return NaturalStringComparer.Instance.Compare(a.SeriesName, b.SeriesName);
+    public static string SourceColumnKey(string sourceId) => SourceColumnKeyPrefix + sourceId;
+
+    public MediaRebuildBreakdown ApplyDomainData(List<Media> medias)
+    {
+        _allMedias.Clear();
+        _allMedias.AddRange(medias);
+
+        return RebuildColumnsAndRows();
     }
 
-    private static int CompareEpisodeThenTitle(MediaRowViewModel a, MediaRowViewModel b)
+    public MediaRebuildBreakdown RebuildColumnsAndRows()
     {
-        var hasA = a.EpisodeNumber.HasValue;
-        var hasB = b.EpisodeNumber.HasValue;
+        var swCols = Stopwatch.StartNew();
 
-        if (hasA != hasB)
+        var activeSourceIds = _filter.ActiveSourceIds();
+        var activeRelationSourceIds = _filter.ActiveRelationSourceIds();
+        var allSources = _allSourcesProvider();
+
+        var columns = allSources
+            .Where(s => (activeSourceIds.Count == 0 || activeSourceIds.Contains(s.Id))
+                && (activeRelationSourceIds.Count == 0 || activeRelationSourceIds.Contains(s.Id)))
+            .ToList();
+
+        ColumnSources.ReplaceAll(columns);
+
+        var metaColumns = _filter.SelectedMetadataColumns();
+        MetadataColumns.ReplaceAll(metaColumns);
+        swCols.Stop();
+
+        var swRows = Stopwatch.StartNew();
+        DetachRowEvents();
+
+        var seriesEntries = MediaSeriesParser.Assign(_allMedias);
+        var newRows = new List<MediaRowViewModel>(_allMedias.Count);
+
+        for (var i = 0; i < _allMedias.Count; i++)
         {
-            return hasA ? -1 : 1;
+            newRows.Add(new(_allMedias[i], columns, metaColumns, seriesEntries[i])
+            {
+                IsCompact = IsCompact,
+            });
         }
 
-        if (hasA && a.EpisodeNumber!.Value != b.EpisodeNumber!.Value)
+        Rows.ReplaceAll(newRows);
+        AttachRowEvents();
+
+        if (IsGrouped)
         {
-            return a.EpisodeNumber.Value.CompareTo(b.EpisodeNumber.Value);
+            BuildSeriesCoverage();
         }
 
-        return NaturalStringComparer.Instance.Compare(a.Title, b.Title);
+        ColumnsChanged?.Invoke(this, EventArgs.Empty);
+        swRows.Stop();
+
+        ReapplySort();
+
+        var swView = Stopwatch.StartNew();
+        RowsView.Refresh();
+        OnPropertyChanged(nameof(TotalCount));
+        OnPropertyChanged(nameof(VisibleCount));
+        OnPropertyChanged(nameof(IsDatabaseEmpty));
+        OnPropertyChanged(nameof(ShowEmptyState));
+        swView.Stop();
+
+        UpdateSelectionState();
+
+        return new(swCols.ElapsedMilliseconds, swRows.ElapsedMilliseconds, swView.ElapsedMilliseconds);
     }
 
     private void BuildSeriesCoverage()
@@ -651,484 +379,15 @@ public sealed partial class MediaGridViewModel : ObservableObject
         ], vmMs);
     }
 
-    private void OnSelectionDebounceTick(object? sender, EventArgs e)
+    private void OnSelectionDebounceTick()
     {
         _selectionDebounceTimer.Stop();
         UpdateSelectionState();
     }
 
-    private bool OnFilterRow(object? value)
-    {
-        return value is MediaRowViewModel row && _filter.Matches(row);
-    }
-
-    private void UpdateSelectionState()
-    {
-        var selected = Rows.Where(r => r.IsSelected).ToList();
-        SelectedCount = selected.Count;
-
-        if (selected.Count == 1)
-        {
-            Focused = selected[0];
-            _inspector.ShowSingle(selected[0].Media, _allSourcesProvider());
-            MultiSourceTallies.Clear();
-            MultiStatusBreakdown.Clear();
-        }
-        else if (selected.Count >= 2)
-        {
-            Focused = null;
-            _inspector.ShowMulti(selected.Count);
-            BuildMultiAggregates(selected);
-        }
-        else
-        {
-            Focused = null;
-            _inspector.Clear();
-            MultiSourceTallies.Clear();
-            MultiStatusBreakdown.Clear();
-            MultiSummaryText = string.Empty;
-        }
-
-        OnPropertyChanged(nameof(IsInspectorOpen));
-        BuildPanelActions();
-    }
-
-    private void BuildMultiAggregates(IReadOnlyList<MediaRowViewModel> selected)
-    {
-        var sourceTallies = new List<MultiSourceTally>(ColumnSources.Count);
-
-        for (var i = 0; i < ColumnSources.Count; i++)
-        {
-            var present = 0;
-            var errors = 0;
-
-            foreach (var row in selected)
-            {
-                if (i >= row.Cells.Count)
-                {
-                    continue;
-                }
-
-                var cell = row.Cells[i];
-
-                if (!cell.HasLink)
-                {
-                    continue;
-                }
-
-                present++;
-
-                if (cell.Status?.Id == MediaStatus.Error)
-                {
-                    errors++;
-                }
-            }
-
-            sourceTallies.Add(new(ColumnSources[i].Title, present, selected.Count, errors));
-        }
-
-        MultiSourceTallies.ReplaceAll(sourceTallies);
-
-        var allCells = selected.SelectMany(r => r.Cells).ToList();
-
-        var breakdown = allCells
-            .Where(c => c.HasLink)
-            .GroupBy(c => c.Status?.Id ?? "?")
-            .Select(g =>
-            {
-                var first = g.First();
-
-                return new MediaStatusTally(first.Status?.Id ?? string.Empty, first.Brush, g.Count(),
-                    first.Status?.Text ?? "–", MediaStatusTally.OrderOf(first.Status?.Id));
-            })
-            .OrderBy(t => t.Order)
-            .ToList();
-
-        var missing = allCells.Count(c => !c.HasLink);
-
-        if (missing > 0)
-        {
-            breakdown.Add(MediaStatusTally.Missing(missing));
-        }
-
-        MultiStatusBreakdown.ReplaceAll(breakdown);
-
-        var fully = selected.Count(r => r.IsFullySynced);
-        var withErrors = selected.Count(r => r.ErrorCount > 0);
-
-        MultiSummaryText = withErrors > 0
-            ? $"Полностью синхронизированы: {fully} из {selected.Count} · с ошибками: {withErrors}"
-            : $"Полностью синхронизированы: {fully} из {selected.Count}";
-    }
-
-    [RelayCommand]
-    private void FocusStatusFilter(string? statusId)
-    {
-        if (string.IsNullOrEmpty(statusId))
-        {
-            return;
-        }
-
-        _filter.FocusStatus(statusId);
-    }
-
-    public MediaRebuildBreakdown RebuildColumnsAndRows()
-    {
-        var swCols = Stopwatch.StartNew();
-
-        var activeSourceIds = _filter.ActiveSourceIds();
-        var activeRelationSourceIds = _filter.ActiveRelationSourceIds();
-
-        var allSources = _allSourcesProvider();
-
-        var columns = allSources
-            .Where(s => (activeSourceIds.Count == 0 || activeSourceIds.Contains(s.Id))
-                && (activeRelationSourceIds.Count == 0 || activeRelationSourceIds.Contains(s.Id)))
-            .ToList();
-
-        ColumnSources.ReplaceAll(columns);
-
-        var metaColumns = _filter.SelectedMetadataColumns();
-
-        MetadataColumns.ReplaceAll(metaColumns);
-        swCols.Stop();
-
-        var swRows = Stopwatch.StartNew();
-
-        DetachRowEvents();
-
-        var seriesEntries = MediaSeriesParser.Assign(_allMedias);
-        var newRows = new List<MediaRowViewModel>(_allMedias.Count);
-
-        for (var i = 0; i < _allMedias.Count; i++)
-        {
-            newRows.Add(new(_allMedias[i], columns, metaColumns, seriesEntries[i])
-            {
-                IsCompact = IsCompact,
-            });
-        }
-
-        Rows.ReplaceAll(newRows);
-        AttachRowEvents();
-
-        if (IsGrouped)
-        {
-            BuildSeriesCoverage();
-        }
-
-        ColumnsChanged?.Invoke(this, EventArgs.Empty);
-        swRows.Stop();
-
-        ReapplySort();
-
-        var swView = Stopwatch.StartNew();
-        RowsView.Refresh();
-        OnPropertyChanged(nameof(TotalCount));
-        OnPropertyChanged(nameof(VisibleCount));
-        OnPropertyChanged(nameof(IsDatabaseEmpty));
-        OnPropertyChanged(nameof(ShowEmptyState));
-        swView.Stop();
-
-        UpdateSelectionState();
-
-        return new(swCols.ElapsedMilliseconds, swRows.ElapsedMilliseconds, swView.ElapsedMilliseconds);
-    }
-
-    public MediaRebuildBreakdown ApplyDomainData(List<Media> medias)
-    {
-        _allMedias.Clear();
-        _allMedias.AddRange(medias);
-
-        return RebuildColumnsAndRows();
-    }
-
-    public Action<IReadOnlyList<PageRenderStage>, long>? PublishMetric { get; set; }
+    private bool OnFilterRow(object? value) => value is MediaRowViewModel row && _filter.Matches(row);
 
     private static string FormatMs(long ms) => $"{ms} мс";
-
-    public sealed record MediaRebuildBreakdown(long ColumnsMs, long RowsMs, long ViewMs);
-
-    public static string MetadataColumnKey(string columnId) => MetadataColumnKeyPrefix + columnId;
-
-    public static string SourceColumnKey(string sourceId) => SourceColumnKeyPrefix + sourceId;
-
-    public void ApplySort(string key, ListSortDirection direction)
-    {
-        ActiveSortKey = key;
-        ActiveSortDirection = direction;
-        ApplySortCore();
-
-        if (!_suppressPrefPersist)
-        {
-            _settings.SetValue(SortSettingKey, $"{key}|{direction}");
-        }
-    }
-
-    private void ReapplySort()
-    {
-        if (ActiveSortKey is not null || IsGrouped)
-        {
-            ApplySortCore();
-        }
-    }
-
-    private void ApplySortCore()
-    {
-        if (RowsView is not ListCollectionView list)
-        {
-            return;
-        }
-
-        var inner = BuildColumnComparer();
-
-        list.CustomSort = IsGrouped ? BuildGroupedComparer(inner) : inner;
-    }
-
-    private Comparer<MediaRowViewModel>? BuildColumnComparer()
-    {
-        if (ActiveSortKey is null)
-        {
-            return null;
-        }
-
-        var sign = ActiveSortDirection == ListSortDirection.Ascending ? 1 : -1;
-
-        if (ActiveSortKey == TitleColumnKey)
-        {
-            return CreateTitleComparer(sign);
-        }
-
-        if (ActiveSortKey.StartsWith(MetadataColumnKeyPrefix, StringComparison.Ordinal))
-        {
-            var index = IndexOfMetadataColumn(ActiveSortKey[MetadataColumnKeyPrefix.Length..]);
-            return index >= 0 ? CreateMetadataComparer(index, sign) : null;
-        }
-
-        if (ActiveSortKey.StartsWith(SourceColumnKeyPrefix, StringComparison.Ordinal))
-        {
-            var index = IndexOfSourceColumn(ActiveSortKey[SourceColumnKeyPrefix.Length..]);
-            return index >= 0 ? CreateSourceComparer(index, sign) : null;
-        }
-
-        return null;
-    }
-
-    private static Comparer<MediaRowViewModel> BuildGroupedComparer(Comparer<MediaRowViewModel>? inner) =>
-        Comparer<MediaRowViewModel>.Create((a, b) =>
-        {
-            var bySeries = CompareSeries(a, b);
-
-            if (bySeries != 0)
-            {
-                return bySeries;
-            }
-
-            return inner?.Compare(a, b) ?? CompareEpisodeThenTitle(a, b);
-        });
-
-    private int IndexOfMetadataColumn(string columnId)
-    {
-        for (var i = 0; i < MetadataColumns.Count; i++)
-        {
-            if (string.Equals(MetadataColumns[i].ColumnId, columnId, StringComparison.Ordinal))
-            {
-                return i;
-            }
-        }
-
-        return -1;
-    }
-
-    private int IndexOfSourceColumn(string sourceId)
-    {
-        for (var i = 0; i < ColumnSources.Count; i++)
-        {
-            if (string.Equals(ColumnSources[i].Id, sourceId, StringComparison.OrdinalIgnoreCase))
-            {
-                return i;
-            }
-        }
-
-        return -1;
-    }
-
-    private static Comparer<MediaRowViewModel> CreateTitleComparer(int sign) =>
-        Comparer<MediaRowViewModel>.Create((a, b) =>
-            NaturalStringComparer.Instance.Compare(a.Title, b.Title) * sign);
-
-    private static Comparer<MediaRowViewModel> CreateMetadataComparer(int columnIndex, int sign) =>
-        Comparer<MediaRowViewModel>.Create((a, b) =>
-        {
-            var valueA = columnIndex < a.MetadataCells.Count ? a.MetadataCells[columnIndex] : string.Empty;
-            var valueB = columnIndex < b.MetadataCells.Count ? b.MetadataCells[columnIndex] : string.Empty;
-
-            var hasA = !string.IsNullOrEmpty(valueA);
-            var hasB = !string.IsNullOrEmpty(valueB);
-
-            if (hasA != hasB)
-            {
-                return hasA ? -1 : 1;
-            }
-
-            var primary = NaturalStringComparer.Instance.Compare(valueA, valueB) * sign;
-
-            return primary != 0
-                ? primary
-                : NaturalStringComparer.Instance.Compare(a.Title, b.Title);
-        });
-
-    private static Comparer<MediaRowViewModel> CreateSourceComparer(int columnIndex, int sign) =>
-        Comparer<MediaRowViewModel>.Create((a, b) =>
-        {
-            var cellA = columnIndex < a.Cells.Count ? a.Cells[columnIndex] : null;
-            var cellB = columnIndex < b.Cells.Count ? b.Cells[columnIndex] : null;
-
-            var hasA = cellA?.HasLink == true;
-            var hasB = cellB?.HasLink == true;
-
-            if (hasA != hasB)
-            {
-                return hasA ? -1 : 1;
-            }
-
-            if (!hasA)
-            {
-                return NaturalStringComparer.Instance.Compare(a.Title, b.Title);
-            }
-
-            var primary = cellA!.SourceSortNumber.CompareTo(cellB!.SourceSortNumber) * sign;
-
-            if (primary != 0)
-            {
-                return primary;
-            }
-
-            var secondary = cellA.SortKey.CompareTo(cellB.SortKey);
-
-            return secondary != 0
-                ? secondary
-                : NaturalStringComparer.Instance.Compare(a.Title, b.Title);
-        });
-
-    public bool TryGetColumnWidth(string key, out double width) => _columnWidths.TryGetValue(key, out width);
-
-    public void SetColumnWidth(string key, double width)
-    {
-        if (double.IsNaN(width) || width < MinPersistedColumnWidth || width > MaxPersistedColumnWidth)
-        {
-            return;
-        }
-
-        if (_columnWidths.TryGetValue(key, out var existing) && Math.Abs(existing - width) < 0.5)
-        {
-            return;
-        }
-
-        _columnWidths[key] = width;
-
-        if (!_suppressPrefPersist)
-        {
-            PersistColumnWidths();
-        }
-    }
-
-    public void ClearColumnWidth(string key)
-    {
-        if (_columnWidths.Remove(key) && !_suppressPrefPersist)
-        {
-            PersistColumnWidths();
-        }
-    }
-
-    private void PersistColumnWidths()
-    {
-        var text = string.Join(";", _columnWidths
-            .Select(kv => $"{kv.Key}={kv.Value.ToString("F0", System.Globalization.CultureInfo.InvariantCulture)}"));
-
-        _settings.SetValue(ColumnWidthsSettingKey, text);
-    }
-
-    private void LoadViewPreferences()
-    {
-        _suppressPrefPersist = true;
-
-        try
-        {
-            if (bool.TryParse(_settings.GetStringValue(CompactSettingKey), out var compact))
-            {
-                IsCompact = compact;
-            }
-
-            if (bool.TryParse(_settings.GetStringValue(SourceHeaderCompactSettingKey), out var compactHeaders))
-            {
-                IsSourceHeaderCompact = compactHeaders;
-            }
-
-            if (int.TryParse(_settings.GetStringValue(SourceHeaderCompactLengthSettingKey),
-                    System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var headerLength))
-            {
-                SourceHeaderCompactLength = Math.Clamp(headerLength, MinSourceHeaderCompactLength, MaxSourceHeaderCompactLength);
-            }
-
-            if (bool.TryParse(_settings.GetStringValue(GroupedSettingKey), out var grouped))
-            {
-                IsGrouped = grouped;
-            }
-
-            LoadSort();
-            LoadColumnWidths();
-        }
-        finally
-        {
-            _suppressPrefPersist = false;
-        }
-    }
-
-    private void LoadSort()
-    {
-        var raw = _settings.GetStringValue(SortSettingKey);
-
-        if (string.IsNullOrWhiteSpace(raw))
-        {
-            return;
-        }
-
-        var sep = raw.LastIndexOf('|');
-
-        if (sep > 0 && Enum.TryParse<ListSortDirection>(raw[(sep + 1)..], out var direction))
-        {
-            ActiveSortKey = raw[..sep];
-            ActiveSortDirection = direction;
-        }
-    }
-
-    private void LoadColumnWidths()
-    {
-        var raw = _settings.GetStringValue(ColumnWidthsSettingKey);
-
-        if (string.IsNullOrWhiteSpace(raw))
-        {
-            return;
-        }
-
-        foreach (var entry in raw.Split(';', StringSplitOptions.RemoveEmptyEntries))
-        {
-            var eq = entry.LastIndexOf('=');
-
-            if (eq <= 0)
-            {
-                continue;
-            }
-
-            if (double.TryParse(entry[(eq + 1)..], System.Globalization.NumberStyles.Float,
-                    System.Globalization.CultureInfo.InvariantCulture, out var width)
-                && width >= MinPersistedColumnWidth
-                && width <= MaxPersistedColumnWidth)
-            {
-                _columnWidths[entry[..eq]] = width;
-            }
-        }
-    }
 
     private void DetachRowEvents()
     {
@@ -1170,4 +429,6 @@ public sealed partial class MediaGridViewModel : ObservableObject
         _selectionDebounceTimer.Stop();
         _selectionDebounceTimer.Start();
     }
+
+    public sealed record MediaRebuildBreakdown(long ColumnsMs, long RowsMs, long ViewMs);
 }

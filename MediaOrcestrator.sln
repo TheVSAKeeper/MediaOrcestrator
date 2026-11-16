@@ -38,6 +38,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MediaOrcestrator.Domain.Tes
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MediaOrcestrator.Runner.Wpf", "MediaOrcestrator.Runner.Wpf\MediaOrcestrator.Runner.Wpf.csproj", "{A0C16275-9F01-49F2-8F51-375882A4FF0C}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MediaOrcestrator.Runner.Wpf.Tests", "MediaOrcestrator.Runner.Wpf.Tests\MediaOrcestrator.Runner.Wpf.Tests.csproj", "{51F5281C-BAF7-45FB-81C4-0795B453CD6C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -180,6 +182,18 @@ Global
 		{A0C16275-9F01-49F2-8F51-375882A4FF0C}.Release|x64.Build.0 = Release|Any CPU
 		{A0C16275-9F01-49F2-8F51-375882A4FF0C}.Release|x86.ActiveCfg = Release|Any CPU
 		{A0C16275-9F01-49F2-8F51-375882A4FF0C}.Release|x86.Build.0 = Release|Any CPU
+		{51F5281C-BAF7-45FB-81C4-0795B453CD6C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{51F5281C-BAF7-45FB-81C4-0795B453CD6C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{51F5281C-BAF7-45FB-81C4-0795B453CD6C}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{51F5281C-BAF7-45FB-81C4-0795B453CD6C}.Debug|x64.Build.0 = Debug|Any CPU
+		{51F5281C-BAF7-45FB-81C4-0795B453CD6C}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{51F5281C-BAF7-45FB-81C4-0795B453CD6C}.Debug|x86.Build.0 = Debug|Any CPU
+		{51F5281C-BAF7-45FB-81C4-0795B453CD6C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{51F5281C-BAF7-45FB-81C4-0795B453CD6C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{51F5281C-BAF7-45FB-81C4-0795B453CD6C}.Release|x64.ActiveCfg = Release|Any CPU
+		{51F5281C-BAF7-45FB-81C4-0795B453CD6C}.Release|x64.Build.0 = Release|Any CPU
+		{51F5281C-BAF7-45FB-81C4-0795B453CD6C}.Release|x86.ActiveCfg = Release|Any CPU
+		{51F5281C-BAF7-45FB-81C4-0795B453CD6C}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -32,6 +32,7 @@ public sealed partial class AuditViewModel : ObservableObject, IPageHeader, IPag
     private readonly HashSet<string> _runningSourceIds = new(StringComparer.OrdinalIgnoreCase);
     private bool _loaded;
     private int _bulkGate;
+    private List<AuditSourceCardViewModel>? _automationStash;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SyncAllFullCommand))]
@@ -367,6 +368,65 @@ public sealed partial class AuditViewModel : ObservableObject, IPageHeader, IPag
             : null;
 
         OnPropertyChanged(nameof(HasSources));
+    }
+
+    internal void SetEmptyForAutomation(bool empty)
+    {
+        if (empty)
+        {
+            _automationStash ??= [.. Sources];
+            Sources.ReplaceAll([]);
+            EmptyHint = "Источники не настроены. Добавьте источник в разделе «Источники и связи».";
+        }
+        else if (_automationStash is not null)
+        {
+            Sources.ReplaceAll(_automationStash);
+            _automationStash = null;
+            EmptyHint = Sources.Count == 0
+                ? "Источники не настроены. Добавьте источник в разделе «Источники и связи»."
+                : null;
+        }
+
+        OnPropertyChanged(nameof(HasSources));
+    }
+
+    internal void SetBusyForAutomation(bool busy)
+    {
+        IsBulkBusy = busy;
+        HasBulkError = false;
+        IsBulkCancelled = false;
+        BulkProgressMessage = busy ? "Синхронизация источников (2/4)…" : "–";
+        SetAllCardsBulkLocked(busy);
+        if (Sources.Count > 0)
+        {
+            if (busy)
+            {
+                Sources[0].Report("Загрузка метаданных…");
+            }
+            else
+            {
+                Sources[0].ClearProgress();
+            }
+        }
+    }
+
+    internal void SetErrorForAutomation(bool error)
+    {
+        IsBulkBusy = false;
+        IsBulkCancelled = false;
+        HasBulkError = error;
+        BulkProgressMessage = error ? "Ошибка: квота YouTube API исчерпана" : "–";
+        if (Sources.Count > 0)
+        {
+            if (error)
+            {
+                Sources[0].ReportError("Ошибка API: превышена квота запросов");
+            }
+            else
+            {
+                Sources[0].ClearProgress();
+            }
+        }
     }
 
     private static (bool isFull, bool onlyNew) MapMode(AuditSyncMode mode)

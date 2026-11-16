@@ -1,22 +1,15 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using KeepShell.Services.Platform;
 using MediaOrcestrator.Domain;
 using MediaOrcestrator.Modules;
 using MediaOrcestrator.Runner.Wpf.Bootstrap;
 using MediaOrcestrator.Runner.Wpf.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using System.Windows;
 using System.Windows.Input;
 
 namespace MediaOrcestrator.Runner.Wpf.ViewModels;
-
-public enum SourcesRelationsViewMode
-{
-    None = 0,
-    List = 1,
-    Graph = 2,
-}
 
 public sealed partial class SourcesRelationsViewModel : ObservableObject, IPageHeader, IPageRefresh
 {
@@ -29,7 +22,6 @@ public sealed partial class SourcesRelationsViewModel : ObservableObject, IPageH
 
     public string? RefreshTooltip => "Перезагрузить источники и связи";
 
-
     private const string ViewModeSettingKey = "wpf.sources.viewMode";
 
     private readonly Orcestrator _orcestrator;
@@ -38,8 +30,11 @@ public sealed partial class SourcesRelationsViewModel : ObservableObject, IPageH
     private readonly StateManager _stateManager;
     private readonly ISettingsStore _settings;
     private readonly IDialogService _dialogs;
+    private readonly IUiDispatcher _dispatcher;
     private readonly ILogger<SourcesRelationsViewModel> _logger;
     private bool _loaded;
+    private List<SourceCardViewModel>? _automationSourcesStash;
+    private List<RelationCardViewModel>? _automationRelationsStash;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsListMode))]
@@ -59,6 +54,7 @@ public sealed partial class SourcesRelationsViewModel : ObservableObject, IPageH
         StateManager stateManager,
         ISettingsStore settings,
         IDialogService dialogs,
+        IUiDispatcher dispatcher,
         ILogger<SourcesRelationsViewModel> logger)
     {
         _orcestrator = orcestrator;
@@ -67,6 +63,7 @@ public sealed partial class SourcesRelationsViewModel : ObservableObject, IPageH
         _stateManager = stateManager;
         _settings = settings;
         _dialogs = dialogs;
+        _dispatcher = dispatcher;
         _logger = logger;
 
         Sources = [];
@@ -110,6 +107,8 @@ public sealed partial class SourcesRelationsViewModel : ObservableObject, IPageH
     public bool IsListMode => ViewMode == SourcesRelationsViewMode.List;
 
     public bool IsGraphMode => ViewMode == SourcesRelationsViewMode.Graph;
+
+    internal StateManager StateManager => _stateManager;
 
     public async Task EnsureLoadedAsync()
     {
@@ -160,16 +159,10 @@ public sealed partial class SourcesRelationsViewModel : ObservableObject, IPageH
     }
 
     [RelayCommand]
-    private void SetListMode()
-    {
-        ViewMode = SourcesRelationsViewMode.List;
-    }
+    private void SetListMode() => ViewMode = SourcesRelationsViewMode.List;
 
     [RelayCommand]
-    private void SetGraphMode()
-    {
-        ViewMode = SourcesRelationsViewMode.Graph;
-    }
+    private void SetGraphMode() => ViewMode = SourcesRelationsViewMode.Graph;
 
     [RelayCommand]
     private async Task AddSource()
@@ -208,19 +201,11 @@ public sealed partial class SourcesRelationsViewModel : ObservableObject, IPageH
 
             if (savedConfirmed && settingsVm.Settings is not null)
             {
-                try
+                await TryMutateAsync("Источники", "Не удалось добавить источник", () =>
                 {
                     _orcestrator.AddSource(newSourceId, plugin.Name, settingsVm.Settings);
                     _logger.LogInformation("Добавлен источник {Title} ({Type})", settingsVm.Name, plugin.Name);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Не удалось добавить источник");
-                    _dialogs.Error("Источники", $"Не удалось добавить источник: {ex.Message}");
-                    return;
-                }
-
-                await ReloadAsync();
+                });
                 return;
             }
 
@@ -247,25 +232,13 @@ public sealed partial class SourcesRelationsViewModel : ObservableObject, IPageH
             return;
         }
 
-        try
-        {
-            _orcestrator.AddRelation(dialogVm.From, dialogVm.To);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Не удалось создать связь");
-            _dialogs.Error("Связи", $"Не удалось создать связь: {ex.Message}");
-            return;
-        }
-
-        await ReloadAsync();
+        await TryMutateAsync("Связи", "Не удалось создать связь",
+            () => _orcestrator.AddRelation(dialogVm.From, dialogVm.To));
     }
 
     internal async Task EditSource(SourceCardViewModel card)
     {
-        var plugin = ResolvePluginFor(card.Source);
-
-        if (plugin is null)
+        if (ResolvePluginFor(card.Source) is not { } plugin)
         {
             return;
         }
@@ -278,27 +251,17 @@ public sealed partial class SourcesRelationsViewModel : ObservableObject, IPageH
             return;
         }
 
-        try
+        await TryMutateAsync("Источники", "Не удалось сохранить источник", () =>
         {
             card.Source.Settings = dialogVm.Settings;
             _orcestrator.UpdateSource(card.Source);
             _logger.LogInformation("Обновлён источник {Title}", card.Title);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Не удалось сохранить источник");
-            _dialogs.Error("Источники", $"Не удалось сохранить источник: {ex.Message}");
-            return;
-        }
-
-        await ReloadAsync();
+        });
     }
 
     internal async Task DuplicateSource(SourceCardViewModel card)
     {
-        var plugin = ResolvePluginFor(card.Source);
-
-        if (plugin is null)
+        if (ResolvePluginFor(card.Source) is not { } plugin)
         {
             return;
         }
@@ -312,53 +275,29 @@ public sealed partial class SourcesRelationsViewModel : ObservableObject, IPageH
             return;
         }
 
-        try
+        await TryMutateAsync("Источники", "Не удалось создать дубликат", () =>
         {
             _orcestrator.AddSource(newSourceId, plugin.Name, dialogVm.Settings);
             _logger.LogInformation("Создан дубликат источника {Title}", dialogVm.Name);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Не удалось создать дубликат");
-            _dialogs.Error("Источники", $"Не удалось создать дубликат: {ex.Message}");
-            return;
-        }
-
-        await ReloadAsync();
+        });
     }
 
     internal void ToggleSourceDisable(SourceCardViewModel card)
     {
-        try
+        TryMutateAndReload("Источники", "Не удалось переключить состояние", () =>
         {
             card.Source.IsDisable = !card.Source.IsDisable;
             _orcestrator.UpdateSource(card.Source);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Не удалось переключить состояние источника");
-            _dialogs.Error("Источники", $"Не удалось переключить состояние: {ex.Message}");
-            return;
-        }
-
-        _ = ReloadAsync();
+        });
     }
 
     internal void DeleteSource(SourceCardViewModel card)
     {
-        try
+        TryMutateAndReload("Источники", "Не удалось удалить источник", () =>
         {
             _orcestrator.RemoveSource(card.Source.Id);
             _logger.LogInformation("Удалён источник {Title}", card.Title);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Не удалось удалить источник");
-            _dialogs.Error("Источники", $"Не удалось удалить источник: {ex.Message}");
-            return;
-        }
-
-        _ = ReloadAsync();
+        });
     }
 
     internal void InvertRelation(RelationCardViewModel card)
@@ -370,18 +309,8 @@ public sealed partial class SourcesRelationsViewModel : ObservableObject, IPageH
             return;
         }
 
-        try
-        {
-            _orcestrator.InvertRelation(relation.From.Id, relation.To.Id);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Не удалось инвертировать связь");
-            _dialogs.Error("Связи", $"Не удалось инвертировать связь: {ex.Message}");
-            return;
-        }
-
-        _ = ReloadAsync();
+        TryMutateAndReload("Связи", "Не удалось инвертировать связь",
+            () => _orcestrator.InvertRelation(relation.From.Id, relation.To.Id));
     }
 
     internal void DeleteRelation(RelationCardViewModel card)
@@ -393,23 +322,44 @@ public sealed partial class SourcesRelationsViewModel : ObservableObject, IPageH
             return;
         }
 
-        try
-        {
-            _orcestrator.RemoveRelation(relation.From, relation.To);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Не удалось удалить связь");
-            _dialogs.Error("Связи", $"Не удалось удалить связь: {ex.Message}");
-            return;
-        }
-
-        _ = ReloadAsync();
+        TryMutateAndReload("Связи", "Не удалось удалить связь",
+            () => _orcestrator.RemoveRelation(relation.From, relation.To));
     }
 
     partial void OnViewModeChanged(SourcesRelationsViewMode value)
     {
         _settings.SetValue(ViewModeSettingKey, value.ToString());
+    }
+
+    private async Task TryMutateAsync(string dialogTitle, string errorPrefix, Action action)
+    {
+        if (TryExecuteMutation(dialogTitle, errorPrefix, action))
+        {
+            await ReloadAsync();
+        }
+    }
+
+    private void TryMutateAndReload(string dialogTitle, string errorPrefix, Action action)
+    {
+        if (TryExecuteMutation(dialogTitle, errorPrefix, action))
+        {
+            _ = ReloadAsync();
+        }
+    }
+
+    private bool TryExecuteMutation(string dialogTitle, string errorPrefix, Action action)
+    {
+        try
+        {
+            action();
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "{ErrorPrefix}", errorPrefix);
+            _dialogs.Error(dialogTitle, $"{errorPrefix}: {ex.Message}");
+            return false;
+        }
     }
 
     private ISourceType? ResolvePluginFor(Source source)
@@ -441,17 +391,10 @@ public sealed partial class SourcesRelationsViewModel : ObservableObject, IPageH
             .OrderBy(t => t.Name, StringComparer.CurrentCultureIgnoreCase)
             .ToList();
 
-        var sourceStats = BuildSourceStats(sources, medias);
-        var relationStats = BuildRelationStats(relations, medias);
+        var sourceStats = SourcesRelationsStatsBuilder.BuildSourceStats(sources, medias);
+        var relationStats = SourcesRelationsStatsBuilder.BuildRelationStats(relations, medias);
 
-        var dispatcher = Application.Current?.Dispatcher;
-
-        if (dispatcher is null)
-        {
-            return;
-        }
-
-        await dispatcher.InvokeAsync(() => Apply(sources, relations, pluginTypes, sourceStats, relationStats));
+        await _dispatcher.InvokeAsync(() => Apply(sources, relations, pluginTypes, sourceStats, relationStats));
     }
 
     private void Apply(
@@ -463,161 +406,44 @@ public sealed partial class SourcesRelationsViewModel : ObservableObject, IPageH
     {
         Sources.ReplaceAll(sources
             .OrderBy(s => s.Title, StringComparer.CurrentCultureIgnoreCase)
-            .Select(source =>
-            {
-                var stats = sourceStats.GetValueOrDefault(source.Id, SourceCardStats.Empty);
-                return new SourceCardViewModel(source, this, stats);
-            }));
+            .Select(s => new SourceCardViewModel(s, this, sourceStats.GetValueOrDefault(s.Id, SourceCardStats.Empty))));
 
-        Relations.ReplaceAll(relations.Select(relation =>
-        {
-            var stats = relationStats.GetValueOrDefault((relation.FromId, relation.ToId), RelationCardStats.Empty);
-            return new RelationCardViewModel(relation, this, stats);
-        }));
+        Relations.ReplaceAll(relations.Select(r =>
+            new RelationCardViewModel(r, this, relationStats.GetValueOrDefault((r.FromId, r.ToId), RelationCardStats.Empty))));
 
         PluginTypes.ReplaceAll(pluginTypes);
 
-        OnPropertyChanged(nameof(SourceCount));
-        OnPropertyChanged(nameof(DisabledSourceCount));
-        OnPropertyChanged(nameof(RelationCount));
-        OnPropertyChanged(nameof(DisabledRelationCount));
-        OnPropertyChanged(nameof(HasSources));
-        OnPropertyChanged(nameof(HasRelations));
-        OnPropertyChanged(nameof(HasAtLeastTwoSources));
-        OnPropertyChanged(nameof(HasPluginTypes));
-        OnPropertyChanged(nameof(ShowEmptySourcesState));
-        OnPropertyChanged(nameof(ShowEmptyRelationsState));
-        AddRelationCommand.NotifyCanExecuteChanged();
+        foreach (var name in SourcesRelationsStatsBuilder.SummaryPropertyNames)
+        {
+            OnPropertyChanged(name);
+        }
 
+        AddRelationCommand.NotifyCanExecuteChanged();
         StatusMessage = null;
     }
 
-    internal StateManager StateManager => _stateManager;
-
-    private static Dictionary<string, SourceCardStats> BuildSourceStats(List<Source> sources, List<Media> medias)
+    internal void SetEmptyForAutomation(bool empty)
     {
-        var counters = new Dictionary<string, (int Total, int Ok, int PartialOk, int Missing, int Error, int Skipped)>(StringComparer.Ordinal);
-
-        foreach (var source in sources)
+        if (empty)
         {
-            counters[source.Id] = default;
+            _automationSourcesStash ??= [.. Sources];
+            _automationRelationsStash ??= [.. Relations];
+            Sources.ReplaceAll([]);
+            Relations.ReplaceAll([]);
+        }
+        else if (_automationSourcesStash is not null)
+        {
+            Sources.ReplaceAll(_automationSourcesStash);
+            Relations.ReplaceAll(_automationRelationsStash ?? []);
+            _automationSourcesStash = null;
+            _automationRelationsStash = null;
         }
 
-        foreach (var media in medias)
+        foreach (var name in SourcesRelationsStatsBuilder.SummaryPropertyNames)
         {
-            if (media.Sources is null)
-            {
-                continue;
-            }
-
-            foreach (var link in media.Sources)
-            {
-                if (!counters.TryGetValue(link.SourceId, out var c))
-                {
-                    continue;
-                }
-
-                c.Total++;
-
-                switch (link.Status)
-                {
-                    case MediaStatus.Ok: c.Ok++; break;
-                    case MediaStatus.PartialOk: c.PartialOk++; break;
-                    case MediaStatus.Missing: c.Missing++; break;
-                    case MediaStatus.Error: c.Error++; break;
-                    case MediaStatus.Skipped: c.Skipped++; break;
-                }
-
-                counters[link.SourceId] = c;
-            }
+            OnPropertyChanged(name);
         }
 
-        return counters.ToDictionary(
-            kvp => kvp.Key,
-            kvp => new SourceCardStats
-            {
-                Total = kvp.Value.Total,
-                Ok = kvp.Value.Ok,
-                PartialOk = kvp.Value.PartialOk,
-                Missing = kvp.Value.Missing,
-                Error = kvp.Value.Error,
-                Skipped = kvp.Value.Skipped,
-            },
-            StringComparer.Ordinal);
-    }
-
-    private static Dictionary<(string From, string To), RelationCardStats> BuildRelationStats(List<SourceSyncRelation> relations, List<Media> medias)
-    {
-        var result = new Dictionary<(string From, string To), RelationCardStats>();
-
-        foreach (var relation in relations)
-        {
-            if (string.IsNullOrEmpty(relation.FromId) || string.IsNullOrEmpty(relation.ToId))
-            {
-                continue;
-            }
-
-            var transferred = 0;
-            var pending = 0;
-            var failed = 0;
-
-            foreach (var media in medias)
-            {
-                if (media.Sources is null)
-                {
-                    continue;
-                }
-
-                MediaSourceLink? fromLink = null;
-                MediaSourceLink? toLink = null;
-
-                foreach (var link in media.Sources)
-                {
-                    if (link.SourceId == relation.FromId)
-                    {
-                        fromLink = link;
-                    }
-                    else if (link.SourceId == relation.ToId)
-                    {
-                        toLink = link;
-                    }
-                }
-
-                if (fromLink is null || fromLink.Status != MediaStatus.Ok)
-                {
-                    continue;
-                }
-
-                if (toLink is null)
-                {
-                    pending++;
-                    continue;
-                }
-
-                switch (toLink.Status)
-                {
-                    case MediaStatus.Ok:
-                    case MediaStatus.PartialOk:
-                        transferred++;
-                        break;
-                    case MediaStatus.Error:
-                        failed++;
-                        break;
-                    case MediaStatus.Missing:
-                    case MediaStatus.None:
-                        pending++;
-                        break;
-                }
-            }
-
-            result[(relation.FromId, relation.ToId)] = new()
-            {
-                Transferred = transferred,
-                Pending = pending,
-                Failed = failed,
-            };
-        }
-
-        return result;
+        AddRelationCommand.NotifyCanExecuteChanged();
     }
 }

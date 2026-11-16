@@ -92,6 +92,9 @@ jobs:
       - name: Build plugins
         run: dotnet build MediaOrcestrator.sln -c Release --no-restore /p:Version=${{ needs.prepare.outputs.version }}
 
+      - name: Run tests
+        run: dotnet test MediaOrcestrator.sln -c Release --no-build --verbosity normal
+
       - name: Publish Runner.Wpf
         run: >
           dotnet publish MediaOrcestrator.Runner.Wpf/MediaOrcestrator.Runner.Wpf.csproj

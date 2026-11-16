@@ -55,6 +55,8 @@ public sealed partial class ToolsViewModel : ObservableObject
 
     public ObservableCollection<ToolItemViewModel> Items { get; }
 
+    internal void SuppressAutoCheckForAutomation() => _initialChecked = true;
+
     public async Task EnsureCheckedAsync()
     {
         if (_initialChecked)

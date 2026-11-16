@@ -1,8 +1,8 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using KeepShell.Services.Platform;
 using MahApps.Metro.IconPacks;
 using MediaOrcestrator.Domain;
-using System.Windows;
 
 namespace MediaOrcestrator.Runner.Wpf.ViewModels;
 
@@ -11,6 +11,7 @@ public sealed partial class ActionRowViewModel : ObservableObject, IDisposable
     private readonly ActionHolder.RunningAction _action;
     private readonly Action _markDirty;
     private readonly Action<ActionRowViewModel> _onExpandedChanged;
+    private readonly IUiDispatcher _dispatcher;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ChevronIcon))]
@@ -23,11 +24,16 @@ public sealed partial class ActionRowViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private bool _isVisible = true;
 
-    public ActionRowViewModel(ActionHolder.RunningAction action, Action markDirty, Action<ActionRowViewModel> onExpandedChanged)
+    public ActionRowViewModel(
+        ActionHolder.RunningAction action,
+        Action markDirty,
+        Action<ActionRowViewModel> onExpandedChanged,
+        IUiDispatcher dispatcher)
     {
         _action = action;
         _markDirty = markDirty;
         _onExpandedChanged = onExpandedChanged;
+        _dispatcher = dispatcher;
         _action.Changed += OnActionChanged;
     }
 
@@ -202,14 +208,7 @@ public sealed partial class ActionRowViewModel : ObservableObject, IDisposable
 
     private void OnActionChanged(object? sender, EventArgs e)
     {
-        var app = Application.Current;
-
-        if (app is null)
-        {
-            return;
-        }
-
-        app.Dispatcher.BeginInvoke(NotifyChanged);
+        _dispatcher.Invoke(NotifyChanged);
     }
 
     private void NotifyChanged()

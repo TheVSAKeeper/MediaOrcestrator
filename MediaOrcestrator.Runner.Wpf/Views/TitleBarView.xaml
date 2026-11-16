@@ -26,7 +26,7 @@
             <StackPanel Grid.Column="0"
                         Orientation="Horizontal"
                         Margin="14,0">
-                <Image Source="pack://application:,,,/icon.ico"
+                <Image Source="pack://application:,,,/MediaOrcestrator.Runner.Wpf;component/icon.ico"
                        Width="18"
                        Height="18"
                        VerticalAlignment="Center"

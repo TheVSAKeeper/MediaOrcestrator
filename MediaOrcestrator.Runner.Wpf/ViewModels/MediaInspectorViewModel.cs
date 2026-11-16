@@ -1,13 +1,11 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using KeepShell.Services.Platform;
-using MahApps.Metro.IconPacks;
 using MediaOrcestrator.Domain;
 using MediaOrcestrator.Modules;
 using MediaOrcestrator.Runner.Wpf.Bootstrap;
 using MediaOrcestrator.Runner.Wpf.Converters;
 using Microsoft.Extensions.Logging;
-using System.Text;
 using System.Windows.Media;
 
 namespace MediaOrcestrator.Runner.Wpf.ViewModels;
@@ -110,7 +108,7 @@ public sealed partial class MediaInspectorViewModel(
                 StatusIcon = StatusIcons.Resolve(status.Id),
                 StatusText = status.Text,
                 StatusBrush = MakeBrush(status.IconColor),
-                OpenUri = TryGetExternalUri(source, link, media),
+                OpenUri = MediaInspectorDetailsFormatter.TryGetExternalUri(source, link, media),
             };
         }));
 
@@ -119,9 +117,9 @@ public sealed partial class MediaInspectorViewModel(
 
         foreach (var item in media.Metadata ?? [])
         {
-            var entry = ToInspectorItem(item, sourceById);
+            var entry = MediaInspectorDetailsFormatter.ToInspectorItem(item, sourceById);
 
-            if (IsSystemKey(item.Key))
+            if (MediaInspectorDetailsFormatter.IsSystemKey(item.Key))
             {
                 systemItems.Add(entry);
             }
@@ -136,14 +134,7 @@ public sealed partial class MediaInspectorViewModel(
         SystemMetadata.ReplaceAll(systemItems.OrderBy(i => i.DisplayName, NaturalStringComparer.Instance));
 
         BuildPreviewSources(media, sourceById);
-
-        OnPropertyChanged(nameof(HasSources));
-        OnPropertyChanged(nameof(HasUserMetadata));
-        OnPropertyChanged(nameof(HasSystemMetadata));
-        OnPropertyChanged(nameof(UserMetadataCount));
-        OnPropertyChanged(nameof(SystemMetadataCount));
-        OnPropertyChanged(nameof(CanCopyDetails));
-        CopyDetailsCommand.NotifyCanExecuteChanged();
+        NotifySectionCountsChanged();
     }
 
     public void Clear()
@@ -152,22 +143,7 @@ public sealed partial class MediaInspectorViewModel(
         SelectionCount = 0;
         Title = string.Empty;
         Description = string.Empty;
-        Sources.ReplaceAll([]);
-        UserMetadataGroups.ReplaceAll([]);
-        SystemMetadata.ReplaceAll([]);
-        PreviewSources.ReplaceAll([]);
-        ApplyPreviewSelection(null);
-        _media = null;
-        _allSources = [];
-
-        OnPropertyChanged(nameof(HasSources));
-        OnPropertyChanged(nameof(HasUserMetadata));
-        OnPropertyChanged(nameof(HasSystemMetadata));
-        OnPropertyChanged(nameof(UserMetadataCount));
-        OnPropertyChanged(nameof(SystemMetadataCount));
-        OnPropertyChanged(nameof(HasMultiplePreviews));
-        OnPropertyChanged(nameof(CanCopyDetails));
-        CopyDetailsCommand.NotifyCanExecuteChanged();
+        ResetCollections();
     }
 
     public void ShowMulti(int count)
@@ -176,6 +152,11 @@ public sealed partial class MediaInspectorViewModel(
         SelectionCount = count;
         Title = $"Выделено {count}";
         Description = string.Empty;
+        ResetCollections();
+    }
+
+    private void ResetCollections()
+    {
         Sources.ReplaceAll([]);
         UserMetadataGroups.ReplaceAll([]);
         SystemMetadata.ReplaceAll([]);
@@ -183,7 +164,11 @@ public sealed partial class MediaInspectorViewModel(
         ApplyPreviewSelection(null);
         _media = null;
         _allSources = [];
+        NotifySectionCountsChanged();
+    }
 
+    private void NotifySectionCountsChanged()
+    {
         OnPropertyChanged(nameof(HasSources));
         OnPropertyChanged(nameof(HasUserMetadata));
         OnPropertyChanged(nameof(HasSystemMetadata));
@@ -207,8 +192,11 @@ public sealed partial class MediaInspectorViewModel(
             return;
         }
 
-        _logger.LogDebug("Превью переключено вручную на {Preview} ({Source}) для медиа {MediaId}",
-            source.Url, source.SourceTitle, _media?.Id);
+        _logger.LogDebug(
+            "Превью переключено вручную на {Preview} ({Source}) для медиа {MediaId}",
+            source.Url,
+            source.SourceTitle,
+            _media?.Id);
 
         ApplyPreviewSelection(source.Url);
     }
@@ -224,7 +212,7 @@ public sealed partial class MediaInspectorViewModel(
 
                 return new MediaPreviewSource
                 {
-                    SourceTitle = ResolveSourceTitle(m.SourceId, sourceById),
+                    SourceTitle = MediaInspectorDetailsFormatter.ResolveSourceTitle(m.SourceId, sourceById),
                     Url = url,
                     CanRender = StringToImageSourceConverter.CanRender(url),
                 };
@@ -238,7 +226,6 @@ public sealed partial class MediaInspectorViewModel(
         {
             _logger.LogDebug("Превью нет: у медиа {MediaId} не задан ни один PreviewUrl", media.Id);
             ApplyPreviewSelection(null);
-
             return;
         }
 
@@ -248,16 +235,21 @@ public sealed partial class MediaInspectorViewModel(
         {
             _logger.LogWarning(
                 "Превью не отображается: ни один из {Count} PreviewUrl медиа {MediaId} не пригоден (относительные/неподдерживаемая схема/нет файла): {Candidates}",
-                sources.Count, media.Id, string.Join("; ", sources.Select(s => s.Url)));
+                sources.Count,
+                media.Id,
+                string.Join("; ", sources.Select(s => s.Url)));
             ApplyPreviewSelection(null);
-
             return;
         }
 
         if (sources.Count > 1)
         {
-            _logger.LogDebug("Для медиа {MediaId} выбрано превью {Preview} ({Source}) из {Count} кандидатов",
-                media.Id, auto.Url, auto.SourceTitle, sources.Count);
+            _logger.LogDebug(
+                "Для медиа {MediaId} выбрано превью {Preview} ({Source}) из {Count} кандидатов",
+                media.Id,
+                auto.Url,
+                auto.SourceTitle,
+                sources.Count);
         }
 
         ApplyPreviewSelection(auto.Url);
@@ -278,7 +270,6 @@ public sealed partial class MediaInspectorViewModel(
         if (url is null || !StringToImageSourceConverter.CanRender(url))
         {
             IsPreviewLoading = false;
-
             return;
         }
 
@@ -299,87 +290,61 @@ public sealed partial class MediaInspectorViewModel(
         IsPreviewLoading = false;
     }
 
-    private static string ResolveSourceTitle(string? sourceId, IDictionary<string, Source> sourceById)
-    {
-        if (!string.IsNullOrEmpty(sourceId) && sourceById.TryGetValue(sourceId, out var source))
-        {
-            return source.TitleFull;
-        }
-
-        return string.IsNullOrEmpty(sourceId) ? "Общее" : sourceId;
-    }
-
     [RelayCommand]
     private void CopyItem(MediaMetadataItem? item)
     {
-        if (item is null)
+        if (item is not null)
         {
-            return;
+            TryCopy(item.RawValue);
         }
-
-        TryCopy(item.RawValue);
     }
 
     [RelayCommand]
     private void CopyItemFormatted(MediaMetadataItem? item)
     {
-        if (item is null)
+        if (item is not null)
         {
-            return;
+            TryCopy($"{item.DisplayName}: {item.Value}");
         }
-
-        TryCopy($"{item.DisplayName}: {item.Value}");
     }
 
     [RelayCommand]
-    private void CopyTitle()
-    {
-        TryCopy(Title);
-    }
+    private void CopyTitle() => TryCopy(Title);
 
     [RelayCommand]
     private void CopyDescription()
     {
-        if (!HasDescription)
+        if (HasDescription)
         {
-            return;
+            TryCopy(Description);
         }
-
-        TryCopy(Description);
     }
 
     [RelayCommand]
     private void CopyExternalId(string? externalId)
     {
-        if (string.IsNullOrEmpty(externalId))
+        if (!string.IsNullOrEmpty(externalId))
         {
-            return;
+            TryCopy(externalId);
         }
-
-        TryCopy(externalId);
     }
 
     [RelayCommand]
     private void OpenSource(MediaInspectorSourceItem? item)
     {
-        if (item?.OpenUri is null)
+        if (item?.OpenUri is not null)
         {
-            return;
+            _shellLauncher.Open(item.OpenUri.ToString());
         }
-
-        _shellLauncher.Open(item.OpenUri.ToString());
     }
 
     [RelayCommand(CanExecute = nameof(CanCopyDetails))]
     private void CopyDetails()
     {
-        if (_media is null)
+        if (_media is not null)
         {
-            return;
+            TryCopy(MediaInspectorDetailsFormatter.BuildDetails(_media, _allSources));
         }
-
-        var details = BuildDetails(_media, _allSources);
-        TryCopy(details);
     }
 
     private void BuildUserGroups(IReadOnlyList<(MetadataItem source, MediaMetadataItem display)> items)
@@ -404,165 +369,12 @@ public sealed partial class MediaInspectorViewModel(
         UserMetadataGroups.ReplaceAll(newGroups);
     }
 
-    private static bool IsSystemKey(string? key)
-    {
-        if (string.IsNullOrEmpty(key))
-        {
-            return false;
-        }
-
-        return key.StartsWith("_system", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(key, "PreviewUrl", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static MediaMetadataItem ToInspectorItem(MetadataItem item, IDictionary<string, Source> sourceById)
-    {
-        string? sourceTitle = null;
-
-        if (!string.IsNullOrEmpty(item.SourceId)
-            && sourceById.TryGetValue(item.SourceId, out var source))
-        {
-            sourceTitle = source.TitleFull;
-        }
-        else if (!string.IsNullOrEmpty(item.SourceId))
-        {
-            sourceTitle = item.SourceId;
-        }
-
-        return new(item.DisplayName ?? item.Key,
-            MetadataValueFormatter.Format(item),
-            item.Value,
-            sourceTitle);
-    }
-
-    private static Uri? TryGetExternalUri(Source? source, MediaSourceLink link, Media media)
-    {
-        if (source?.Type is null || string.IsNullOrEmpty(link.ExternalId))
-        {
-            return null;
-        }
-
-        try
-        {
-            var linkMetadata = media.Metadata?.ForSource(source.Id);
-
-            return source.Type.GetExternalUri(link.ExternalId, source.Settings, linkMetadata);
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
     private static SolidColorBrush MakeBrush(System.Drawing.Color color)
     {
         var brush = new SolidColorBrush(Color.FromArgb(color.A, color.R, color.G, color.B));
         brush.Freeze();
-
         return brush;
     }
 
-    private void TryCopy(string value)
-    {
-        _clipboard.TrySetText(value ?? string.Empty);
-    }
-
-    private static string BuildDetails(Media media, IReadOnlyList<Source> allSources)
-    {
-        var sb = new StringBuilder();
-
-        sb.AppendLine($"Название: {media.Title}");
-
-        if (!string.IsNullOrEmpty(media.Description))
-        {
-            sb.AppendLine($"Описание: {media.Description}");
-        }
-
-        if (media.Metadata is { Count: > 0 })
-        {
-            sb.AppendLine();
-            sb.AppendLine("Метаданные:");
-
-            foreach (var meta in media.Metadata)
-            {
-                if (IsSystemKey(meta.Key))
-                {
-                    continue;
-                }
-
-                var name = meta.DisplayName ?? meta.Key;
-                sb.AppendLine($"  {name}: {MetadataValueFormatter.Format(meta)}");
-            }
-        }
-
-        sb.AppendLine();
-        sb.AppendLine("Источники:");
-
-        if (media.Sources is not { Count: > 0 })
-        {
-            sb.AppendLine("  Нет источников");
-
-            return sb.ToString();
-        }
-
-        foreach (var link in media.Sources)
-        {
-            var source = allSources.FirstOrDefault(s => s.Id == link.SourceId);
-            var sourceName = source?.TitleFull ?? "Неизвестный источник";
-            var status = MediaStatusHelper.GetById(link.Status);
-
-            sb.AppendLine($"  {sourceName}: {status.IconText} {status.Text}");
-
-            if (!string.IsNullOrEmpty(link.ExternalId))
-            {
-                sb.AppendLine($"    ID: {link.ExternalId}");
-            }
-        }
-
-        return sb.ToString();
-    }
-}
-
-public sealed class MediaInspectorSourceItem
-{
-    public required string SourceTitle { get; init; }
-
-    public string? LinkTitle { get; init; }
-
-    public string? LinkDescription { get; init; }
-
-    public required string ExternalId { get; init; }
-
-    public required PackIconLucideKind StatusIcon { get; init; }
-
-    public required string StatusText { get; init; }
-
-    public required Brush StatusBrush { get; init; }
-
-    public Uri? OpenUri { get; init; }
-
-    public bool CanOpen => OpenUri is not null;
-}
-
-public sealed class MediaMetadataGroup(string label)
-{
-    public string Label { get; } = label;
-
-    public RangeObservableCollection<MediaMetadataItem> Items { get; } = [];
-}
-
-public sealed record MediaMetadataItem(string DisplayName, string Value, string RawValue, string? SourceTitle);
-
-public sealed partial class MediaPreviewSource : ObservableObject
-{
-    public required string SourceTitle { get; init; }
-
-    public required string Url { get; init; }
-
-    public required bool CanRender { get; init; }
-
-    [ObservableProperty]
-    private bool _isActive;
-
-    public string Label => CanRender ? SourceTitle : $"{SourceTitle} – недоступно";
+    private void TryCopy(string value) => _clipboard.TrySetText(value ?? string.Empty);
 }

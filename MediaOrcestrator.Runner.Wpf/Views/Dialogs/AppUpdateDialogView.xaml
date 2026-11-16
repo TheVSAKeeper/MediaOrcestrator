@@ -3,6 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="clr-namespace:MediaOrcestrator.Runner.Wpf.ViewModels"
              xmlns:conv="clr-namespace:MediaOrcestrator.Runner.Wpf.Converters"
+             xmlns:keepshell="https://schemas.keepshell.dev/wpf"
              xmlns:iconPacks="http://metro.mahapps.com/winfx/xaml/iconpacks"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -136,41 +137,37 @@
             </StackPanel>
         </Border>
 
-        <Grid Grid.Row="6"
-              Margin="0,18,0,0">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-
-            <Button Grid.Column="0"
-                    Style="{StaticResource Button.Ghost}"
+        <keepshell:StretchWrapPanel Grid.Row="6"
+                                    Margin="0,18,0,0">
+            <Button Style="{StaticResource Button.Ghost}"
                     Command="{Binding OpenReleasePageCommand}"
                     Padding="{DynamicResource Padding.Control}"
                     MinHeight="{DynamicResource Control.Height.Default}"
+                    Margin="0,2,8,2"
+                    HorizontalAlignment="Left"
                     ToolTip="Открыть страницу релиза на GitHub"
                     Visibility="{Binding ReleasePageUrl, Converter={StaticResource NullToVisibility}, FallbackValue=Collapsed, TargetNullValue=Collapsed}">
                 <StackPanel Orientation="Horizontal">
                     <iconPacks:PackIconLucide Kind="ExternalLink"
-                                      Width="14"
-                                      Height="14"
-                                      Margin="0,0,6,0"
-                                      VerticalAlignment="Center" />
+                                              Width="14"
+                                              Height="14"
+                                              Margin="0,0,6,0"
+                                              VerticalAlignment="Center" />
                     <TextBlock Text="Страница релиза"
                                VerticalAlignment="Center" />
                 </StackPanel>
             </Button>
 
-            <StackPanel Grid.Column="2"
-                        Orientation="Horizontal">
-                
+            <WrapPanel keepshell:StretchWrapPanel.Stretch="True"
+                       keepshell:StretchWrapPanel.StretchWidth="220"
+                       Orientation="Horizontal"
+                       HorizontalAlignment="Right">
                 <Button Style="{StaticResource Button.Ghost}"
                         Command="{Binding SkipCommand}"
                         Content="Пропустить эту версию"
                         Padding="{DynamicResource Padding.Control}"
                         MinHeight="{DynamicResource Control.Height.Default}"
-                        Margin="0,0,8,0"
+                        Margin="0,2,8,2"
                         ToolTip="Не показывать баннер для этой версии"
                         Visibility="{Binding IsIdle, Converter={StaticResource BoolToVisibility}}" />
                 <Button Style="{StaticResource Button.Ghost}"
@@ -178,21 +175,22 @@
                         Content="Позже"
                         Padding="14,6"
                         MinHeight="{DynamicResource Control.Height.Default}"
-                        Margin="0,0,8,0"
+                        Margin="0,2,8,2"
                         IsCancel="True"
                         Visibility="{Binding IsIdle, Converter={StaticResource BoolToVisibility}}" />
                 <Button Style="{StaticResource Button.Primary}"
                         Command="{Binding InstallCommand}"
                         Padding="16,6"
                         MinHeight="{DynamicResource Control.Height.Default}"
+                        Margin="0,2,0,2"
                         IsDefault="True"
                         Visibility="{Binding IsIdle, Converter={StaticResource BoolToVisibility}}">
                     <StackPanel Orientation="Horizontal">
                         <iconPacks:PackIconLucide Kind="Download"
-                                          Width="14"
-                                          Height="14"
-                                          Margin="0,0,6,0"
-                                          VerticalAlignment="Center" />
+                                                  Width="14"
+                                                  Height="14"
+                                                  Margin="0,0,6,0"
+                                                  VerticalAlignment="Center" />
                         <TextBlock Text="Установить"
                                    VerticalAlignment="Center" />
                     </StackPanel>
@@ -202,9 +200,10 @@
                         Content="Отменить скачивание"
                         Padding="14,6"
                         MinHeight="{DynamicResource Control.Height.Default}"
+                        Margin="0,2,0,2"
                         IsCancel="True"
                         Visibility="{Binding IsDownloading, Converter={StaticResource BoolToVisibility}}" />
-            </StackPanel>
-        </Grid>
+            </WrapPanel>
+        </keepshell:StretchWrapPanel>
     </Grid>
 </UserControl>

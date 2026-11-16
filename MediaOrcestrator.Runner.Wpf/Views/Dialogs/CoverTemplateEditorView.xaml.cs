@@ -12,6 +12,7 @@ public partial class CoverTemplateEditorView : UserControl, IView<CoverTemplateE
     public CoverTemplateEditorView()
     {
         InitializeComponent();
+        Loaded += (_, _) => InspectorPanel.FocusProfileName();
     }
 
     private void OnPreviewMouseDown(object sender, MouseButtonEventArgs e)
