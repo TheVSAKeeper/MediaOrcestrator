@@ -1,6 +1,4 @@
-﻿using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.Formats.Jpeg;
-using SixLabors.ImageSharp.Processing;
+﻿using SkiaSharp;
 
 namespace MediaOrcestrator.VkVideo;
 
@@ -16,10 +14,11 @@ internal static class ThumbnailCropper
             return sourcePath;
         }
 
-        using var image = Image.Load(sourcePath);
+        using var bitmap = SKBitmap.Decode(sourcePath)
+                           ?? throw new InvalidOperationException($"Не удалось декодировать изображение: {sourcePath}");
 
-        var imageHeight = image.Height;
-        var imageWidth = image.Width;
+        var imageHeight = bitmap.Height;
+        var imageWidth = bitmap.Width;
         var sourceAspect = (double)imageWidth / imageHeight;
         if (sourceAspect <= TargetAspectRatio + AspectTolerance)
         {
@@ -33,14 +32,18 @@ internal static class ThumbnailCropper
         }
 
         var x = (imageWidth - targetWidth) / 2;
-        image.Mutate(ctx => ctx.Crop(new(x, 0, targetWidth, imageHeight)));
+        using var sourceImage = SKImage.FromBitmap(bitmap);
+        using var croppedImage = sourceImage.Subset(SKRectI.Create(x, 0, targetWidth, imageHeight))
+                                 ?? throw new InvalidOperationException($"Не удалось обрезать изображение: {sourcePath}");
 
         var directory = Path.GetDirectoryName(sourcePath) ?? string.Empty;
         var nameWithoutExt = Path.GetFileNameWithoutExtension(sourcePath);
         var croppedPath = Path.Combine(directory, $"{nameWithoutExt}.shorts.jpg");
 
-        var encoder = new JpegEncoder { Quality = 100 };
-        image.Save(croppedPath, encoder);
+        using var data = croppedImage.Encode(SKEncodedImageFormat.Jpeg, 100)
+                         ?? throw new InvalidOperationException($"Не удалось закодировать изображение в JPEG: {croppedPath}");
+        using var stream = File.Create(croppedPath);
+        data.SaveTo(stream);
 
         return croppedPath;
     }

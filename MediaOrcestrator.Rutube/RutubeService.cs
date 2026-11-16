@@ -1,8 +1,7 @@
 ﻿using MediaOrcestrator.Modules;
 using Microsoft.Extensions.Logging;
 using Polly;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.Formats.Jpeg;
+using SkiaSharp;
 using System.Net;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -103,25 +102,7 @@ public sealed partial class RutubeService
                     try
                     {
                         _logger.ConvertingWebPToJpg();
-
-                        var tempJpgPath = thumbnailPath + ".jpg";
-
-                        using (var image = Image.Load(thumbnailPath))
-                        {
-                            var encoder = new JpegEncoder
-                            {
-                                Quality = 90,
-                            };
-
-                            if (File.Exists(tempJpgPath))
-                            {
-                                File.Delete(tempJpgPath);
-                            }
-
-                            await using var fileStream = new FileStream(tempJpgPath, FileMode.Create);
-                            await image.SaveAsync(fileStream, encoder, cancellationToken);
-                        }
-
+                        var tempJpgPath = ConvertWebPToJpeg(thumbnailPath);
                         _logger.WebPConverted();
                         thumbnailUrl = await UploadThumbnailAsync(videoId, tempJpgPath, cancellationToken);
                     }
@@ -913,6 +894,22 @@ public sealed partial class RutubeService
         {
             _logger.PublicationConfirmed(result.VideoId, result.Timestamp);
         }
+    }
+
+    internal static string ConvertWebPToJpeg(string thumbnailPath)
+    {
+        var tempJpgPath = thumbnailPath + ".jpg";
+
+        using var bitmap = SKBitmap.Decode(thumbnailPath)
+                           ?? throw new InvalidOperationException($"Не удалось декодировать изображение: {thumbnailPath}");
+        using var image = SKImage.FromBitmap(bitmap);
+        using var data = image.Encode(SKEncodedImageFormat.Jpeg, 90)
+                         ?? throw new InvalidOperationException($"Не удалось закодировать изображение в JPEG: {thumbnailPath}");
+
+        using var fileStream = File.Create(tempJpgPath);
+        data.SaveTo(fileStream);
+
+        return tempJpgPath;
     }
 
     private static class Operations
