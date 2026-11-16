@@ -53,7 +53,8 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <m:MediaSearchBar Grid.Row="0"
+        <m:MediaSearchBar x:Name="SearchBar"
+                          Grid.Row="0"
                           DataContext="{Binding Filter}" />
 
         <m:MediaFilterBar Grid.Row="1" />
@@ -61,12 +62,12 @@
         <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"
-                                  MinWidth="360" />
+                                  MinWidth="260" />
                 <ColumnDefinition x:Name="SplitterColumn"
                                   Width="6" />
                 <ColumnDefinition x:Name="InspectorColumn"
                                   Width="480"
-                                  MinWidth="300" />
+                                  MinWidth="260" />
             </Grid.ColumnDefinitions>
 
             <m:MediaGridView Grid.Column="0"
@@ -107,13 +108,13 @@
                            VerticalAlignment="Center"
                            TextTrimming="CharacterEllipsis" />
 
-                <StackPanel Grid.Column="1"
-                            Orientation="Horizontal"
-                            Margin="16,0,0,0">
-                    <Grid>
+                <WrapPanel Grid.Column="1"
+                           Orientation="Horizontal"
+                           VerticalAlignment="Center"
+                           Margin="16,0,0,0">
+                    <Grid Margin="0,2,8,2">
                         <ToggleButton x:Name="TransferButton"
                                       Style="{StaticResource ToggleButton.Toolbar}"
-                                      Margin="{DynamicResource Margin.InlineGap}"
                                       ToolTip="Передать через связь источников"
                                       AutomationProperties.Name="Передать через связь источников">
                             <StackPanel Orientation="Horizontal">
@@ -160,7 +161,7 @@
                             Command="{Binding Grid.OpenRenameOperationCommand}"
                             IsEnabled="{Binding Grid.HasSelection}"
                             Padding="{DynamicResource Padding.Control.Compact}"
-                            Margin="{DynamicResource Margin.InlineGap}"
+                            Margin="0,2,8,2"
                             ToolTip="Открыть пакетное переименование для выделенного"
                             AutomationProperties.Name="Переименовать выделенное">
                         <StackPanel Orientation="Horizontal">
@@ -178,7 +179,7 @@
                             Command="{Binding Grid.OpenPreviewOperationCommand}"
                             IsEnabled="{Binding Grid.HasSelection}"
                             Padding="{DynamicResource Padding.Control.Compact}"
-                            Margin="{DynamicResource Margin.InlineGap}"
+                            Margin="0,2,8,2"
                             ToolTip="Открыть обновление обложек для выделенного"
                             AutomationProperties.Name="Обложки выделенного">
                         <StackPanel Orientation="Horizontal">
@@ -196,6 +197,7 @@
                             Command="{Binding Grid.OpenMergeOperationCommand}"
                             IsEnabled="{Binding Grid.HasSelection}"
                             Padding="{DynamicResource Padding.Control.Compact}"
+                            Margin="0,2,0,2"
                             ToolTip="Открыть слияние дублей для выделенного"
                             AutomationProperties.Name="Слить дубли выделенного">
                         <StackPanel Orientation="Horizontal">
@@ -208,7 +210,7 @@
                                        VerticalAlignment="Center" />
                         </StackPanel>
                     </Button>
-                </StackPanel>
+                </WrapPanel>
 
                 <Grid Grid.Column="2"
                       Margin="16,0,0,0">

@@ -63,6 +63,7 @@ public sealed partial class BatchPreviewSubViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasFilePath))]
     [NotifyCanExecuteChangedFor(nameof(ApplyCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ClearFileCommand))]
     private string? _filePath;
 
     [ObservableProperty]
@@ -95,6 +96,7 @@ public sealed partial class BatchPreviewSubViewModel : ObservableObject
         ISettingsStore settings,
         CoverGenerator coverGenerator,
         CoverTemplateStore coverTemplateStore,
+        ICoverTemplateEditorWindowService editorWindow,
         ILogger<BatchPreviewSubViewModel> logger,
         IFilePicker filePicker)
     {
@@ -106,7 +108,7 @@ public sealed partial class BatchPreviewSubViewModel : ObservableObject
         _logger = logger;
         _filePicker = filePicker;
 
-        TemplatePicker = new(coverGenerator, coverTemplateStore, dialogs, filePicker);
+        TemplatePicker = new(coverGenerator, coverTemplateStore, dialogs, filePicker, editorWindow);
         TemplatePicker.TemplateChanged += OnTemplateChanged;
         TemplatePicker.PropertyChanged += OnTemplatePickerPropertyChanged;
 
@@ -231,6 +233,11 @@ public sealed partial class BatchPreviewSubViewModel : ObservableObject
             FilePath = path;
         }
     }
+
+    [RelayCommand(CanExecute = nameof(HasAnyFilePath))]
+    private void ClearFile() => FilePath = null;
+
+    private bool HasAnyFilePath() => !string.IsNullOrEmpty(FilePath);
 
     [RelayCommand]
     private void SelectAllTargets() => SetAllTargets(true);

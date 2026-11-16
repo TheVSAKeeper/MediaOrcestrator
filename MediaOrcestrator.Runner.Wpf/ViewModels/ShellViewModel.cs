@@ -43,6 +43,9 @@ public sealed partial class ShellViewModel : ShellViewModelBase
 
     private IPageRenderMetric? _renderMetricSource;
     private ICommand? _observedPageRefreshCommand;
+    private IPageStatus? _observedPageStatus;
+    private ICommand? _observedPageCancelCommand;
+    private INotifyPropertyChanged? _observedEscapeHandler;
     private string? _defaultRenderText;
     private string? _customRenderText;
     private IReadOnlyList<PageRenderStage>? _customRenderStages;
@@ -87,6 +90,8 @@ public sealed partial class ShellViewModel : ShellViewModelBase
         modal.PropertyChanged += OnModalPropertyChanged;
         PropertyChanged += OnShellPropertyChanged;
         AttachPageRefreshCommand(PageRefreshCommand);
+        AttachPageStatus(CurrentPageStatus);
+        AttachEscapeHandler(Selected?.Content as IPageEscapeHandler);
 
         _actionHolder.Changed += OnActionsChanged;
         RefreshStatusText();
@@ -97,14 +102,14 @@ public sealed partial class ShellViewModel : ShellViewModelBase
 
         _settingsItem = new("Настройки", PackIconLucideKind.Settings, settings, key: "settings");
 
-        Sections.Add(new("Медиа", PackIconLucideKind.Library, media, key: "media"));
+        Sections.Add(new("Медиа", PackIconLucideKind.Library, media, key: "media") { KeepAlive = true });
         Sections.Add(new("Источники и связи", PackIconLucideKind.Link, sources, key: "sources"));
         Sections.Add(new("Досинк источников", PackIconLucideKind.RefreshCw, audit, key: "audit"));
-        Sections.Add(new("Передачи", PackIconLucideKind.ArrowLeftRight, transfers, key: "transfers"));
+        Sections.Add(new("Передачи", PackIconLucideKind.ArrowLeftRight, transfers, key: "transfers") { KeepAlive = true });
         Sections.Add(new("Хронология", PackIconLucideKind.Film, chronology, key: "chronology"));
         Sections.Add(new("Публикация", PackIconLucideKind.Upload, publish, key: "publish"));
         Sections.Add(BuildOperationsGroup(operations, IsOperationsExpandedPersisted()));
-        Sections.Add(new("Комментарии", PackIconLucideKind.MessageSquare, comments, key: "comments"));
+        Sections.Add(new("Комментарии", PackIconLucideKind.MessageSquare, comments, key: "comments") { KeepAlive = true });
         Sections.Add(new("Обслуживание", PackIconLucideKind.Wrench, maintenance, key: "maintenance") { StartsGroup = true });
         Sections.Add(new("Логи", PackIconLucideKind.ScrollText, logs, key: "logs"));
         Sections.Add(new("Диагностика", PackIconLucideKind.Activity, diagnostics, key: "diagnostics"));
@@ -193,6 +198,8 @@ public sealed partial class ShellViewModel : ShellViewModelBase
     {
         ExpandOwningGroup(value);
         AttachRenderMetricSource(value?.Content as IPageRenderMetric);
+        AttachEscapeHandler(value?.Content as IPageEscapeHandler);
+        FocusPageSearchCommand.NotifyCanExecuteChanged();
         BeginMeasurePageRender();
     }
 
@@ -353,6 +360,63 @@ public sealed partial class ShellViewModel : ShellViewModelBase
 
     private bool CanCloseTasksDrawer() => IsTasksDrawerOpen && !Modal.HasActive;
 
+    [RelayCommand(CanExecute = nameof(CanHandleEscape))]
+    private void HandleEscape()
+    {
+        if (Modal.HasActive)
+        {
+            return;
+        }
+
+        if (IsTasksDrawerOpen)
+        {
+            IsTasksDrawerOpen = false;
+            return;
+        }
+
+        if (CurrentPageStatus is { IsBusy: true, CancelCommand: { } cancel } && cancel.CanExecute(null))
+        {
+            cancel.Execute(null);
+            return;
+        }
+
+        if (Selected?.Content is IPageEscapeHandler handler)
+        {
+            handler.TryHandleEscape();
+        }
+    }
+
+    private bool CanHandleEscape()
+    {
+        if (Modal.HasActive)
+        {
+            return false;
+        }
+
+        if (IsTasksDrawerOpen)
+        {
+            return true;
+        }
+
+        if (CurrentPageStatus is { IsBusy: true, CancelCommand: { } cancel } && cancel.CanExecute(null))
+        {
+            return true;
+        }
+
+        return (Selected?.Content as IPageEscapeHandler)?.CanHandleEscape == true;
+    }
+
+    [RelayCommand(CanExecute = nameof(CanFocusPageSearch))]
+    private void FocusPageSearch()
+    {
+        if (Selected?.Content is IPageSearchable searchable)
+        {
+            searchable.RequestSearchFocus();
+        }
+    }
+
+    private bool CanFocusPageSearch() => !Modal.HasActive && !IsTasksDrawerOpen && Selected?.Content is IPageSearchable;
+
     [RelayCommand(CanExecute = nameof(CanRefreshActivePage))]
     private void RefreshActivePage()
     {
@@ -369,6 +433,8 @@ public sealed partial class ShellViewModel : ShellViewModelBase
         if (e.PropertyName == nameof(ModalHostViewModel.HasActive))
         {
             CloseTasksDrawerCommand.NotifyCanExecuteChanged();
+            HandleEscapeCommand.NotifyCanExecuteChanged();
+            FocusPageSearchCommand.NotifyCanExecuteChanged();
             RefreshActivePageCommand.NotifyCanExecuteChanged();
         }
     }
@@ -378,6 +444,89 @@ public sealed partial class ShellViewModel : ShellViewModelBase
         if (string.IsNullOrEmpty(e.PropertyName) || e.PropertyName == nameof(PageRefreshCommand))
         {
             AttachPageRefreshCommand(PageRefreshCommand);
+        }
+
+        if (string.IsNullOrEmpty(e.PropertyName) || e.PropertyName == nameof(CurrentPageStatus))
+        {
+            AttachPageStatus(CurrentPageStatus);
+        }
+    }
+
+    private void AttachPageStatus(IPageStatus? next)
+    {
+        if (_observedPageStatus is INotifyPropertyChanged oldObservable)
+        {
+            oldObservable.PropertyChanged -= OnObservedPageStatusPropertyChanged;
+        }
+
+        _observedPageStatus = next;
+
+        if (next is INotifyPropertyChanged newObservable)
+        {
+            newObservable.PropertyChanged += OnObservedPageStatusPropertyChanged;
+        }
+
+        AttachPageCancelCommand(next?.CancelCommand);
+        HandleEscapeCommand.NotifyCanExecuteChanged();
+    }
+
+    private void OnObservedPageStatusPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (string.IsNullOrEmpty(e.PropertyName)
+            || e.PropertyName is nameof(IPageStatus.IsBusy) or nameof(IPageStatus.CancelCommand))
+        {
+            AttachPageCancelCommand(_observedPageStatus?.CancelCommand);
+            HandleEscapeCommand.NotifyCanExecuteChanged();
+        }
+    }
+
+    private void AttachPageCancelCommand(ICommand? next)
+    {
+        if (ReferenceEquals(_observedPageCancelCommand, next))
+        {
+            return;
+        }
+
+        if (_observedPageCancelCommand is not null)
+        {
+            _observedPageCancelCommand.CanExecuteChanged -= OnObservedPageCancelCanExecuteChanged;
+        }
+
+        _observedPageCancelCommand = next;
+
+        if (next is not null)
+        {
+            next.CanExecuteChanged += OnObservedPageCancelCanExecuteChanged;
+        }
+    }
+
+    private void OnObservedPageCancelCanExecuteChanged(object? sender, EventArgs e)
+    {
+        HandleEscapeCommand.NotifyCanExecuteChanged();
+    }
+
+    private void AttachEscapeHandler(IPageEscapeHandler? handler)
+    {
+        if (_observedEscapeHandler is not null)
+        {
+            _observedEscapeHandler.PropertyChanged -= OnObservedEscapeHandlerPropertyChanged;
+        }
+
+        _observedEscapeHandler = handler as INotifyPropertyChanged;
+
+        if (_observedEscapeHandler is not null)
+        {
+            _observedEscapeHandler.PropertyChanged += OnObservedEscapeHandlerPropertyChanged;
+        }
+
+        HandleEscapeCommand.NotifyCanExecuteChanged();
+    }
+
+    private void OnObservedEscapeHandlerPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (string.IsNullOrEmpty(e.PropertyName) || e.PropertyName == nameof(IPageEscapeHandler.CanHandleEscape))
+        {
+            HandleEscapeCommand.NotifyCanExecuteChanged();
         }
     }
 
@@ -406,6 +555,8 @@ public sealed partial class ShellViewModel : ShellViewModelBase
     partial void OnIsTasksDrawerOpenChanged(bool value)
     {
         CloseTasksDrawerCommand.NotifyCanExecuteChanged();
+        HandleEscapeCommand.NotifyCanExecuteChanged();
+        FocusPageSearchCommand.NotifyCanExecuteChanged();
 
         if (_suppressPersist)
         {

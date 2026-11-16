@@ -23,6 +23,8 @@ public sealed class MediaMenuItemViewModel
 
     public bool IsSeparator { get; init; }
 
+    public bool IsTransferAction { get; init; }
+
     public ICommand? Command { get; init; }
 
     public ObservableCollection<MediaMenuItemViewModel>? Children { get; init; }
@@ -74,6 +76,7 @@ public sealed class MediaMenuItemViewModel
             GlyphBrush = spec.Glyph?.Brush,
             Tooltip = spec.Tooltip,
             IsEnabled = spec.Enabled,
+            IsTransferAction = spec.IsTransferAction,
             Command = command,
             Children = children,
         };

@@ -20,11 +20,11 @@
             <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
 
-        <StackPanel Grid.Column="0"
-                    Orientation="Horizontal">
+        <WrapPanel Grid.Column="0"
+                   Orientation="Horizontal">
             <ToggleButton x:Name="SourcesFilterButton"
                           Style="{StaticResource ToggleButton.Filter}"
-                          Margin="{DynamicResource Margin.InlineGap}">
+                          Margin="0,2,8,2">
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="Источники"
                                VerticalAlignment="Center" />
@@ -48,7 +48,7 @@
 
             <ToggleButton x:Name="StatusFilterButton"
                           Style="{StaticResource ToggleButton.Filter}"
-                          Margin="{DynamicResource Margin.InlineGap}">
+                          Margin="0,2,8,2">
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="Статус"
                                VerticalAlignment="Center" />
@@ -72,7 +72,7 @@
 
             <ToggleButton x:Name="RelationsFilterButton"
                           Style="{StaticResource ToggleButton.Filter}"
-                          Margin="{DynamicResource Margin.InlineGap}"
+                          Margin="0,2,8,2"
                           ToolTip="Фильтр по связям синхронизации">
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="Связи"
@@ -99,7 +99,7 @@
 
             <ToggleButton x:Name="ColumnsFilterButton"
                           Style="{StaticResource ToggleButton.Filter}"
-                          Margin="{DynamicResource Margin.InlineGap}"
+                          Margin="0,2,8,2"
                           ToolTip="Колонки метаданных в таблице">
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="Колонки"
@@ -205,7 +205,7 @@
                     </Grid>
                 </Border>
             </Popup>
-        </StackPanel>
+        </WrapPanel>
 
         <StackPanel Grid.Column="1"
                     Orientation="Horizontal"

@@ -13,7 +13,8 @@
     <Border Background="{DynamicResource Bg.Surface}"
             BorderBrush="{DynamicResource Border.Subtle}"
             BorderThickness="0,1,0,0">
-        <Grid Height="32">
+        <Grid MinHeight="32"
+              Margin="0,3">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />

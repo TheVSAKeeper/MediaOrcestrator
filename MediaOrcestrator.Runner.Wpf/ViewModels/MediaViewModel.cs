@@ -11,7 +11,7 @@ using System.Windows.Media;
 
 namespace MediaOrcestrator.Runner.Wpf.ViewModels;
 
-public sealed partial class MediaViewModel : ObservableObject, IMediaActionUi, IPageStatus, IPageHeader, IPageRefresh, IPageRenderMetric
+public sealed partial class MediaViewModel : ObservableObject, IMediaActionUi, IPageStatus, IPageHeader, IPageRefresh, IPageRenderMetric, IPageEscapeHandler, IPageSearchable
 {
     public string PageTitle => "Медиа";
 
@@ -30,7 +30,7 @@ public sealed partial class MediaViewModel : ObservableObject, IMediaActionUi, I
     private const string InspectorWidthSettingKey = "wpf.media.inspector.width";
 
     public const double DefaultInspectorWidth = 480;
-    public const double MinInspectorWidth = 300;
+    public const double MinInspectorWidth = 260;
     private const double MaxInspectorWidth = 1000;
 
     private readonly Orcestrator _orcestrator;
@@ -76,6 +76,7 @@ public sealed partial class MediaViewModel : ObservableObject, IMediaActionUi, I
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(InspectorToggleTooltip))]
     [NotifyPropertyChangedFor(nameof(InspectorToggleAutomationName))]
+    [NotifyPropertyChangedFor(nameof(CanHandleEscape))]
     private bool _isInspectorCollapsed;
 
     [ObservableProperty]
@@ -100,6 +101,23 @@ public sealed partial class MediaViewModel : ObservableObject, IMediaActionUi, I
     private double _progressMax = 100;
 
     private CancellationTokenSource? _convertCts;
+
+    public event EventHandler? SearchFocusRequested;
+
+    public bool CanHandleEscape => !IsInspectorCollapsed;
+
+    public bool TryHandleEscape()
+    {
+        if (IsInspectorCollapsed)
+        {
+            return false;
+        }
+
+        IsInspectorCollapsed = true;
+        return true;
+    }
+
+    public void RequestSearchFocus() => SearchFocusRequested?.Invoke(this, EventArgs.Empty);
 
     public MediaFilterViewModel Filter { get; }
 

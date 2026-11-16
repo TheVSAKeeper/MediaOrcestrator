@@ -269,7 +269,8 @@
                                           Focusable="False"
                                           Width="20"
                                           Height="20"
-                                          VerticalAlignment="Center">
+                                          VerticalAlignment="Center"
+                                          AutomationProperties.Name="Свернуть или развернуть группу">
                                 <ToggleButton.Template>
                                     <ControlTemplate TargetType="ToggleButton">
                                         <Border Background="Transparent">
@@ -360,26 +361,21 @@
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
-                <Grid Grid.Row="0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-
-                    <Grid Grid.Column="0">
+                <keepshell:StretchWrapPanel Grid.Row="0">
+                    <Grid keepshell:StretchWrapPanel.Stretch="True"
+                          keepshell:StretchWrapPanel.StretchWidth="180"
+                          Margin="0,2,6,2">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <TextBox Grid.Column="0"
+                        <TextBox x:Name="SearchBox"
+                                 Grid.Column="0"
                                  Style="{StaticResource TextBox.Toolbar}"
                                  Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
                                  keepshell:PlaceholderBehavior.Placeholder="Название медиа"
                                  AutomationProperties.Name="Поиск по плану передач"
-                                 MinWidth="220"
+                                 MinWidth="150"
                                  Padding="32,0,32,0" />
                         <iconPacks:PackIconLucide Grid.Column="0"
                                           Kind="Search"
@@ -406,10 +402,11 @@
                         </Button>
                     </Grid>
 
+                    <WrapPanel Orientation="Horizontal"
+                               VerticalAlignment="Center">
                     <ToggleButton x:Name="SourcesFilterToggle"
-                                  Grid.Column="1"
                                   Style="{StaticResource ToggleButton.Filter}"
-                                  Margin="6,0,4,0">
+                                  Margin="0,2,4,2">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="Источники"
                                        VerticalAlignment="Center" />
@@ -433,9 +430,8 @@
                     </Popup>
 
                     <ToggleButton x:Name="RelationsFilterToggle"
-                                  Grid.Column="2"
                                   Style="{StaticResource ToggleButton.Filter}"
-                                  Margin="0,0,4,0">
+                                  Margin="0,2,4,2">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="Связи"
                                        VerticalAlignment="Center" />
@@ -459,9 +455,8 @@
                     </Popup>
 
                     <ToggleButton x:Name="MoreMenuToggle"
-                                  Grid.Column="3"
                                   Style="{StaticResource ToggleButton.Filter}"
-                                  Margin="0,0,4,0"
+                                  Margin="0,2,4,2"
                                   IsChecked="{Binding IsMoreMenuOpen, Mode=TwoWay}"
                                   ToolTip="Дополнительные действия"
                                   AutomationProperties.Name="Дополнительные действия"
@@ -521,10 +516,9 @@
                         </Border>
                     </Popup>
 
-                    <Button Grid.Column="4"
-                            Style="{StaticResource HeaderButton}"
+                    <Button Style="{StaticResource HeaderButton}"
                             Command="{Binding RebuildPlanCommand}"
-                            Margin="6,0,0,0"
+                            Margin="2,2,0,2"
                             ToolTip="Перестроить план по текущим медиа и связям">
                         <StackPanel Orientation="Horizontal">
                             <Path Width="12"
@@ -541,20 +535,15 @@
                             <TextBlock Text="Пересобрать" />
                         </StackPanel>
                     </Button>
-                </Grid>
+                    </WrapPanel>
+                </keepshell:StretchWrapPanel>
 
-                <Grid Grid.Row="1"
-                      Margin="0,8,0,0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="3*"
-                                          MinWidth="0" />
-                        <ColumnDefinition Width="*"
-                                          MinWidth="0" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-
-                    <Grid Grid.Column="0"
-                          VerticalAlignment="Center">
+                <keepshell:StretchWrapPanel Grid.Row="1"
+                                            Margin="0,8,0,0">
+                    <Grid keepshell:StretchWrapPanel.Stretch="True"
+                          keepshell:StretchWrapPanel.StretchWidth="220"
+                          VerticalAlignment="Center"
+                          Margin="0,2,12,2">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"
                                               MinWidth="0" />
@@ -598,9 +587,16 @@
                                 <Style TargetType="Border"
                                        BasedOn="{StaticResource Badge}">
                                     <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsPlanStale}"
-                                                     Value="True">
-                                            <DataTrigger.EnterActions>
+                                        <MultiDataTrigger>
+                                            <MultiDataTrigger.Conditions>
+                                                <Condition Binding="{Binding IsPlanStale}"
+                                                           Value="True" />
+                                                <Condition Binding="{Binding IsVisible, RelativeSource={RelativeSource Self}}"
+                                                           Value="True" />
+                                                <Condition Binding="{Binding Source={x:Static SystemParameters.ClientAreaAnimation}}"
+                                                           Value="True" />
+                                            </MultiDataTrigger.Conditions>
+                                            <MultiDataTrigger.EnterActions>
                                                 <BeginStoryboard x:Name="PlanStaleBadgePulse">
                                                     <Storyboard RepeatBehavior="Forever"
                                                                 AutoReverse="True">
@@ -618,11 +614,11 @@
                                                                          Duration="0:0:1.1" />
                                                     </Storyboard>
                                                 </BeginStoryboard>
-                                            </DataTrigger.EnterActions>
-                                            <DataTrigger.ExitActions>
-                                                <StopStoryboard BeginStoryboardName="PlanStaleBadgePulse" />
-                                            </DataTrigger.ExitActions>
-                                        </DataTrigger>
+                                            </MultiDataTrigger.EnterActions>
+                                            <MultiDataTrigger.ExitActions>
+                                                <RemoveStoryboard BeginStoryboardName="PlanStaleBadgePulse" />
+                                            </MultiDataTrigger.ExitActions>
+                                        </MultiDataTrigger>
                                     </Style.Triggers>
                                 </Style>
                             </Border.Style>
@@ -646,18 +642,16 @@
                         </Border>
                     </Grid>
 
-                    <TextBlock Grid.Column="1"
-                               Text="{Binding StatusText}"
+                    <TextBlock Text="{Binding StatusText}"
                                Style="{StaticResource TextBlock.Subtle}"
                                TextTrimming="CharacterEllipsis"
                                TextWrapping="NoWrap"
                                ToolTip="{Binding StatusText}"
-                               HorizontalAlignment="Right"
                                VerticalAlignment="Center"
-                               Margin="16,0,16,0" />
+                               Margin="0,2,12,2" />
 
-                    <StackPanel Grid.Column="2"
-                                Orientation="Horizontal"
+                    <StackPanel Orientation="Horizontal"
+                                Margin="0,2,0,2"
                                 VerticalAlignment="Center">
                         <ToggleButton x:Name="RunOptionsToggle"
                                       Style="{StaticResource ToggleButton.Filter}"
@@ -755,7 +749,7 @@
                                               Height="16" />
                         </ToggleButton>
                     </StackPanel>
-                </Grid>
+                </keepshell:StretchWrapPanel>
             </Grid>
         </Border>
 
@@ -884,23 +878,35 @@
                                       Data="M 11 1 A 10 10 0 0 1 20.5 8.5"
                                       RenderTransformOrigin="0.5,0.5">
                                     <Path.RenderTransform>
-                                        <RotateTransform x:Name="PlanSpinnerRotate" Angle="0" />
+                                        <RotateTransform Angle="0" />
                                     </Path.RenderTransform>
-                                    <Path.Triggers>
-                                        <EventTrigger RoutedEvent="Path.Loaded">
-                                            <BeginStoryboard>
-                                                <Storyboard>
-                                                    
-                                                    <DoubleAnimation Storyboard.TargetName="PlanSpinnerRotate"
-                                                                     Storyboard.TargetProperty="Angle"
-                                                                     From="0"
-                                                                     To="360"
-                                                                     Duration="0:0:1"
-                                                                     RepeatBehavior="Forever" />
-                                                </Storyboard>
-                                            </BeginStoryboard>
-                                        </EventTrigger>
-                                    </Path.Triggers>
+                                    <Path.Style>
+                                        <Style TargetType="Path">
+                                            <Style.Triggers>
+                                                <MultiDataTrigger>
+                                                    <MultiDataTrigger.Conditions>
+                                                        <Condition Binding="{Binding IsVisible, RelativeSource={RelativeSource Self}}"
+                                                                   Value="True" />
+                                                        <Condition Binding="{Binding Source={x:Static SystemParameters.ClientAreaAnimation}}"
+                                                                   Value="True" />
+                                                    </MultiDataTrigger.Conditions>
+                                                    <MultiDataTrigger.EnterActions>
+                                                        <BeginStoryboard x:Name="PlanSpinnerRotateStoryboard">
+                                                            <Storyboard RepeatBehavior="Forever">
+                                                                <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(RotateTransform.Angle)"
+                                                                                 From="0"
+                                                                                 To="360"
+                                                                                 Duration="0:0:1" />
+                                                            </Storyboard>
+                                                        </BeginStoryboard>
+                                                    </MultiDataTrigger.EnterActions>
+                                                    <MultiDataTrigger.ExitActions>
+                                                        <RemoveStoryboard BeginStoryboardName="PlanSpinnerRotateStoryboard" />
+                                                    </MultiDataTrigger.ExitActions>
+                                                </MultiDataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Path.Style>
                                 </Path>
                             </Grid>
                             <TextBlock Text="Построение плана…"
@@ -911,7 +917,8 @@
                 </Grid>
             </Border>
 
-            <Border Grid.Column="1"
+            <Border x:Name="JournalBorder"
+                    Grid.Column="1"
                     Width="340"
                     Margin="10,0,0,0"
                     Style="{StaticResource Card}"
@@ -1034,7 +1041,7 @@
                 <Button Grid.Column="1"
                         Style="{StaticResource ActionBar.Danger}"
                         Command="{Binding StopCommand}"
-                        MinWidth="180">
+                        MinWidth="120">
                     <StackPanel Orientation="Horizontal">
                         <Path Width="12"
                               Height="12"

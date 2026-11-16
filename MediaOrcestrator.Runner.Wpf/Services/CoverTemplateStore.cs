@@ -26,6 +26,8 @@ public sealed class CoverTemplateStore(ILogger<CoverTemplateStore> logger)
         WriteIndented = true,
     };
 
+    public event Action<string?>? Changed;
+
     public string Sanitize(string name)
     {
         return SanitizeName(name);
@@ -90,13 +92,15 @@ public sealed class CoverTemplateStore(ILogger<CoverTemplateStore> logger)
             TrySaveBackup(name, template.TemplatePath);
 
             logger.LogDebug("Шаблон обложки '{Name}' сохранён", name);
-            return true;
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Не удалось сохранить шаблон обложки '{Name}'", name);
             return false;
         }
+
+        Changed?.Invoke(name);
+        return true;
     }
 
     public IReadOnlyList<string> List()
@@ -144,7 +148,10 @@ public sealed class CoverTemplateStore(ILogger<CoverTemplateStore> logger)
         catch (Exception ex)
         {
             logger.LogError(ex, "Не удалось удалить профиль шаблона '{Name}'", name);
+            return;
         }
+
+        Changed?.Invoke(null);
     }
 
     private static string SanitizeName(string name)

@@ -41,6 +41,7 @@ internal sealed class SyncAction : IMediaMenuAction
                 yield return new(text)
                 {
                     Glyph = MenuIcons.Sync,
+                    IsTransferAction = true,
                     Enabled = false,
                     Tooltip = selection.IsBatch
                         ? "Нет подходящих медиа для синхронизации"
@@ -53,6 +54,7 @@ internal sealed class SyncAction : IMediaMenuAction
             yield return new(text)
             {
                 Glyph = MenuIcons.Sync,
+                IsTransferAction = true,
                 Execute = () => ExecuteAsync(eligible, rel, ctx),
             };
         }

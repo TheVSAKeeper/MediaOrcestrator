@@ -8,4 +8,10 @@ public partial class CommentsFilterBar : UserControl
     {
         InitializeComponent();
     }
+
+    public void FocusSearch()
+    {
+        SearchBox.Focus();
+        SearchBox.SelectAll();
+    }
 }

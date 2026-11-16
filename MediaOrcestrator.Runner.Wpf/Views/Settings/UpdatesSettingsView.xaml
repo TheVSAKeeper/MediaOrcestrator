@@ -20,8 +20,7 @@
                        Style="{StaticResource Form.Label}" />
             <TextBox Text="{Binding Updates.Repo, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
                      Margin="0,8,0,0"
-                     HorizontalAlignment="Left"
-                     MinWidth="320"
+                     MinWidth="200"
                      FontFamily="{DynamicResource Font.Mono}"
                      AutomationProperties.Name="Репозиторий GitHub, откуда берутся релизы" />
             <TextBlock Style="{StaticResource Form.Hint}"

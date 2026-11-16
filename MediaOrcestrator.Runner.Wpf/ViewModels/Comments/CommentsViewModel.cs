@@ -18,8 +18,16 @@ using System.Windows.Threading;
 
 namespace MediaOrcestrator.Runner.Wpf.ViewModels.Comments;
 
-public sealed partial class CommentsViewModel : ObservableObject, ICommentItemHost, IPageStatus, IPageHeader, IPageRenderMetric
+public sealed partial class CommentsViewModel : ObservableObject, ICommentItemHost, IPageStatus, IPageHeader, IPageRenderMetric, IPageSearchable
 {
+    public event EventHandler? SearchFocusRequested;
+
+    public void RequestSearchFocus()
+    {
+        IsFiltersExpanded = true;
+        SearchFocusRequested?.Invoke(this, EventArgs.Empty);
+    }
+
     public string PageTitle => "Комментарии";
 
     public string? PageDescription =>
@@ -54,6 +62,7 @@ public sealed partial class CommentsViewModel : ObservableObject, ICommentItemHo
     private int _applyVersion;
     private CancellationTokenSource? _applyCts;
     private bool _loaded;
+    private bool _isViewVisible = true;
     private bool _suppressPersist;
     private ReplyEditorViewModel? _activeReplyEditor;
 
@@ -277,7 +286,28 @@ public sealed partial class CommentsViewModel : ObservableObject, ICommentItemHo
         }
 
         ScheduleApplyFilters();
-        _relativeTimeTimer.Start();
+
+        if (_isViewVisible)
+        {
+            _relativeTimeTimer.Start();
+        }
+    }
+
+    public void SetViewVisible(bool isVisible)
+    {
+        _isViewVisible = isVisible;
+
+        if (!isVisible)
+        {
+            _relativeTimeTimer.Stop();
+            return;
+        }
+
+        if (_loaded)
+        {
+            RefreshRelativeTimes();
+            _relativeTimeTimer.Start();
+        }
     }
 
     private void RefreshRelativeTimes()

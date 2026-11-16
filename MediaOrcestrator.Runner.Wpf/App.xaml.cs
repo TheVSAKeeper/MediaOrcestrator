@@ -679,6 +679,7 @@ public partial class App : Application
         services.AddSingleton<BatchRenameService>();
         services.AddSingleton<CoverGenerator>();
         services.AddSingleton<CoverTemplateStore>();
+        services.AddSingleton<ICoverTemplateEditorWindowService, CoverTemplateEditorWindowService>();
         services.AddSingleton<BatchPreviewService>();
         services.AddSingleton<SyncPlanner>();
         services.AddSingleton<DatabaseMaintenanceService>(sp =>

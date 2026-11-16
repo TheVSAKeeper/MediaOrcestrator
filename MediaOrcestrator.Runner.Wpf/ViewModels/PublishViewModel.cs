@@ -36,6 +36,8 @@ public sealed partial class PublishViewModel : ObservableObject, IPageStatus, IP
     private readonly IDialogService _dialogs;
     private readonly ILogger<PublishViewModel> _logger;
     private readonly IFilePicker _filePicker;
+    private readonly CoverGenerator _coverGenerator;
+    private readonly TempManager _tempManager;
 
     private readonly List<Media> _mediasCache = [];
     private readonly Dictionary<string, string> _titleToDescription = new(StringComparer.Ordinal);
@@ -45,6 +47,7 @@ public sealed partial class PublishViewModel : ObservableObject, IPageStatus, IP
     private bool _isMediasCacheValid;
     private bool _suppressTitleAutoFill;
     private string? _videoSidecarDescription;
+    private string? _generatedCoverDir;
 
     public PublishViewModel(
         Orcestrator orcestrator,
@@ -53,7 +56,11 @@ public sealed partial class PublishViewModel : ObservableObject, IPageStatus, IP
         ActionHolder actionHolder,
         IDialogService dialogs,
         ILogger<PublishViewModel> logger,
-        IFilePicker filePicker)
+        IFilePicker filePicker,
+        CoverGenerator coverGenerator,
+        CoverTemplateStore coverTemplateStore,
+        ICoverTemplateEditorWindowService editorWindow,
+        TempManager tempManager)
     {
         _orcestrator = orcestrator;
         _retryRunner = retryRunner;
@@ -62,6 +69,17 @@ public sealed partial class PublishViewModel : ObservableObject, IPageStatus, IP
         _dialogs = dialogs;
         _logger = logger;
         _filePicker = filePicker;
+        _coverGenerator = coverGenerator;
+        _tempManager = tempManager;
+
+        TemplatePicker = new(coverGenerator, coverTemplateStore, dialogs, filePicker, editorWindow);
+        TemplatePicker.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(CoverProfilePickerViewModel.HasTemplate) or nameof(CoverProfilePickerViewModel.SelectedTemplate))
+            {
+                GenerateCoverFromTemplateCommand.NotifyCanExecuteChanged();
+            }
+        };
 
         TitleSuggestions.CollectionChanged += (_, _) =>
         {
@@ -71,12 +89,15 @@ public sealed partial class PublishViewModel : ObservableObject, IPageStatus, IP
         DescriptionTemplates.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasDescriptionTemplates));
     }
 
+    public CoverProfilePickerViewModel TemplatePicker { get; }
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanEditFields))]
     [NotifyPropertyChangedFor(nameof(IsBusy))]
     [NotifyCanExecuteChangedFor(nameof(PublishCommand))]
     [NotifyCanExecuteChangedFor(nameof(BrowseVideoCommand))]
     [NotifyCanExecuteChangedFor(nameof(BrowseCoverCommand))]
+    [NotifyCanExecuteChangedFor(nameof(GenerateCoverFromTemplateCommand))]
     private bool _isPublishing;
 
     [ObservableProperty]
@@ -224,6 +245,63 @@ public sealed partial class PublishViewModel : ObservableObject, IPageStatus, IP
     private void ClearCover()
     {
         CoverPath = null;
+        CleanupGeneratedCoverDir();
+    }
+
+    [RelayCommand(CanExecute = nameof(CanGenerateCoverFromTemplate))]
+    private async Task GenerateCoverFromTemplateAsync()
+    {
+        if (TemplatePicker.SelectedTemplate is not { } template)
+        {
+            return;
+        }
+
+        if (string.IsNullOrEmpty(template.TemplatePath) || !File.Exists(template.TemplatePath))
+        {
+            SetStatus("Картинка выбранного шаблона недоступна.", true);
+            return;
+        }
+
+        try
+        {
+            var number = CoverNumberResolver.Resolve(template, Title, 0);
+            var outputDir = Path.Combine(_tempManager.TempPath, "publish-covers", Guid.NewGuid().ToString("N"));
+            var outputPath = await Task.Run(() => _coverGenerator.Generate(template, number, outputDir));
+
+            CleanupGeneratedCoverDir();
+            _generatedCoverDir = outputDir;
+            CoverPath = outputPath;
+            SetStatus($"Обложка по шаблону «{TemplatePicker.SelectedProfileName}» (№{number}) готова.", false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Не удалось сгенерировать обложку по шаблону");
+            SetStatus("Ошибка генерации обложки: " + ex.Message, true);
+        }
+    }
+
+    private bool CanGenerateCoverFromTemplate() => CanEditFields && TemplatePicker.HasTemplate;
+
+    private void CleanupGeneratedCoverDir()
+    {
+        if (string.IsNullOrEmpty(_generatedCoverDir))
+        {
+            return;
+        }
+
+        try
+        {
+            if (Directory.Exists(_generatedCoverDir))
+            {
+                Directory.Delete(_generatedCoverDir, true);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Не удалось удалить временную папку обложки {Dir}", _generatedCoverDir);
+        }
+
+        _generatedCoverDir = null;
     }
 
     [RelayCommand]
@@ -397,8 +475,24 @@ public sealed partial class PublishViewModel : ObservableObject, IPageStatus, IP
         UpdateSidecarDescription(value);
     }
 
+    partial void OnCoverPathChanged(string? value)
+    {
+        if (string.IsNullOrEmpty(_generatedCoverDir))
+        {
+            return;
+        }
+
+        if (string.IsNullOrEmpty(value)
+            || !value.StartsWith(_generatedCoverDir, StringComparison.OrdinalIgnoreCase))
+        {
+            CleanupGeneratedCoverDir();
+        }
+    }
+
     partial void OnTitleChanged(string value)
     {
+        TemplatePicker.SampleTitle = value;
+
         if (_suppressTitleAutoFill)
         {
             return;

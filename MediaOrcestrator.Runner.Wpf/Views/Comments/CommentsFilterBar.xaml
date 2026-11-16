@@ -13,16 +13,10 @@
     <Border Style="{StaticResource Card.Inset}">
         <StackPanel>
             
-            <Grid Margin="{DynamicResource Margin.StackItem.Dense}">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-
-                <ToggleButton Grid.Column="0"
-                              Style="{StaticResource ToggleButton.FiltersCollapse}"
+            <keepshell:StretchWrapPanel Margin="{DynamicResource Margin.StackItem.Dense}">
+                <ToggleButton Style="{StaticResource ToggleButton.FiltersCollapse}"
                               IsChecked="{Binding IsFiltersExpanded, Mode=TwoWay}"
+                              Margin="0,2,10,2"
                               AutomationProperties.Name="Свернуть/развернуть фильтры комментариев"
                               ToolTip="Свернуть или развернуть панель фильтров">
                     <StackPanel Orientation="Horizontal">
@@ -49,11 +43,11 @@
                     </StackPanel>
                 </ToggleButton>
 
-                <StackPanel Grid.Column="1"
+                <StackPanel keepshell:StretchWrapPanel.Stretch="True"
+                            keepshell:StretchWrapPanel.StretchWidth="140"
                             Orientation="Horizontal"
-                            HorizontalAlignment="Right"
                             VerticalAlignment="Center"
-                            Margin="12,0,12,0">
+                            Margin="0,2,10,2">
                     <TextBlock Text="{Binding TotalCountText}"
                                VerticalAlignment="Center"
                                TextTrimming="CharacterEllipsis"
@@ -66,8 +60,8 @@
                                Visibility="{Binding TruncatedHint, Converter={StaticResource NullToVisibility}}" />
                 </StackPanel>
 
-                <StackPanel Grid.Column="2"
-                            Orientation="Horizontal">
+                <StackPanel Orientation="Horizontal"
+                            Margin="0,2,0,2">
                     <Button Style="{StaticResource Button.Ghost}"
                             Command="{Binding OpenAppearanceCommand}"
                             Padding="10,4"
@@ -97,7 +91,7 @@
                         </StackPanel>
                     </Button>
                 </StackPanel>
-            </Grid>
+            </keepshell:StretchWrapPanel>
 
             <StackPanel Visibility="{Binding IsFiltersExpanded, Converter={StaticResource BoolToVisibility}}">
                 
@@ -106,7 +100,8 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <TextBox Grid.Column="0"
+                    <TextBox x:Name="SearchBox"
+                             Grid.Column="0"
                              Style="{StaticResource TextBox.Toolbar}"
                              Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
                              keepshell:PlaceholderBehavior.Placeholder="Текст комментария или название медиа"

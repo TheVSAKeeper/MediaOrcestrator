@@ -15,6 +15,7 @@ public sealed partial class CoverProfilePickerViewModel : ObservableObject
     private readonly CoverTemplateStore _store;
     private readonly IDialogService _dialogs;
     private readonly IFilePicker _filePicker;
+    private readonly ICoverTemplateEditorWindowService _editorWindow;
 
     private bool _suppressSelection;
     private int _previewGeneration;
@@ -40,13 +41,16 @@ public sealed partial class CoverProfilePickerViewModel : ObservableObject
         CoverGenerator generator,
         CoverTemplateStore store,
         IDialogService dialogs,
-        IFilePicker filePicker)
+        IFilePicker filePicker,
+        ICoverTemplateEditorWindowService editorWindow)
     {
         _generator = generator;
         _store = store;
         _dialogs = dialogs;
         _filePicker = filePicker;
+        _editorWindow = editorWindow;
 
+        _store.Changed += OnStoreChanged;
         ReloadProfiles();
     }
 
@@ -56,9 +60,9 @@ public sealed partial class CoverProfilePickerViewModel : ObservableObject
 
     public bool HasTemplate => SelectedTemplate is not null;
 
-    public void ReloadProfiles()
+    public void ReloadProfiles(string? selectProfileName = null)
     {
-        var previous = SelectedProfileName;
+        var previous = selectProfileName ?? SelectedProfileName;
 
         _suppressSelection = true;
         Profiles.Clear();
@@ -76,17 +80,18 @@ public sealed partial class CoverProfilePickerViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private async Task OpenEditorAsync()
+    private void OpenEditor()
     {
-        var editor = new CoverTemplateEditorViewModel(_generator, _store, _dialogs, _filePicker, SelectedTemplate, SelectedProfileName, SampleTitle);
+        _editorWindow.Open(SelectedTemplate, SelectedProfileName, SampleTitle, this);
+    }
 
-        var saved = await _dialogs.ShowAsync(editor);
+    private void OnStoreChanged(string? savedName)
+    {
+        var shouldSelect = savedName is not null
+                           && (_editorWindow.IsActiveCaller(this)
+                               || string.Equals(SelectedProfileName, savedName, StringComparison.OrdinalIgnoreCase));
 
-        if (saved && !string.IsNullOrEmpty(editor.ResultProfileName))
-        {
-            ReloadProfiles();
-            SelectedProfileName = editor.ResultProfileName;
-        }
+        ReloadProfiles(shouldSelect ? savedName : null);
     }
 
     [RelayCommand(CanExecute = nameof(CanDeleteProfile))]

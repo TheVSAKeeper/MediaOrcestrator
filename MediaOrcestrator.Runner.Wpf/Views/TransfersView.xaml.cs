@@ -12,11 +12,45 @@ public partial class TransfersView : UserControl, IView<TransfersViewModel>
     private Point _dragStartPoint;
     private TransferMediaGroupViewModel? _dragCandidate;
     private bool _isDragging;
+    private TransfersViewModel? _vm;
 
     public TransfersView()
     {
         InitializeComponent();
         Loaded += OnLoaded;
+        SizeChanged += OnSizeChanged;
+        DataContextChanged += OnDataContextChanged;
+    }
+
+    private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
+    {
+        if (_vm is not null)
+        {
+            _vm.SearchFocusRequested -= OnSearchFocusRequested;
+        }
+
+        _vm = e.NewValue as TransfersViewModel;
+
+        if (_vm is not null)
+        {
+            _vm.SearchFocusRequested += OnSearchFocusRequested;
+        }
+    }
+
+    private void OnSearchFocusRequested(object? sender, EventArgs e)
+    {
+        SearchBox.Focus();
+        SearchBox.SelectAll();
+    }
+
+    private void OnSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (ActualWidth <= 0)
+        {
+            return;
+        }
+
+        JournalBorder.SetCurrentValue(WidthProperty, Math.Min(340d, Math.Max(220d, ActualWidth * 0.40)));
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)

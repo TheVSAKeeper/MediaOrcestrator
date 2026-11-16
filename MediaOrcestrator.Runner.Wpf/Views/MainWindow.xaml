@@ -15,8 +15,8 @@
         Icon="pack://application:,,,/icon.ico"
         Height="720"
         Width="1200"
-        MinHeight="540"
-        MinWidth="960"
+        MinHeight="520"
+        MinWidth="880"
         WindowStyle="None"
         AllowsTransparency="False"
         ResizeMode="CanResize"
@@ -41,7 +41,10 @@
 
     <Window.InputBindings>
         <KeyBinding Key="Escape"
-                    Command="{Binding CloseTasksDrawerCommand}" />
+                    Command="{Binding HandleEscapeCommand}" />
+        <KeyBinding Key="F"
+                    Modifiers="Control"
+                    Command="{Binding FocusPageSearchCommand}" />
         <KeyBinding Key="F5"
                     Command="{Binding RefreshActivePageCommand}" />
     </Window.InputBindings>

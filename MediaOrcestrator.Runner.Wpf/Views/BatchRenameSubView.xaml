@@ -220,74 +220,72 @@
                                             CanEditParameters="{Binding CanEditParameters}"
                                             StopOnError="{Binding StopOnError}" />
 
-                <Grid Margin="0,4,0,0">
-                    
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
+                <StackPanel Margin="0,4,0,0">
+                    <keepshell:UniformRowPanel>
+                        <Grid Margin="0,0,12,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0"
+                                       Style="{StaticResource FieldLabel}"
+                                       Text="Найти:" />
+                            <TextBox Grid.Column="1"
+                                     Style="{StaticResource TextBox.Toolbar}"
+                                     MinWidth="140"
+                                     Text="{Binding Find, UpdateSourceTrigger=PropertyChanged}"
+                                     IsEnabled="{Binding CanEditParameters}" />
+                        </Grid>
 
-                    <TextBlock Grid.Row="0"
-                               Grid.Column="0"
-                               Style="{StaticResource FieldLabel}"
-                               Text="Найти:" />
-                    <TextBox Grid.Row="0"
-                             Grid.Column="1"
-                             Style="{StaticResource TextBox.Toolbar}"
-                             Text="{Binding Find, UpdateSourceTrigger=PropertyChanged}"
-                             IsEnabled="{Binding CanEditParameters}"
-                             Margin="0,0,12,4" />
-                    <TextBlock Grid.Row="0"
-                               Grid.Column="2"
-                               Style="{StaticResource FieldLabel}"
-                               Text="Режим:" />
-                    <ComboBox Grid.Row="0"
-                              Grid.Column="3"
-                              Style="{StaticResource ComboBox.Toolbar}"
-                              ItemsSource="{Binding ModeOptions}"
-                              DisplayMemberPath="Label"
-                              SelectedValuePath="Value"
-                              SelectedValue="{Binding Mode}"
-                              IsEnabled="{Binding CanEditParameters}"
-                              AutomationProperties.Name="Режим замены"
-                              MinWidth="180"
-                              Margin="0,0,0,4" />
+                        <Grid Margin="0,0,0,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0"
+                                       Style="{StaticResource FieldLabel}"
+                                       Text="Заменить:" />
+                            <TextBox Grid.Column="1"
+                                     Style="{StaticResource TextBox.Toolbar}"
+                                     MinWidth="140"
+                                     Text="{Binding Replace, UpdateSourceTrigger=PropertyChanged}"
+                                     IsEnabled="{Binding CanEditParameters}" />
+                        </Grid>
+                    </keepshell:UniformRowPanel>
 
-                    <TextBlock Grid.Row="1"
-                               Grid.Column="0"
-                               Style="{StaticResource FieldLabel}"
-                               Text="Заменить:" />
-                    <TextBox Grid.Row="1"
-                             Grid.Column="1"
-                             Style="{StaticResource TextBox.Toolbar}"
-                             Text="{Binding Replace, UpdateSourceTrigger=PropertyChanged}"
-                             IsEnabled="{Binding CanEditParameters}"
-                             Margin="0,0,12,4" />
-                    <StackPanel Grid.Row="1"
-                                Grid.Column="2"
-                                Grid.ColumnSpan="2"
-                                Orientation="Horizontal"
-                                VerticalAlignment="Center"
-                                Margin="0,0,0,4">
+                    <WrapPanel Orientation="Horizontal"
+                               VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal"
+                                    VerticalAlignment="Center"
+                                    Margin="0,2,14,2">
+                            <TextBlock Style="{StaticResource FieldLabel}"
+                                       MinWidth="0"
+                                       Text="Режим:" />
+                            <ComboBox Style="{StaticResource ComboBox.Toolbar}"
+                                      ItemsSource="{Binding ModeOptions}"
+                                      DisplayMemberPath="Label"
+                                      SelectedValuePath="Value"
+                                      SelectedValue="{Binding Mode}"
+                                      IsEnabled="{Binding CanEditParameters}"
+                                      AutomationProperties.Name="Режим замены"
+                                      MinWidth="150" />
+                        </StackPanel>
+
                         <CheckBox IsChecked="{Binding IgnoreCase}"
                                   IsEnabled="{Binding CanEditParameters}"
                                   VerticalAlignment="Center"
+                                  Margin="0,2,14,2"
                                   Content="Без учёта регистра" />
+
                         <controls:SourceFilterDropDown Label="Площадки"
                                                        ItemsSource="{Binding Sources}"
                                                        CanEdit="{Binding CanEditParameters}"
                                                        SelectAllCommand="{Binding SelectAllSourcesCommand}"
                                                        SelectNoneCommand="{Binding SelectNoSourcesCommand}"
                                                        VerticalAlignment="Center"
-                                                       Margin="14,0,0,0" />
-                    </StackPanel>
-                </Grid>
+                                                       Margin="0,2,0,2" />
+                    </WrapPanel>
+                </StackPanel>
 
                 <Border Background="{DynamicResource State.ErrorSoft}"
                         BorderBrush="{DynamicResource State.Error}"

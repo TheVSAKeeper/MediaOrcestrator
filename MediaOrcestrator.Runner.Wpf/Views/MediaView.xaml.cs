@@ -19,6 +19,7 @@ public partial class MediaView : UserControl, IView<MediaViewModel>
         InitializeComponent();
 
         Loaded += OnLoaded;
+        SizeChanged += OnSizeChanged;
         DataContextChanged += OnDataContextChanged;
     }
 
@@ -37,6 +38,7 @@ public partial class MediaView : UserControl, IView<MediaViewModel>
         if (_vm is not null)
         {
             _vm.PropertyChanged -= OnViewModelPropertyChanged;
+            _vm.SearchFocusRequested -= OnSearchFocusRequested;
         }
 
         _vm = e.NewValue as MediaViewModel;
@@ -44,9 +46,15 @@ public partial class MediaView : UserControl, IView<MediaViewModel>
         if (_vm is not null)
         {
             _vm.PropertyChanged += OnViewModelPropertyChanged;
+            _vm.SearchFocusRequested += OnSearchFocusRequested;
             ApplyInspectorLayout();
             await _vm.EnsureLoadedAsync();
         }
+    }
+
+    private void OnSearchFocusRequested(object? sender, EventArgs e)
+    {
+        SearchBar.FocusSearch();
     }
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -55,6 +63,11 @@ public partial class MediaView : UserControl, IView<MediaViewModel>
         {
             ApplyInspectorLayout();
         }
+    }
+
+    private void OnSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        ApplyInspectorLayout();
     }
 
     private void ApplyInspectorLayout()
@@ -66,14 +79,22 @@ public partial class MediaView : UserControl, IView<MediaViewModel>
 
         if (_vm.IsInspectorCollapsed)
         {
-            InspectorColumn.SetCurrentValue(ColumnDefinition.MinWidthProperty, RailWidth);
+            InspectorColumn.SetCurrentValue(ColumnDefinition.MinWidthProperty, (double)RailWidth);
             InspectorColumn.SetCurrentValue(ColumnDefinition.WidthProperty, new GridLength(RailWidth));
             SplitterColumn.SetCurrentValue(ColumnDefinition.WidthProperty, new GridLength(0));
         }
         else
         {
-            InspectorColumn.SetCurrentValue(ColumnDefinition.MinWidthProperty, MinPanelWidth);
-            InspectorColumn.SetCurrentValue(ColumnDefinition.WidthProperty, new GridLength(_vm.InspectorWidth));
+            var width = _vm.InspectorWidth;
+
+            if (ActualWidth > 0)
+            {
+                var maxForInspector = Math.Max(MinPanelWidth, ActualWidth - 266);
+                width = Math.Min(width, maxForInspector);
+            }
+
+            InspectorColumn.SetCurrentValue(ColumnDefinition.MinWidthProperty, (double)MinPanelWidth);
+            InspectorColumn.SetCurrentValue(ColumnDefinition.WidthProperty, new GridLength(width));
             SplitterColumn.SetCurrentValue(ColumnDefinition.WidthProperty, new GridLength(6));
         }
     }

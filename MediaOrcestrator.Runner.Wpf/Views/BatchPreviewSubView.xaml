@@ -163,7 +163,7 @@
                                 Padding="2"
                                 Margin="0,0,0,8">
                             
-                            <StackPanel Orientation="Horizontal">
+                            <WrapPanel Orientation="Horizontal">
                                 <RadioButton Style="{StaticResource RadioButton.Segment}"
                                              GroupName="PreviewSource"
                                              Content="Из площадки"
@@ -188,7 +188,7 @@
                                              Command="{Binding SetSourceModeCommand}"
                                              CommandParameter="{x:Static vm:BatchPreviewSourceMode.Template}"
                                              AutomationProperties.Name="Источник превью: из шаблона" />
-                            </StackPanel>
+                            </WrapPanel>
                         </Border>
 
                         <Grid>
@@ -201,24 +201,18 @@
                                       AutomationProperties.Name="Площадка-донор"
                                       Visibility="{Binding IsDonorMode, Converter={StaticResource BoolToVisibility}}" />
 
-                            <Grid Visibility="{Binding IsFileMode, Converter={StaticResource BoolToVisibility}}">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <TextBox Grid.Column="0"
-                                         Style="{StaticResource TextBox.Toolbar}"
-                                         Text="{Binding FilePath, UpdateSourceTrigger=PropertyChanged}"
-                                         IsEnabled="{Binding IsFileMode}"
-                                         AutomationProperties.Name="Путь к файлу превью" />
-                                <Button Grid.Column="1"
-                                        Style="{StaticResource Button.Ghost}"
-                                        Content="Обзор"
-                                        Command="{Binding BrowseFileCommand}"
-                                        IsEnabled="{Binding IsFileMode}"
-                                        Padding="{DynamicResource Padding.Control.Compact}"
-                                        Margin="6,0,0,0" />
-                            </Grid>
+                            <controls:FilePickerField Path="{Binding FilePath, Mode=TwoWay}"
+                                                      IsPathEditable="True"
+                                                      Placeholder="Путь к файлу или перетащите картинку"
+                                                      Icon="Image"
+                                                      AllowedExtensions=".jpg;.jpeg;.png;.webp;.bmp"
+                                                      BrowseCommand="{Binding BrowseFileCommand}"
+                                                      ClearCommand="{Binding ClearFileCommand}"
+                                                      IsEnabled="{Binding IsFileMode}"
+                                                      BrowseToolTip="Выбрать файл превью"
+                                                      BrowseAutomationName="Выбрать файл превью"
+                                                      ClearAutomationName="Очистить путь к файлу превью"
+                                                      Visibility="{Binding IsFileMode, Converter={StaticResource BoolToVisibility}}" />
 
                             <Grid Visibility="{Binding IsTemplateMode, Converter={StaticResource BoolToVisibility}}">
                                 <Grid.ColumnDefinitions>

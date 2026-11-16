@@ -18,7 +18,8 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <cmt:CommentsFilterBar Grid.Row="0"
+        <cmt:CommentsFilterBar x:Name="FilterBar"
+                               Grid.Row="0"
                                Margin="0,0,0,10" />
 
         <Border Grid.Row="1"

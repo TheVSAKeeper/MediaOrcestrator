@@ -43,7 +43,8 @@
                         Margin="6,0,0,0"
                         Padding="10,4"
                         MinWidth="40"
-                        ToolTip="Показать/скрыть">
+                        ToolTip="Показать/скрыть"
+                        AutomationProperties.Name="Показать или скрыть секрет">
                     <iconPacks:PackIconLucide Kind="Eye"
                                               Width="16"
                                               Height="16" />

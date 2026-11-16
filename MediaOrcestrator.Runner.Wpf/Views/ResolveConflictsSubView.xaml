@@ -66,45 +66,42 @@
                            TextWrapping="Wrap"
                            Margin="0,0,0,8" />
 
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
+                <keepshell:StretchWrapPanel>
+                    <WrapPanel keepshell:StretchWrapPanel.Stretch="True"
+                               keepshell:StretchWrapPanel.StretchWidth="260"
+                               Orientation="Horizontal"
+                               VerticalAlignment="Center">
+                        <controls:SourceFilterDropDown Label="Источники"
+                                                       ItemsSource="{Binding Scope}"
+                                                       CanEdit="{Binding CanEditParameters}"
+                                                       SelectAllCommand="{Binding SelectAllScopeCommand}"
+                                                       SelectNoneCommand="{Binding SelectNoScopeCommand}"
+                                                       VerticalAlignment="Center"
+                                                       Margin="0,2,10,2" />
 
-                    <controls:SourceFilterDropDown Grid.Column="0"
-                                                   Label="Источники"
-                                                   ItemsSource="{Binding Scope}"
-                                                   CanEdit="{Binding CanEditParameters}"
-                                                   SelectAllCommand="{Binding SelectAllScopeCommand}"
-                                                   SelectNoneCommand="{Binding SelectNoScopeCommand}"
-                                                   VerticalAlignment="Center" />
+                        <Button Style="{StaticResource Button.Primary}"
+                                Command="{Binding FindConflictsCommand}"
+                                Padding="{DynamicResource Padding.Control}"
+                                Margin="0,2,12,2"
+                                VerticalAlignment="Center">
+                            <StackPanel Orientation="Horizontal">
+                                <iconPacks:PackIconLucide Kind="RotateCw"
+                                                  Width="14"
+                                                  Height="14"
+                                                  VerticalAlignment="Center"
+                                                  Margin="0,0,6,0" />
+                                <TextBlock Text="Найти конфликты"
+                                           VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                    </WrapPanel>
 
-                    <Button Grid.Column="1"
-                            Style="{StaticResource Button.Primary}"
-                            Command="{Binding FindConflictsCommand}"
-                            Padding="{DynamicResource Padding.Control}"
-                            Margin="10,0,0,0"
-                            VerticalAlignment="Center">
-                        <StackPanel Orientation="Horizontal">
-                            <iconPacks:PackIconLucide Kind="RotateCw"
-                                              Width="14"
-                                              Height="14"
-                                              VerticalAlignment="Center"
-                                              Margin="0,0,6,0" />
-                            <TextBlock Text="Найти конфликты"
-                                       VerticalAlignment="Center" />
-                        </StackPanel>
-                    </Button>
-
-                    <CheckBox Grid.Column="3"
-                              IsChecked="{Binding StopOnError}"
+                    <CheckBox IsChecked="{Binding StopOnError}"
                               IsEnabled="{Binding CanEditParameters}"
                               VerticalAlignment="Center"
+                              Margin="0,2,0,2"
                               Content="Прервать при ошибке" />
-                </Grid>
+                </keepshell:StretchWrapPanel>
             </StackPanel>
         </Border>
 
@@ -136,9 +133,30 @@
                                      DescriptionMaxWidth="460" />
             </controls:OperationResultPanel.EmptyContent>
 
-            <ScrollViewer VerticalScrollBarVisibility="Auto">
-                <ItemsControl ItemsSource="{Binding Groups}">
-                    <ItemsControl.ItemTemplate>
+            <ItemsControl ItemsSource="{Binding Groups}"
+                          VirtualizingPanel.IsVirtualizing="True"
+                          VirtualizingPanel.VirtualizationMode="Standard"
+                          VirtualizingPanel.ScrollUnit="Pixel"
+                          VirtualizingPanel.CacheLengthUnit="Page"
+                          VirtualizingPanel.CacheLength="1,1"
+                          ScrollViewer.CanContentScroll="True"
+                          ScrollViewer.IsDeferredScrollingEnabled="False">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <VirtualizingStackPanel IsItemsHost="True" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.Template>
+                    <ControlTemplate TargetType="ItemsControl">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled"
+                                      CanContentScroll="True"
+                                      Focusable="False">
+                            <ItemsPresenter />
+                        </ScrollViewer>
+                    </ControlTemplate>
+                </ItemsControl.Template>
+                <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="{x:Type vm:ConflictGroupViewModel}">
                             <Border Style="{StaticResource Card.Inset}"
                                     Margin="{DynamicResource Margin.StackItem}">
@@ -235,6 +253,7 @@
                                                     </Grid.ColumnDefinitions>
 
                                                     <RadioButton Grid.Column="0"
+                                                                 GroupName="{Binding GroupKey}"
                                                                  IsChecked="{Binding IsTarget, Mode=TwoWay}"
                                                                  IsEnabled="{Binding CanBeTarget}"
                                                                  VerticalAlignment="Center"
@@ -337,7 +356,6 @@
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
-            </ScrollViewer>
         </controls:OperationResultPanel>
 
         <Border Grid.Row="2"
@@ -352,6 +370,7 @@
                                          ProgressMax="{Binding ProgressMax}"
                                          ToggleJournalCommand="{Binding ToggleJournalCommand}">
                 <TextBlock Style="{StaticResource TextBlock.Subtle}"
+                           TextWrapping="Wrap"
                            VerticalAlignment="Center">
                     <Run Text="Готово к объединению: " />
                     <Run Text="{Binding ReadyGroups, Mode=OneWay}" />

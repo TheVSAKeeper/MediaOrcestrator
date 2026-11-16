@@ -14,11 +14,12 @@
     </UserControl.Resources>
 
     <Grid Margin="{DynamicResource Margin.StackItem}">
-        <TextBox Style="{StaticResource TextBox.Toolbar}"
+        <TextBox x:Name="SearchBox"
+                 Style="{StaticResource TextBox.Toolbar}"
                  Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
                  keepshell:PlaceholderBehavior.Placeholder="Название или ID в источнике"
                  AutomationProperties.Name="Поиск по медиа"
-                 MinWidth="260"
+                 MinWidth="160"
                  Padding="32,0,32,0" />
         <iconPacks:PackIconLucide Kind="Search"
                           Width="16"

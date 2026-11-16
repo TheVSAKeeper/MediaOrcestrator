@@ -11,7 +11,7 @@ using System.Windows.Threading;
 
 namespace MediaOrcestrator.Runner.Wpf.ViewModels;
 
-public sealed partial class CoverTemplateEditorViewModel : ObservableObject, IDialogViewModel
+public sealed partial class CoverTemplateEditorViewModel : ObservableObject
 {
     private static readonly string[] ImageExtensions = [".png", ".jpg", ".jpeg", ".webp", ".bmp"];
 
@@ -80,6 +80,13 @@ public sealed partial class CoverTemplateEditorViewModel : ObservableObject, IDi
     [ObservableProperty]
     private bool _isTemplateSectionExpanded = true;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSaveStatus))]
+    private string? _saveStatusText;
+
+    [ObservableProperty]
+    private bool _isDirty;
+
     public CoverTemplateEditorViewModel(
         CoverGenerator generator,
         CoverTemplateStore store,
@@ -130,9 +137,10 @@ public sealed partial class CoverTemplateEditorViewModel : ObservableObject, IDi
         IsTemplateSectionExpanded = !(HasTemplateImage && !string.IsNullOrWhiteSpace(ProfileName));
 
         RefreshPreview();
+        IsDirty = false;
     }
 
-    public event EventHandler<bool>? RequestClose;
+    public event EventHandler? CloseRequested;
 
     public ObservableCollection<CoverTextLayerViewModel> Layers { get; } = [];
 
@@ -151,6 +159,8 @@ public sealed partial class CoverTemplateEditorViewModel : ObservableObject, IDi
     public bool HasTemplateImage => !string.IsNullOrEmpty(TemplatePath) && File.Exists(TemplatePath);
 
     public bool HasSelectedLayer => SelectedLayer is not null;
+
+    public bool HasSaveStatus => !string.IsNullOrEmpty(SaveStatusText);
 
     [RelayCommand]
     private void BrowseTemplate()
@@ -273,13 +283,23 @@ public sealed partial class CoverTemplateEditorViewModel : ObservableObject, IDi
 
         ResultTemplate = template;
         ResultProfileName = name;
-        RequestClose?.Invoke(this, true);
+        IsDirty = false;
+        SaveStatusText = $"Профиль «{name}» сохранён.";
     }
 
     private bool CanSave() => HasTemplateImage && !string.IsNullOrWhiteSpace(ProfileName);
 
+    partial void OnProfileNameChanged(string value)
+    {
+        if (!_suppressPreview)
+        {
+            IsDirty = true;
+            SaveStatusText = null;
+        }
+    }
+
     [RelayCommand]
-    private void Cancel() => RequestClose?.Invoke(this, false);
+    private void Cancel() => CloseRequested?.Invoke(this, EventArgs.Empty);
 
     [RelayCommand(CanExecute = nameof(HasSelectedLayer))]
     private void PickFillColor()
@@ -440,6 +460,8 @@ public sealed partial class CoverTemplateEditorViewModel : ObservableObject, IDi
             return;
         }
 
+        IsDirty = true;
+        SaveStatusText = null;
         _previewTimer.Stop();
         _previewTimer.Start();
     }

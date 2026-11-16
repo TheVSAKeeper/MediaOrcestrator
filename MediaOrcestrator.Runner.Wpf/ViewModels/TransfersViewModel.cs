@@ -12,7 +12,7 @@ using System.Windows.Threading;
 
 namespace MediaOrcestrator.Runner.Wpf.ViewModels;
 
-public sealed partial class TransfersViewModel : ObservableObject, IPageHeader, IPageRenderMetric
+public sealed partial class TransfersViewModel : ObservableObject, IPageHeader, IPageRenderMetric, IPageEscapeHandler, IPageSearchable
 {
     public string PageTitle => "Передачи";
 
@@ -131,6 +131,7 @@ public sealed partial class TransfersViewModel : ObservableObject, IPageHeader, 
     private string _uploadIntervalMinutesText = DefaultUploadIntervalMinutes.ToString(CultureInfo.InvariantCulture);
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanHandleEscape))]
     private bool _isJournalOpen;
 
     [ObservableProperty]
@@ -194,6 +195,23 @@ public sealed partial class TransfersViewModel : ObservableObject, IPageHeader, 
             .ToString(CultureInfo.InvariantCulture);
         _suppressPersist = false;
     }
+
+    public event EventHandler? SearchFocusRequested;
+
+    public bool CanHandleEscape => IsJournalOpen;
+
+    public bool TryHandleEscape()
+    {
+        if (!IsJournalOpen)
+        {
+            return false;
+        }
+
+        IsJournalOpen = false;
+        return true;
+    }
+
+    public void RequestSearchFocus() => SearchFocusRequested?.Invoke(this, EventArgs.Empty);
 
     public RangeObservableCollection<FilterOptionViewModel> SourceFilters { get; }
 

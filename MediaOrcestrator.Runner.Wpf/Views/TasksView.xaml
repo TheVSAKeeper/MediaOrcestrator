@@ -42,8 +42,7 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="4" />
                         <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto"
-                                          SharedSizeGroup="TasksActions" />
+                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
 
                     <Rectangle Grid.Column="0"
@@ -204,9 +203,15 @@
                 </Grid>
             </Border>
         </DataTemplate>
+
+        <DataTemplate DataType="{x:Type vm:TasksSectionDivider}">
+            <Border BorderBrush="{DynamicResource Border.Subtle}"
+                    BorderThickness="0,1,0,0"
+                    Margin="0,8,0,8" />
+        </DataTemplate>
     </UserControl.Resources>
 
-    <Grid Grid.IsSharedSizeScope="True">
+    <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -282,22 +287,31 @@
                               Description="Синк, передачи и пакетные операции появятся здесь, пока идут, и осядут в завершённых."
                               Visibility="{Binding HasNoVisibleItems, Converter={StaticResource BoolToVisibility}}" />
 
-        <ScrollViewer Grid.Row="1"
+        <ItemsControl Grid.Row="1"
+                      ItemsSource="{Binding VisibleRows}"
                       Visibility="{Binding HasVisibleItems, Converter={StaticResource BoolToVisibility}}"
-                      VerticalScrollBarVisibility="Auto"
-                      HorizontalScrollBarVisibility="Disabled"
-                      Focusable="False">
-            <StackPanel>
-                <ItemsControl ItemsSource="{Binding Active}" />
-
-                <Border BorderBrush="{DynamicResource Border.Subtle}"
-                        BorderThickness="0,1,0,0"
-                        Margin="0,8,0,0"
-                        Padding="0,8,0,0"
-                        Visibility="{Binding CompletedExpandedVisibility}">
-                    <ItemsControl ItemsSource="{Binding Completed}" />
-                </Border>
-            </StackPanel>
-        </ScrollViewer>
+                      VirtualizingPanel.IsVirtualizing="True"
+                      VirtualizingPanel.VirtualizationMode="Recycling"
+                      VirtualizingPanel.ScrollUnit="Pixel"
+                      VirtualizingPanel.CacheLengthUnit="Page"
+                      VirtualizingPanel.CacheLength="1,2"
+                      ScrollViewer.CanContentScroll="True"
+                      ScrollViewer.IsDeferredScrollingEnabled="False">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <VirtualizingStackPanel IsItemsHost="True" />
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.Template>
+                <ControlTemplate TargetType="ItemsControl">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  CanContentScroll="True"
+                                  Focusable="False">
+                        <ItemsPresenter />
+                    </ScrollViewer>
+                </ControlTemplate>
+            </ItemsControl.Template>
+        </ItemsControl>
     </Grid>
 </UserControl>

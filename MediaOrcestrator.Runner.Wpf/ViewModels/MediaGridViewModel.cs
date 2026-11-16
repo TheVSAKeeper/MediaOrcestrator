@@ -263,7 +263,7 @@ public sealed partial class MediaGridViewModel : ObservableObject
     {
         var items = new ObservableCollection<MediaMenuItemViewModel>();
 
-        foreach (var item in PanelActionItems.Where(i => i.Icon == MenuIcons.Sync.Icon))
+        foreach (var item in PanelActionItems.Where(i => i.IsTransferAction))
         {
             items.Add(new()
             {

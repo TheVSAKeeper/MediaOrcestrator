@@ -76,6 +76,8 @@ public sealed partial class TasksViewModel : ObservableObject
 
     public ObservableCollection<ActionRowViewModel> Completed { get; }
 
+    public RangeObservableCollection<object> VisibleRows { get; } = [];
+
     public bool HasActive => ActiveCount > 0;
 
     public bool HasNoActive => ActiveCount == 0;
@@ -136,6 +138,8 @@ public sealed partial class TasksViewModel : ObservableObject
 
     partial void OnIsCompletedExpandedChanged(bool value)
     {
+        RebuildVisibleRows();
+
         if (_suppressPersist)
         {
             return;
@@ -180,6 +184,7 @@ public sealed partial class TasksViewModel : ObservableObject
 
         ActiveCount = Active.Count;
         CompletedCount = Completed.Count;
+        RebuildVisibleRows();
         RecalculateAggregates();
     }
 
@@ -275,6 +280,34 @@ public sealed partial class TasksViewModel : ObservableObject
     {
         RefreshHierarchy(_actionHolder.Snapshot(), _activeRows);
         RefreshHierarchy(_actionHolder.CompletedSnapshot(), _completedRows);
+        RebuildVisibleRows();
+    }
+
+    private void RebuildVisibleRows()
+    {
+        var items = new List<object>(Active.Count + (IsCompletedExpanded ? Completed.Count + 1 : 0));
+
+        foreach (var row in Active)
+        {
+            if (row.IsVisible)
+            {
+                items.Add(row);
+            }
+        }
+
+        if (IsCompletedExpanded)
+        {
+            var visibleCompleted = Completed.Where(r => r.IsVisible).ToList();
+
+            if (items.Count > 0 && visibleCompleted.Count > 0)
+            {
+                items.Add(TasksSectionDivider.Instance);
+            }
+
+            items.AddRange(visibleCompleted);
+        }
+
+        VisibleRows.ReplaceAll(items);
     }
 
     private void MarkRowDirty()
@@ -337,5 +370,14 @@ public sealed partial class TasksViewModel : ObservableObject
         }
 
         return failed;
+    }
+}
+
+public sealed class TasksSectionDivider
+{
+    public static TasksSectionDivider Instance { get; } = new();
+
+    private TasksSectionDivider()
+    {
     }
 }

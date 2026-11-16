@@ -30,10 +30,12 @@ public sealed partial class ConflictGroupViewModel : ObservableObject
         Group = group;
         _allSources = allSources;
         Title = group.NormalizedKey;
+        var groupKey = Guid.NewGuid().ToString("N");
 
         var rows = group.Medias
             .Select(m => new ConflictMediaRowViewModel
             {
+                GroupKey = groupKey,
                 Media = m,
                 Title = m.Title,
                 SourceBadges = BuildBadges(m),
@@ -331,6 +333,8 @@ public sealed partial class ConflictMediaRowViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanBeTarget))]
     private bool _isExcluded;
+
+    public required string GroupKey { get; init; }
 
     public required Media Media { get; init; }
 

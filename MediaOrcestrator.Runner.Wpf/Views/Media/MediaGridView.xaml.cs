@@ -44,10 +44,24 @@ public partial class MediaGridView : UserControl, IView<MediaGridViewModel>
         _columnWidthTimer.Tick += OnColumnWidthTimerTick;
 
         Unloaded += OnUnloaded;
+        IsVisibleChanged += OnIsVisibleChanged;
         DataContextChanged += OnDataContextChanged;
     }
 
+    private void OnIsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
+    {
+        if (!IsVisible)
+        {
+            FlushColumnWidthSave();
+        }
+    }
+
     private void OnUnloaded(object sender, RoutedEventArgs e)
+    {
+        FlushColumnWidthSave();
+    }
+
+    private void FlushColumnWidthSave()
     {
         if (_columnWidthTimer.IsEnabled)
         {
