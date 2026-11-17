@@ -1,5 +1,6 @@
 ﻿using CommunityToolkit.Mvvm.Input;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Globalization;
 using System.Windows.Data;
 
@@ -51,11 +52,6 @@ public sealed partial class MediaGridViewModel
 
     partial void OnIsCompactChanged(bool value)
     {
-        foreach (var row in Rows)
-        {
-            row.IsCompact = value;
-        }
-
         if (!_suppressPrefPersist)
         {
             _settings.SetValue(CompactSettingKey, value ? "true" : "false");
@@ -104,7 +100,14 @@ public sealed partial class MediaGridViewModel
     [RelayCommand]
     private void AutoFitColumns()
     {
+        var sw = Stopwatch.StartNew();
         AutoFitColumnsRequested?.Invoke(this, EventArgs.Empty);
+        sw.Stop();
+
+        PublishMetric?.Invoke(
+        [
+            new("Автоширина колонок", FormatMs(sw.ElapsedMilliseconds)),
+        ], sw.ElapsedMilliseconds);
     }
 
     partial void OnIsGroupedChanged(bool value)
@@ -114,7 +117,17 @@ public sealed partial class MediaGridViewModel
             _settings.SetValue(GroupedSettingKey, value ? "true" : "false");
         }
 
+        var sw = Stopwatch.StartNew();
         ApplyGrouping();
+        sw.Stop();
+
+        if (!_suppressPrefPersist)
+        {
+            PublishMetric?.Invoke(
+            [
+                new(value ? "Группировка по сериям" : "Плоский список", FormatMs(sw.ElapsedMilliseconds)),
+            ], sw.ElapsedMilliseconds);
+        }
     }
 
     private void ApplyGrouping()

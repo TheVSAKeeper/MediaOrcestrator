@@ -1,4 +1,5 @@
 ﻿using KeepShell.Diagnostics;
+using MediaOrcestrator.Domain;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
@@ -9,13 +10,16 @@ namespace MediaOrcestrator.Runner.Wpf.Services.Diagnostics;
 
 public sealed class ChildProcessSampler(
     PerformanceMonitor monitor,
+    ActionHolder actionHolder,
     ILogger<ChildProcessSampler> logger) : IHostedService, IDisposable
 {
     private const uint Th32csSnapProcess = 0x00000002;
-    private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan ActivePollInterval = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan IdlePollInterval = TimeSpan.FromSeconds(30);
 
     private readonly CancellationTokenSource _stopCts = new();
     private Task? _loopTask;
+    private int _lastTotalCount;
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
@@ -49,14 +53,13 @@ public sealed class ChildProcessSampler(
 
     private async Task RunLoopAsync(CancellationToken ct)
     {
-        using var timer = new PeriodicTimer(PollInterval);
-
         SampleOnce();
 
         try
         {
-            while (await timer.WaitForNextTickAsync(ct))
+            while (!ct.IsCancellationRequested)
             {
+                await Task.Delay(GetNextPollInterval(), ct);
                 SampleOnce();
             }
         }
@@ -65,11 +68,17 @@ public sealed class ChildProcessSampler(
         }
     }
 
+    internal TimeSpan GetNextPollInterval() =>
+        actionHolder.ActiveCount > 0 || Volatile.Read(ref _lastTotalCount) > 0
+            ? ActivePollInterval
+            : IdlePollInterval;
+
     private void SampleOnce()
     {
         try
         {
             var usage = CollectDescendantUsage();
+            Volatile.Write(ref _lastTotalCount, usage.Count);
             monitor.ReportChildProcesses(usage);
         }
         catch (Exception ex)

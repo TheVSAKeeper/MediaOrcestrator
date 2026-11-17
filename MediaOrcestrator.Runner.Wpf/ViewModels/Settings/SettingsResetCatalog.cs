@@ -11,6 +11,7 @@ public static class SettingsSectionKeys
     public const string Paths = "paths";
     public const string Appearance = "appearance";
     public const string Notifications = "notifications";
+    public const string Sync = "sync";
     public const string Updates = "updates";
     public const string Mcp = "mcp";
 }
@@ -134,6 +135,15 @@ public sealed class SettingsResetCatalog
                 new(ShellPreferences.ToastOnlyWhenInactiveKey, "Только когда окно неактивно", "включено",
                     () => shell.ToastOnlyWhenInactive,
                     () => shell.ToastOnlyWhenInactive = true)),
+
+            [SettingsSectionKeys.Sync] = new(SettingsSectionKeys.Sync,
+                null,
+                new(ShellPreferences.AutoSyncEnabledKey, "Автосинхронизация в фоне", "включена",
+                    () => shell.AutoSyncEnabled,
+                    () => shell.AutoSyncEnabled = true),
+                new(ShellPreferences.AutoSyncStartupDelaySecondsKey, "Пауза после запуска", $"{ShellPreferences.DefaultAutoSyncStartupDelaySeconds} с",
+                    () => shell.AutoSyncStartupDelaySeconds == ShellPreferences.DefaultAutoSyncStartupDelaySeconds,
+                    () => shell.AutoSyncStartupDelaySeconds = ShellPreferences.DefaultAutoSyncStartupDelaySeconds)),
 
             [SettingsSectionKeys.Updates] = new(SettingsSectionKeys.Updates,
                 null,

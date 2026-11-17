@@ -24,8 +24,10 @@ public sealed partial class CommentsViewModel : ObservableObject, ICommentItemHo
     private readonly ILogger<CommentsViewModel> _logger;
     private readonly IShellLauncher _shellLauncher;
     private readonly IUiDispatcher _dispatcher;
+    private readonly IPageRenderProbe? _renderProbe;
     private readonly CommentsTreeBuilder _treeBuilder;
     private readonly CommentsSourceFetcher _sourceFetcher;
+    private readonly CommentsSnapshotCache _snapshotCache = new();
 
     private readonly IUiTimer _searchTimer;
     private readonly IUiTimer _relativeTimeTimer;
@@ -37,6 +39,7 @@ public sealed partial class CommentsViewModel : ObservableObject, ICommentItemHo
     private CommentsViewSettings _settings = new();
     private int _applyVersion;
     private CancellationTokenSource? _applyCts;
+    private Task? _lastApplyTask;
     private bool _loaded;
     private bool _isViewVisible = true;
     private bool _suppressPersist;
@@ -136,7 +139,8 @@ public sealed partial class CommentsViewModel : ObservableObject, ICommentItemHo
         ISettingsStore settingsStore,
         ILogger<CommentsViewModel> logger,
         IShellLauncher shellLauncher,
-        IUiDispatcher dispatcher)
+        IUiDispatcher dispatcher,
+        IPageRenderProbe? renderProbe = null)
     {
         _orcestrator = orcestrator;
         _commentsService = commentsService;
@@ -146,6 +150,7 @@ public sealed partial class CommentsViewModel : ObservableObject, ICommentItemHo
         _logger = logger;
         _shellLauncher = shellLauncher;
         _dispatcher = dispatcher;
+        _renderProbe = renderProbe;
         _treeBuilder = new(orcestrator, dispatcher);
         _sourceFetcher = new(orcestrator, commentsService, actionHolder, dialogs, logger, shellLauncher, dispatcher);
 
@@ -315,6 +320,7 @@ public sealed partial class CommentsViewModel : ObservableObject, ICommentItemHo
     private void ReloadSourcesCommand()
     {
         LoadError = null;
+        InvalidateSnapshotCache();
 
         try
         {
@@ -381,6 +387,7 @@ public sealed partial class CommentsViewModel : ObservableObject, ICommentItemHo
             FetchProgressMax = 0;
             _fetchCts?.Dispose();
             _fetchCts = null;
+            InvalidateSnapshotCache();
             ScheduleApplyFilters();
         }
     }

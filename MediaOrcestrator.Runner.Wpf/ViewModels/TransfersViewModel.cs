@@ -99,7 +99,11 @@ public sealed partial class TransfersViewModel : ObservableObject, IPageHeader, 
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(RunProgressText))]
+    [NotifyPropertyChangedFor(nameof(HasRunErrors))]
     private int _runStepsFailed;
+
+    [ObservableProperty]
+    private bool _hasPlanError;
 
     [ObservableProperty]
     private bool _isPlanStale;
@@ -133,6 +137,9 @@ public sealed partial class TransfersViewModel : ObservableObject, IPageHeader, 
 
     [ObservableProperty]
     private string? _emptyHint;
+
+    [ObservableProperty]
+    private string? _danglingRelationsWarning;
 
     [ObservableProperty]
     private string _emptyHeading = "Передач нет";
@@ -215,6 +222,8 @@ public sealed partial class TransfersViewModel : ObservableObject, IPageHeader, 
     public bool IsEmptyAfterBuild => IsPlanLoaded && PlanRoots == 0;
 
     public bool HasAnySelected => SelectedRoots > 0;
+
+    public bool HasRunErrors => RunStepsFailed > 0;
 
     public string PlanSummary => IsPlanLoaded
         ? $"План: {PlanRoots} цепочек · {PlanSteps} шагов"
@@ -301,6 +310,9 @@ public sealed partial class TransfersViewModel : ObservableObject, IPageHeader, 
 
         try
         {
+            HasPlanError = false;
+            DanglingRelationsWarning = null;
+
             var dbSw = Stopwatch.StartNew();
             var (sources, medias, relations) = await Task.Run(() =>
                 (_orcestrator.GetSources(), _orcestrator.GetMedias(), _orcestrator.GetRelations()));
@@ -310,10 +322,20 @@ public sealed partial class TransfersViewModel : ObservableObject, IPageHeader, 
             _planSources = sources;
             _planRelations = relations;
 
+            var validRelations = relations.Where(r => r.From is not null && r.To is not null).ToList();
+            var danglingCount = relations.Count - validRelations.Count;
+
             var filtersSw = Stopwatch.StartNew();
-            PopulateFilters(sources, relations);
+            PopulateFilters(sources, validRelations);
             filtersSw.Stop();
             filtersMs = filtersSw.ElapsedMilliseconds;
+
+            if (danglingCount > 0)
+            {
+                _logger.LogWarning("Пропущено повреждённых связей с отсутствующим источником: {DanglingCount}", danglingCount);
+                AppendJournal(TransferJournalLevel.Warning, $"Пропущено повреждённых связей (удалён источник): {danglingCount}");
+                DanglingRelationsWarning = $"Пропущено повреждённых связей (удалён источник): {danglingCount}. Удалите их в разделе «Источники и связи».";
+            }
 
             if (sources.Count == 0)
             {
@@ -335,19 +357,38 @@ public sealed partial class TransfersViewModel : ObservableObject, IPageHeader, 
                 return;
             }
 
+            if (validRelations.Count == 0)
+            {
+                applyBreakdown = ApplyPlanInternal([], 0);
+                EmptyIcon = PackIconLucideKind.TriangleAlert;
+                EmptyHeading = "Связи повреждены";
+                EmptyHint = "Все связи ссылаются на удалённые источники. Проверьте раздел «Источники и связи».";
+                StatusText = "Готов";
+                return;
+            }
+
             var planSw = Stopwatch.StartNew();
-            var rootIntents = await Task.Run(() => _planner.Plan(medias, relations));
+            var rootIntents = await Task.Run(() => _planner.Plan(medias, validRelations));
             var totalSteps = CountSteps(rootIntents);
             planSw.Stop();
             planMs = planSw.ElapsedMilliseconds;
 
             applyBreakdown = ApplyPlanInternal(rootIntents, totalSteps);
 
-            EmptyIcon = PackIconLucideKind.CircleCheck;
-            EmptyHeading = "Передач нет";
-            EmptyHint = rootIntents.Count == 0
-                ? "Всё в порядке: медиа присутствуют во всех целевых источниках по активным связям."
-                : null;
+            if (rootIntents.Count == 0 && HasRunErrors)
+            {
+                EmptyIcon = PackIconLucideKind.TriangleAlert;
+                EmptyHeading = "В последнем прогоне были ошибки";
+                EmptyHint = $"Неудачных шагов: {RunStepsFailed}. Подробности смотрите в журнале прогона.";
+            }
+            else
+            {
+                EmptyIcon = PackIconLucideKind.CircleCheck;
+                EmptyHeading = "Передач нет";
+                EmptyHint = rootIntents.Count == 0
+                    ? "Всё в порядке: медиа присутствуют во всех целевых источниках по активным связям."
+                    : null;
+            }
 
             StatusText = "Готов";
             _logger.LogInformation("План передач построен: {Roots} цепочек, {Steps} шагов", rootIntents.Count, totalSteps);
@@ -355,6 +396,13 @@ public sealed partial class TransfersViewModel : ObservableObject, IPageHeader, 
         catch (Exception ex)
         {
             _logger.LogError(ex, "Не удалось построить план передач");
+            ClearPlanOnError();
+            HasPlanError = true;
+            EmptyIcon = PackIconLucideKind.TriangleAlert;
+            EmptyHeading = "Не удалось построить план";
+            EmptyHint = string.IsNullOrWhiteSpace(ex.Message)
+                ? "Неизвестная ошибка при построении плана."
+                : ex.Message;
             StatusText = $"Ошибка построения плана: {ex.Message}";
             AppendJournal(TransferJournalLevel.Error, $"Ошибка построения плана: {ex.Message}");
         }

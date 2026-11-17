@@ -30,23 +30,6 @@
             <Setter Property="Margin"
                     Value="0,0,6,0" />
         </Style>
-
-        <Style x:Key="SyncButton.Soft"
-               TargetType="Button"
-               BasedOn="{StaticResource Button.Base}">
-            <Setter Property="Background"
-                    Value="{DynamicResource Accent.Soft}" />
-            <Setter Property="BorderBrush"
-                    Value="{DynamicResource Accent.Soft}" />
-            <Setter Property="MinHeight"
-                    Value="32" />
-            <Setter Property="MinWidth"
-                    Value="100" />
-            <Setter Property="Padding"
-                    Value="12,4" />
-            <Setter Property="Margin"
-                    Value="0,0,6,0" />
-        </Style>
     </UserControl.Resources>
 
     <Grid>
@@ -79,18 +62,21 @@
 
                     <StackPanel Grid.Column="1"
                                 Orientation="Horizontal">
-                        <Button Style="{StaticResource SyncButton.Soft}"
+                        <Button Style="{StaticResource SyncButton}"
                                 Command="{Binding SyncAllFullCommand}"
+                                AutomationProperties.Name="Полная синхронизация всех источников"
                                 ToolTip="Полная синхронизация по всем источникам">
                             <TextBlock Text="Полная" />
                         </Button>
                         <Button Style="{StaticResource SyncButton}"
                                 Command="{Binding SyncAllQuickCommand}"
+                                AutomationProperties.Name="Быстрая синхронизация всех источников"
                                 ToolTip="Загружает список медиа без метаданных по всем источникам">
                             <TextBlock Text="Быстрая" />
                         </Button>
                         <Button Style="{StaticResource SyncButton}"
                                 Command="{Binding SyncAllNewCommand}"
+                                AutomationProperties.Name="Синхронизация новых медиа по всем источникам"
                                 ToolTip="Синхронизирует до первого уже известного медиа по всем источникам">
                             <TextBlock Text="Новые" />
                         </Button>
@@ -149,14 +135,17 @@
                     Padding="0">
                 <Grid>
                     <ItemsControl ItemsSource="{Binding Sources}"
-                                  Grid.IsSharedSizeScope="True"
                                   ScrollViewer.CanContentScroll="True"
                                   VirtualizingPanel.IsVirtualizing="True"
                                   VirtualizingPanel.VirtualizationMode="Recycling"
-                                  VirtualizingPanel.ScrollUnit="Pixel">
+                                  VirtualizingPanel.ScrollUnit="Pixel"
+                                  VirtualizingPanel.CacheLengthUnit="Page"
+                                  VirtualizingPanel.CacheLength="1,2">
                         <ItemsControl.Template>
                             <ControlTemplate TargetType="ItemsControl">
-                                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                <ScrollViewer CanContentScroll="True"
+                                              Focusable="False"
+                                              VerticalScrollBarVisibility="Auto"
                                               HorizontalScrollBarVisibility="Disabled"
                                               Padding="12">
                                     <ItemsPresenter />
@@ -203,10 +192,8 @@
                                                         Orientation="Vertical">
                                                 <Grid>
                                                     <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="Auto"
-                                                                          SharedSizeGroup="TitleCol" />
-                                                        <ColumnDefinition Width="Auto"
-                                                                          SharedSizeGroup="TypeBadgeCol" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="Auto" />
                                                         <ColumnDefinition Width="Auto" />
                                                         <ColumnDefinition Width="*" />
                                                     </Grid.ColumnDefinitions>
@@ -215,7 +202,9 @@
                                                                FontWeight="SemiBold"
                                                                FontSize="{DynamicResource Font.Size.L}"
                                                                VerticalAlignment="Center"
+                                                               MaxWidth="380"
                                                                TextTrimming="CharacterEllipsis"
+                                                               ToolTip="{Binding Title}"
                                                                HorizontalAlignment="Left"
                                                                Margin="0,0,10,0" />
                                                     <Border Grid.Column="1"
@@ -293,18 +282,21 @@
                                                         Orientation="Horizontal"
                                                         VerticalAlignment="Center"
                                                         Margin="16,0,0,0">
-                                                <Button Style="{StaticResource SyncButton.Soft}"
+                                                <Button Style="{StaticResource SyncButton}"
                                                         Command="{Binding SyncFullCommand}"
+                                                        AutomationProperties.Name="Полная синхронизация источника"
                                                         ToolTip="Полное перечитывание всех медиа источника">
                                                     <TextBlock Text="Полная" />
                                                 </Button>
                                                 <Button Style="{StaticResource SyncButton}"
                                                         Command="{Binding SyncQuickCommand}"
+                                                        AutomationProperties.Name="Быстрая синхронизация источника"
                                                         ToolTip="Загружает список медиа без метаданных">
                                                     <TextBlock Text="Быстрая" />
                                                 </Button>
                                                 <Button Style="{StaticResource SyncButton}"
                                                         Command="{Binding SyncNewCommand}"
+                                                        AutomationProperties.Name="Синхронизация новых медиа источника"
                                                         ToolTip="Синхронизирует до первого уже известного медиа">
                                                     <TextBlock Text="Новые" />
                                                 </Button>

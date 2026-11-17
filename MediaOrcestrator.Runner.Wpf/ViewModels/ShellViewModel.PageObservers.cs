@@ -8,6 +8,38 @@ namespace MediaOrcestrator.Runner.Wpf.ViewModels;
 
 public sealed partial class ShellViewModel
 {
+    public string? PageStatusCaption
+    {
+        get
+        {
+            if (CurrentPageStatus is not { IsBusy: true } pageStatus)
+            {
+                return null;
+            }
+
+            var caption = pageStatus.StatusCaption;
+
+            if (string.IsNullOrWhiteSpace(caption))
+            {
+                return null;
+            }
+
+            return IsSameStatusCaption(StatusText, caption) ? null : caption;
+        }
+    }
+
+    private static bool IsSameStatusCaption(string? left, string? right)
+    {
+        var normalizedLeft = NormalizeStatusCaption(left);
+        var normalizedRight = NormalizeStatusCaption(right);
+
+        return normalizedLeft.Length > 0
+            && string.Equals(normalizedLeft, normalizedRight, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string NormalizeStatusCaption(string? text) =>
+        string.IsNullOrWhiteSpace(text) ? string.Empty : text.Trim().TrimEnd('.', '…').TrimEnd();
+
     private void AttachRenderMetricSource(IPageRenderMetric? next)
     {
         if (_renderMetricSource is not null)
@@ -221,6 +253,11 @@ public sealed partial class ShellViewModel
         {
             AttachPageStatus(CurrentPageStatus);
         }
+
+        if (string.IsNullOrEmpty(e.PropertyName) || e.PropertyName == nameof(StatusText))
+        {
+            OnPropertyChanged(nameof(PageStatusCaption));
+        }
     }
 
     private void AttachPageStatus(IPageStatus? next)
@@ -238,6 +275,7 @@ public sealed partial class ShellViewModel
         }
 
         AttachPageCancelCommand(next?.CancelCommand);
+        OnPropertyChanged(nameof(PageStatusCaption));
         HandleEscapeCommand.NotifyCanExecuteChanged();
     }
 
@@ -248,6 +286,12 @@ public sealed partial class ShellViewModel
         {
             AttachPageCancelCommand(_observedPageStatus?.CancelCommand);
             HandleEscapeCommand.NotifyCanExecuteChanged();
+        }
+
+        if (string.IsNullOrEmpty(e.PropertyName)
+            || e.PropertyName is nameof(IPageStatus.IsBusy) or nameof(IPageStatus.StatusCaption))
+        {
+            OnPropertyChanged(nameof(PageStatusCaption));
         }
     }
 

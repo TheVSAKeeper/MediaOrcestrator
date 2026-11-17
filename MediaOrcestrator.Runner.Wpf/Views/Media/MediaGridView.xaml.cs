@@ -71,6 +71,7 @@ public partial class MediaGridView : UserControl, IView<MediaGridViewModel>
         {
             _vm.ColumnsChanged -= OnColumnsChanged;
             _vm.AutoFitColumnsRequested -= OnAutoFitColumnsRequested;
+            _vm.PropertyChanged -= OnVmPropertyChanged;
         }
 
         _vm = e.NewValue as MediaGridViewModel;
@@ -79,11 +80,20 @@ public partial class MediaGridView : UserControl, IView<MediaGridViewModel>
         {
             _vm.ColumnsChanged += OnColumnsChanged;
             _vm.AutoFitColumnsRequested += OnAutoFitColumnsRequested;
+            _vm.PropertyChanged += OnVmPropertyChanged;
             RebuildColumns(_vm);
         }
     }
 
     private void OnAutoFitColumnsRequested(object? sender, EventArgs e) => AutoFitColumns();
+
+    private void OnVmPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(MediaGridViewModel.IsCompact) && _vm is not null)
+        {
+            UpdateTitleColumnStyle(_vm.IsCompact);
+        }
+    }
 
     private void AutoFitColumns()
     {

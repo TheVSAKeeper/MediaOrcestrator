@@ -66,6 +66,7 @@
                             Command="{Binding OpenAppearanceCommand}"
                             Padding="10,4"
                             Height="{DynamicResource Control.Height.Default}"
+                            AutomationProperties.Name="Внешний вид"
                             ToolTip="Внешний вид: размеры шрифтов и префикс ответа">
                         <StackPanel Orientation="Horizontal">
                             <iconPacks:PackIconLucide Kind="Settings"
@@ -80,7 +81,8 @@
                             Command="{Binding FetchSelectedCommand}"
                             Margin="8,0,0,0"
                             Padding="14,4"
-                            Height="{DynamicResource Control.Height.Default}">
+                            Height="{DynamicResource Control.Height.Default}"
+                            AutomationProperties.Name="Загрузить комментарии">
                         <StackPanel Orientation="Horizontal">
                             <iconPacks:PackIconLucide Kind="RotateCw"
                                                       Width="16"
@@ -105,6 +107,7 @@
                              Style="{StaticResource TextBox.Toolbar}"
                              Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
                              keepshell:PlaceholderBehavior.Placeholder="Текст комментария или название медиа"
+                             AutomationProperties.AutomationId="CommentsSearchBox"
                              AutomationProperties.Name="Поиск по комментариям"
                              ToolTip="Поиск в тексте и заголовках медиа" />
                     <Button Grid.Column="1"
@@ -128,7 +131,10 @@
                                   Grid.Column="0"
                                   Height="{DynamicResource Control.Height.Default}"
                                   HorizontalContentAlignment="Left"
-                                  Padding="10,4">
+                                  Padding="10,4"
+                                  Foreground="{DynamicResource Fg.Primary}"
+                                  Cursor="Hand"
+                                  AutomationProperties.Name="Фильтр источников комментариев">
                         <ToggleButton.Template>
                             <ControlTemplate TargetType="ToggleButton">
                                 <Border x:Name="Bd"
@@ -159,10 +165,23 @@
                                                 Property="BorderBrush"
                                                 Value="{DynamicResource Border.Strong}" />
                                     </Trigger>
+                                    <Trigger Property="IsChecked"
+                                             Value="True">
+                                        <Setter TargetName="Bd"
+                                                Property="BorderBrush"
+                                                Value="{DynamicResource Accent.Primary}" />
+                                    </Trigger>
+                                    <Trigger Property="IsEnabled"
+                                             Value="False">
+                                        <Setter TargetName="Bd"
+                                                Property="Opacity"
+                                                Value="0.5" />
+                                    </Trigger>
                                 </ControlTemplate.Triggers>
                             </ControlTemplate>
                         </ToggleButton.Template>
                         <TextBlock Text="{Binding SelectedSourcesText}"
+                                   Foreground="{DynamicResource Fg.Primary}"
                                    TextTrimming="CharacterEllipsis" />
                     </ToggleButton>
 
@@ -201,6 +220,7 @@
                               MinWidth="180"
                               ItemsSource="{Binding ReplyStatusOptions}"
                               SelectedItem="{Binding SelectedReplyStatus, Mode=TwoWay}"
+                              AutomationProperties.Name="Фильтр по статусу ответа"
                               ToolTip="Фильтр по статусу ответа автора" />
 
                     <StackPanel Grid.Column="2"
@@ -213,6 +233,7 @@
                         <TextBox Style="{StaticResource TextBox.Toolbar}"
                                  Width="80"
                                  Text="{Binding Limit, UpdateSourceTrigger=LostFocus}"
+                                 AutomationProperties.Name="Лимит комментариев"
                                  ToolTip="От 100 до 10000" />
                     </StackPanel>
                 </Grid>

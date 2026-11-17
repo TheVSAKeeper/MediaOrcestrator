@@ -16,6 +16,7 @@ public sealed partial class CommentItemViewModel : ObservableObject, ICommentsRo
     private IUiTimer? _deleteConfirmTimer;
     private string _displayText = string.Empty;
     private string? _currentSearch;
+    private string? _absoluteDateText;
     private IReadOnlyList<Inline>? _cachedInlines;
     private ImageSource? _authorAvatarSource;
     private bool _avatarLoadStarted;
@@ -71,7 +72,6 @@ public sealed partial class CommentItemViewModel : ObservableObject, ICommentsRo
         _publishedAtUtc = record.PublishedAt.Kind == DateTimeKind.Utc
             ? record.PublishedAt
             : record.PublishedAt.ToUniversalTime();
-        AbsoluteDateText = record.PublishedAt.ToLocalTime().ToString("g");
         SourceTitle = context.SourceTitle;
         MediaTitle = context.MediaTitle;
         HasCommentPermalink = context.HasCommentPermalink;
@@ -153,7 +153,7 @@ public sealed partial class CommentItemViewModel : ObservableObject, ICommentsRo
 
     public Thickness IndentMargin { get; }
 
-    public string AbsoluteDateText { get; }
+    public string AbsoluteDateText => _absoluteDateText ??= Record.PublishedAt.ToLocalTime().ToString("g");
 
     public string DateText => Context.Layout == CommentsLayoutMode.Flat
         ? RelativeTimeFormatter.Format(_publishedAtUtc, DateTime.UtcNow, AbsoluteDateText)
@@ -200,7 +200,7 @@ public sealed partial class CommentItemViewModel : ObservableObject, ICommentsRo
         }
     }
 
-    public IEnumerable<Inline> Inlines => _cachedInlines ??= CommentTextRenderer.BuildInlines(DisplayText, _currentSearch, _host).ToList();
+    public IEnumerable<Inline> Inlines => _cachedInlines ??= CommentTextRenderer.BuildInlines(DisplayText, _currentSearch, _host);
 
     public void RefreshRelativeTime()
     {

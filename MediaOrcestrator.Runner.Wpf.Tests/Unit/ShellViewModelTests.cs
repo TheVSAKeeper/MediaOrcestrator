@@ -185,6 +185,39 @@ public sealed partial class ShellViewModelTests
         }
     }
 
+    [Test]
+    public void PageStatusCaption_ПриСовпаденииСStatusText_СкрываетДублирующуюПодписьСправа()
+    {
+        var page = new FakeStatusAndEscapePage { IsBusy = true, StatusCaption = "Синхронизация…" };
+        _shell.Sections.Add(new("Тест", MahApps.Metro.IconPacks.PackIconLucideKind.Bug, page, key: "test-caption"));
+        _shell.NavigateByKey("test-caption");
+
+        var beforeActionCaption = _shell.PageStatusCaption;
+
+        using var cts1 = new CancellationTokenSource();
+        var action1 = _actionHolder.Register("Синхронизация", "Выполняется", 0, cts1);
+        var duplicateCaption = _shell.PageStatusCaption;
+
+        page.StatusCaption = "Синхронизация (42 %)";
+        var detailedCaption = _shell.PageStatusCaption;
+
+        page.StatusCaption = "Синхронизация";
+        using var cts2 = new CancellationTokenSource();
+        var action2 = _actionHolder.Register("Ещё задача", "Выполняется", 0, cts2);
+        var multiTaskCaption = _shell.PageStatusCaption;
+
+        action1.Finish("Готово");
+        action2.Finish("Готово");
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(beforeActionCaption, Is.EqualTo("Синхронизация…"));
+            Assert.That(duplicateCaption, Is.Null);
+            Assert.That(detailedCaption, Is.EqualTo("Синхронизация (42 %)"));
+            Assert.That(multiTaskCaption, Is.EqualTo("Синхронизация"));
+        }
+    }
+
     private sealed class DummyDialogViewModel : ObservableObject, IDialogViewModel
     {
         public event EventHandler<bool>? RequestClose
@@ -199,12 +232,13 @@ public sealed partial class ShellViewModelTests
         [ObservableProperty]
         private bool _isBusy;
 
+        [ObservableProperty]
+        private string? _statusCaption;
+
         public FakeStatusAndEscapePage()
         {
             CancelCommand = new RelayCommand(() => CancelExecutions++);
         }
-
-        public string? StatusCaption => null;
 
         public bool IsIndeterminate => true;
 

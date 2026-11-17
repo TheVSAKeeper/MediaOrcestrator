@@ -15,15 +15,30 @@ internal static class CommentTextRenderer
 
     private static readonly Regex YoutubeHandleRegex = new("^[A-Za-z][A-Za-z0-9_.\\-]*$", RegexOptions.Compiled);
 
-    public static IEnumerable<Inline> BuildInlines(string? text, string? search, ICommentItemHost host)
+    public static IReadOnlyList<Inline> BuildInlines(string? text, string? search, ICommentItemHost host)
     {
         if (string.IsNullOrEmpty(text))
         {
-            yield break;
+            return [];
         }
 
         var search0 = string.IsNullOrWhiteSpace(search) ? null : search;
 
+        if (search0 is null && IsPlainText(text))
+        {
+            return [new Run(text)];
+        }
+
+        return BuildRichInlines(text, search0, host).ToList();
+    }
+
+    private static bool IsPlainText(string text) =>
+        !text.Contains('@')
+        && !text.Contains('[')
+        && !text.Contains("http", StringComparison.OrdinalIgnoreCase);
+
+    private static IEnumerable<Inline> BuildRichInlines(string text, string? search0, ICommentItemHost host)
+    {
         var lastEnd = 0;
 
         foreach (Match match in TokenRegex.Matches(text))

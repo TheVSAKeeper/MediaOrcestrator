@@ -128,7 +128,7 @@
                 Margin="{DynamicResource Margin.StackItem}">
             <keepshell:StretchWrapPanel>
                 <WrapPanel keepshell:StretchWrapPanel.Stretch="True"
-                           keepshell:StretchWrapPanel.StretchWidth="260"
+                           keepshell:StretchWrapPanel.StretchWidth="200"
                            Orientation="Horizontal"
                            VerticalAlignment="Center">
                     <controls:SourceFilterDropDown Label="Источники"
@@ -231,7 +231,8 @@
                                          ProgressMax="{Binding ProgressMax}"
                                          ToggleJournalCommand="{Binding ToggleJournalCommand}">
                 <TextBlock Style="{StaticResource TextBlock.Subtle}"
-                           TextWrapping="Wrap"
+                           TextWrapping="NoWrap"
+                           TextTrimming="CharacterEllipsis"
                            VerticalAlignment="Center">
                     <Run Text="Отмечено групп: " />
                     <Run Text="{Binding CheckedGroups, Mode=OneWay}" />

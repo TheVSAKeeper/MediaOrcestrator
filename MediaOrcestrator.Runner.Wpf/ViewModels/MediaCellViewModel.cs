@@ -7,6 +7,8 @@ namespace MediaOrcestrator.Runner.Wpf.ViewModels;
 
 public sealed class MediaCellViewModel
 {
+    private string? _tooltip;
+
     public MediaCellViewModel(Source source, MediaSourceLink? link)
     {
         Source = source;
@@ -33,7 +35,7 @@ public sealed class MediaCellViewModel
 
     public int SourceSortNumber { get; }
 
-    public string Tooltip => Link is null
+    public string Tooltip => _tooltip ??= Link is null
         ? $"{Source.Title}: нет в источнике"
         : $"{Source.Title}: {Status?.Text ?? Link.Status} ({Link.ExternalId})";
 

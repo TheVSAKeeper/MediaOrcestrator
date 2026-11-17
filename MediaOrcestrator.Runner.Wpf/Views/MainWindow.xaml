@@ -58,8 +58,16 @@
         </keepshell:ShellLayout.StatusBar>
         <keepshell:ShellLayout.ContentOverlay>
             <Grid>
-                <Border VerticalAlignment="Bottom"
-                        Height="420"
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="2*"
+                                   MinHeight="132" />
+                    <RowDefinition Height="3*"
+                                   MinHeight="220"
+                                   MaxHeight="420" />
+                </Grid.RowDefinitions>
+
+                <Border Grid.Row="1"
+                        VerticalAlignment="Stretch"
                         Background="{DynamicResource Bg.Surface}"
                         BorderBrush="{DynamicResource Border.Subtle}"
                         BorderThickness="0,1,0,0"
@@ -134,7 +142,8 @@
                     </Grid>
                 </Border>
 
-                <keepshell:ToastHost DataContext="{Binding Toasts}"
+                <keepshell:ToastHost Grid.RowSpan="2"
+                                     DataContext="{Binding Toasts}"
                                      Panel.ZIndex="10" />
             </Grid>
         </keepshell:ShellLayout.ContentOverlay>

@@ -24,7 +24,8 @@
                    Orientation="Horizontal">
             <ToggleButton x:Name="SourcesFilterButton"
                           Style="{StaticResource ToggleButton.Filter}"
-                          Margin="0,2,8,2">
+                          Margin="0,2,8,2"
+                          AutomationProperties.Name="Источники">
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="Источники"
                                VerticalAlignment="Center" />
@@ -48,7 +49,8 @@
 
             <ToggleButton x:Name="StatusFilterButton"
                           Style="{StaticResource ToggleButton.Filter}"
-                          Margin="0,2,8,2">
+                          Margin="0,2,8,2"
+                          AutomationProperties.Name="Статус">
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="Статус"
                                VerticalAlignment="Center" />
@@ -73,6 +75,7 @@
             <ToggleButton x:Name="RelationsFilterButton"
                           Style="{StaticResource ToggleButton.Filter}"
                           Margin="0,2,8,2"
+                          AutomationProperties.Name="Связи"
                           ToolTip="Фильтр по связям синхронизации">
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="Связи"
@@ -100,6 +103,7 @@
             <ToggleButton x:Name="ColumnsFilterButton"
                           Style="{StaticResource ToggleButton.Filter}"
                           Margin="0,2,8,2"
+                          AutomationProperties.Name="Колонки"
                           ToolTip="Колонки метаданных в таблице">
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="Колонки"
@@ -140,6 +144,7 @@
                               Visibility="{Binding Filter.HasMetadataColumns, Converter={StaticResource BoolToVisibility}}">
                             <TextBox Style="{StaticResource TextBox.Toolbar}"
                                      Text="{Binding Filter.MetadataColumnSearch, UpdateSourceTrigger=PropertyChanged}"
+                                     AutomationProperties.Name="Поиск по столбцам метаданных"
                                      Padding="30,0,30,0" />
                             <iconPacks:PackIconLucide Kind="Search"
                                               Width="14"
@@ -348,6 +353,7 @@
 
                         <CheckBox IsChecked="{Binding Grid.IsCompact, Mode=TwoWay}"
                                   Margin="6,4"
+                                  AutomationProperties.Name="Компактные строки"
                                   ToolTip="Уплотнить строки – одна строка с обрезкой вместо переноса текста">
                             <StackPanel Orientation="Horizontal">
                                 <iconPacks:PackIconLucide Kind="Rows3"
@@ -362,6 +368,7 @@
 
                         <CheckBox IsChecked="{Binding Grid.IsGrouped, Mode=TwoWay}"
                                   Margin="6,4"
+                                  AutomationProperties.Name="Группировать по сериям"
                                   ToolTip="Группировать строки по сериям (серия определяется из названия)">
                             <StackPanel Orientation="Horizontal">
                                 <iconPacks:PackIconLucide Kind="Layers"
@@ -376,6 +383,7 @@
 
                         <CheckBox IsChecked="{Binding Grid.IsSourceHeaderCompact, Mode=TwoWay}"
                                   Margin="6,4"
+                                  AutomationProperties.Name="Короткие заголовки источников"
                                   ToolTip="Сокращать имена в заголовках столбцов-источников – полное имя во всплывающей подсказке">
                             <StackPanel Orientation="Horizontal">
                                 <iconPacks:PackIconLucide Kind="ChevronsRightLeft"

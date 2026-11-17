@@ -69,8 +69,11 @@
                     <ContentPresenter Content="{Binding GridContent, ElementName=Root}"
                                       Visibility="{Binding IsEmpty, ElementName=Root, Converter={StaticResource InverseBoolToVisibility}}" />
 
-                    <ContentPresenter Content="{Binding EmptyContent, ElementName=Root}"
-                                      Visibility="{Binding IsEmpty, ElementName=Root, Converter={StaticResource BoolToVisibility}}" />
+                    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  Visibility="{Binding IsEmpty, ElementName=Root, Converter={StaticResource BoolToVisibility}}">
+                        <ContentPresenter Content="{Binding EmptyContent, ElementName=Root}" />
+                    </ScrollViewer>
 
                     <Border Style="{StaticResource Card.Loading}"
                             Visibility="{Binding IsLoading, ElementName=Root, Converter={StaticResource BoolToVisibility}}">

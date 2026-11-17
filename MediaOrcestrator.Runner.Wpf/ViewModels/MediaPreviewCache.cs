@@ -1,6 +1,5 @@
 ﻿using MediaOrcestrator.Runner.Wpf.Converters;
 using Serilog;
-using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
@@ -10,21 +9,31 @@ namespace MediaOrcestrator.Runner.Wpf.ViewModels;
 
 internal static class MediaPreviewCache
 {
+    public const int DefaultDecodePixelWidth = 640;
+    public const int DefaultCapacity = 48;
+
     private static readonly ILogger Logger = Log.ForContext(typeof(MediaPreviewCache));
 
-    private static readonly ConcurrentDictionary<string, Task<BitmapImage?>> Cache = new(StringComparer.Ordinal);
+    private static readonly AsyncLruCache<(string Url, int Width), BitmapImage> Cache = new(DefaultCapacity);
 
     private static readonly HttpClient Http = new()
     {
         Timeout = TimeSpan.FromSeconds(20),
     };
 
-    public static Task<BitmapImage?> GetAsync(string url)
+    public static Task<BitmapImage?> GetAsync(string url, int decodePixelWidth = DefaultDecodePixelWidth)
     {
-        return Cache.GetOrAdd(url, LoadAsync);
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return Task.FromResult<BitmapImage?>(null);
+        }
+
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(decodePixelWidth, 0);
+
+        return Cache.GetOrAddAsync((url, decodePixelWidth), static key => LoadAsync(key.Url, key.Width));
     }
 
-    private static async Task<BitmapImage?> LoadAsync(string url)
+    private static async Task<BitmapImage?> LoadAsync(string url, int decodePixelWidth)
     {
         var sw = Stopwatch.StartNew();
 
@@ -36,10 +45,12 @@ internal static class MediaPreviewCache
                     ? await File.ReadAllBytesAsync(uri.LocalPath).ConfigureAwait(false)
                     : await Http.GetByteArrayAsync(candidate).ConfigureAwait(false);
 
+                using var stream = new MemoryStream(bytes);
                 var image = new BitmapImage();
                 image.BeginInit();
                 image.CacheOption = BitmapCacheOption.OnLoad;
-                image.StreamSource = new MemoryStream(bytes);
+                image.DecodePixelWidth = decodePixelWidth;
+                image.StreamSource = stream;
                 image.EndInit();
                 image.Freeze();
 
@@ -55,7 +66,6 @@ internal static class MediaPreviewCache
         }
 
         sw.Stop();
-        Cache.TryRemove(url, out _);
         Logger.Warning("Не удалось загрузить превью {Url} (все кандидаты) за {Elapsed} мс", url, sw.ElapsedMilliseconds);
 
         return null;

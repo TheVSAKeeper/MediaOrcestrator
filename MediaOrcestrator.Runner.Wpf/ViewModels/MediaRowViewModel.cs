@@ -11,9 +11,6 @@ public sealed partial class MediaRowViewModel : ObservableObject
     [ObservableProperty]
     private bool _isSelected;
 
-    [ObservableProperty]
-    private bool _isCompact;
-
     public MediaRowViewModel(Media media, IReadOnlyList<Source> columnSources, IReadOnlyList<MetadataColumnInfo> metadataColumns, MediaSeriesEntry series)
     {
         Media = media;

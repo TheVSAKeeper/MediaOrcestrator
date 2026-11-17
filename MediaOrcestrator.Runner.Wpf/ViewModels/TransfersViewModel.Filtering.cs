@@ -20,6 +20,23 @@ public sealed partial class TransfersViewModel
         return ApplyFilter();
     }
 
+    private void ClearPlanOnError()
+    {
+        _allRootIntents.Clear();
+
+        foreach (var group in Groups)
+        {
+            DetachGroup(group);
+        }
+
+        Groups.ReplaceAll([]);
+        RecomputeCounts();
+        PlanRoots = 0;
+        PlanSteps = 0;
+        IsPlanLoaded = false;
+        IsPlanStale = false;
+    }
+
     private TransferFilterBreakdown ApplyFilter()
     {
         var groupingSw = Stopwatch.StartNew();
@@ -127,6 +144,7 @@ public sealed partial class TransfersViewModel
             }));
 
         RelationFilters.ReplaceAll(relations
+            .Where(r => r.From is not null && r.To is not null)
             .Select(r =>
             {
                 var id = RelationKey(r);

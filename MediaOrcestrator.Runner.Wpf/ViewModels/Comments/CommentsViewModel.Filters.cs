@@ -154,11 +154,17 @@ public sealed partial class CommentsViewModel
         _ = Task.Run(() => snapshot.Save(_settingsStore));
     }
 
+    internal long SnapshotCacheHits => _snapshotCache.Hits;
+
+    internal long SnapshotCacheMisses => _snapshotCache.Misses;
+
+    internal Task WaitForPendingApplyAsync() => _lastApplyTask ?? Task.CompletedTask;
+
     private void ScheduleApplyFilters()
     {
         if (_loaded)
         {
-            _ = ApplyFiltersAsync();
+            _lastApplyTask = ApplyFiltersAsync();
         }
     }
 
@@ -177,37 +183,37 @@ public sealed partial class CommentsViewModel
         var limit = Math.Clamp(Limit, 100, 10000);
         var layout = SelectedLayout.Mode;
         var replyStatus = SelectedReplyStatus.Key;
+        var snapshotKey = new CommentsSnapshotKey(sourceIds, search, limit);
+        var expandedSnapshot = new HashSet<string>(_expandedBranches, StringComparer.Ordinal);
         var callbacks = new CommentsTreeCallbacks(this, ToggleBranchAsync, RefreshGroupAsync, RefreshOneSourceAsync, _sourceFetcher.OpenOneSourceAsync);
 
         IsLoading = true;
         LoadError = null;
 
-        var totalSw = Stopwatch.StartNew();
-
         try
         {
-            var buildSw = Stopwatch.StartNew();
-            var rows = await Task.Run(() => BuildItems(sourceIds, search, limit, layout, replyStatus, callbacks, ct), ct);
-            buildSw.Stop();
-            var buildMs = buildSw.ElapsedMilliseconds;
+            var build = await Task.Run(() => BuildItems(snapshotKey, sourceIds, search, limit, layout, replyStatus, expandedSnapshot, callbacks, ct), ct);
 
             if (version != Volatile.Read(ref _applyVersion))
             {
                 return;
             }
 
-            ReplaceItems(rows);
+            var swList = Stopwatch.StartNew();
+            ReplaceItems(build.Result);
+            swList.Stop();
 
-            totalSw.Stop();
-            var uiMs = totalSw.ElapsedMilliseconds - buildMs;
-            RenderDurationText = $"{totalSw.ElapsedMilliseconds} мс";
-            RenderStages =
-            [
-                new("Подготовка данных", $"{buildMs} мс"),
-                new("Применение к UI", $"{uiMs} мс"),
-                new("Итого", $"{totalSw.ElapsedMilliseconds} мс"),
-                new("Строк", rows.Rows.Count.ToString()),
-            ];
+            var listMs = swList.ElapsedMilliseconds;
+            var vmMs = build.DbMs + build.IndexMs + build.TreeMs + listMs;
+            PublishRenderMetric(
+                [
+                    new("Чтение БД", FormatMs(build.DbMs)),
+                    new("Индекс медиа", FormatMs(build.IndexMs)),
+                    new("Сборка дерева", FormatMs(build.TreeMs)),
+                    new("Обновление списка", FormatMs(listMs)),
+                ],
+                vmMs,
+                build.Result.Rows.Count);
         }
         catch (OperationCanceledException)
         {
@@ -230,26 +236,85 @@ public sealed partial class CommentsViewModel
         }
     }
 
-    private CommentsBuildResult BuildItems(
+    internal void InvalidateSnapshotCache() => _snapshotCache.Invalidate();
+
+    private void PublishRenderMetric(IReadOnlyList<PageRenderStage> vmStages, long vmMs, int rowCount)
+    {
+        if (_renderProbe is null)
+        {
+            ApplyRenderMetric(vmStages, vmMs, 0, rowCount);
+            return;
+        }
+
+        _renderProbe.MeasureNextFrame(renderMs => ApplyRenderMetric(vmStages, vmMs, renderMs, rowCount));
+    }
+
+    private void ApplyRenderMetric(IReadOnlyList<PageRenderStage> vmStages, long vmMs, long renderMs, int rowCount)
+    {
+        var totalMs = vmMs + renderMs;
+        var stages = new List<PageRenderStage>(vmStages.Count + 3);
+        stages.AddRange(vmStages);
+        stages.Add(new("Отрисовка кадра", FormatMs(renderMs)));
+        stages.Add(new("Итого", FormatMs(totalMs)));
+        stages.Add(new("Строк", rowCount.ToString()));
+
+        RenderDurationText = FormatMs(totalMs);
+        RenderStages = stages;
+    }
+
+    private static string FormatMs(long ms) => $"{ms} мс";
+
+    private CommentsTimedBuild BuildItems(
+        CommentsSnapshotKey snapshotKey,
         IReadOnlyCollection<string>? sourceIds,
         string search,
         int limit,
         CommentsLayoutMode layout,
         CommentsReplyStatusFilter replyStatus,
+        IReadOnlySet<string> expandedBranches,
         CommentsTreeCallbacks callbacks,
         CancellationToken ct)
     {
-        var records = LoadRecords(sourceIds, search, limit + 1, ct);
-        var truncated = records.Count > limit;
+        long dbMs = 0;
+        long indexMs = 0;
+        var generation = _snapshotCache.CaptureGeneration();
 
-        if (truncated)
+        if (!_snapshotCache.TryGet(snapshotKey, out var snapshot) || snapshot is null)
         {
-            records = records.Take(limit).ToList();
+            var swDb = Stopwatch.StartNew();
+            var records = LoadRecords(sourceIds, search, limit + 1, ct);
+            var truncated = records.Count > limit;
+
+            if (truncated)
+            {
+                records = records.Take(limit).ToList();
+            }
+
+            BackfillOrphanParents(records, ct);
+            swDb.Stop();
+            dbMs = swDb.ElapsedMilliseconds;
+
+            ct.ThrowIfCancellationRequested();
+
+            var swIndex = Stopwatch.StartNew();
+            var (sourceById, mediaByPair) = _treeBuilder.BuildLookupIndexes();
+            swIndex.Stop();
+            indexMs = swIndex.ElapsedMilliseconds;
+
+            snapshot = new(records, truncated, sourceById, mediaByPair);
+            _snapshotCache.Set(snapshotKey, snapshot, generation);
         }
 
-        BackfillOrphanParents(records, ct);
-        return _treeBuilder.Build(records, truncated, search, layout, replyStatus, _expandedBranches, callbacks, ct);
+        ct.ThrowIfCancellationRequested();
+
+        var swTree = Stopwatch.StartNew();
+        var result = _treeBuilder.BuildFromSnapshot(snapshot, search, layout, replyStatus, expandedBranches, callbacks, ct);
+        swTree.Stop();
+
+        return new(result, dbMs, indexMs, swTree.ElapsedMilliseconds);
     }
+
+    private sealed record CommentsTimedBuild(CommentsBuildResult Result, long DbMs, long IndexMs, long TreeMs);
 
     private List<CommentRecord> LoadRecords(IReadOnlyCollection<string>? sourceIds, string search, int limit, CancellationToken ct)
     {
@@ -404,12 +469,14 @@ public sealed partial class CommentsViewModel
             await _sourceFetcher.RefreshSourceMediaAsync(info.SourceId, info.ExternalMediaId);
         }
 
+        InvalidateSnapshotCache();
         ScheduleApplyFilters();
     }
 
     private async Task RefreshOneSourceAsync(MediaGroupSourceActionViewModel action)
     {
         await _sourceFetcher.RefreshSourceMediaAsync(action.SourceId, action.ExternalMediaId);
+        InvalidateSnapshotCache();
         ScheduleApplyFilters();
     }
 }

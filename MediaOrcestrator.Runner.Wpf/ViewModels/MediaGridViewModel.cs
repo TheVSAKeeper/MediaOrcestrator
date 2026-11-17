@@ -1,4 +1,5 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using KeepShell.Services.Platform;
 using MediaOrcestrator.Domain;
 using MediaOrcestrator.Modules;
@@ -211,6 +212,28 @@ public sealed partial class MediaGridViewModel : ObservableObject
 
     public Action<IReadOnlyList<PageRenderStage>, long>? PublishMetric { get; set; }
 
+    public Func<Task>? RetryLoadAction { get; set; }
+
+    [RelayCommand]
+    private Task RetryLoadAsync() => RetryLoadAction?.Invoke() ?? Task.CompletedTask;
+
+    public void ClearOnLoadError()
+    {
+        _allMedias.Clear();
+        DetachRowEvents();
+        Rows.ReplaceAll([]);
+        ColumnSources.ReplaceAll([]);
+        MetadataColumns.ReplaceAll([]);
+        ClearSeriesCoverage();
+        ColumnsChanged?.Invoke(this, EventArgs.Empty);
+        RowsView.Refresh();
+        OnPropertyChanged(nameof(TotalCount));
+        OnPropertyChanged(nameof(VisibleCount));
+        OnPropertyChanged(nameof(IsDatabaseEmpty));
+        OnPropertyChanged(nameof(ShowEmptyState));
+        UpdateSelectionState();
+    }
+
     internal void RefreshViewForAutomation()
     {
         RowsView.Refresh();
@@ -259,10 +282,7 @@ public sealed partial class MediaGridViewModel : ObservableObject
 
         for (var i = 0; i < _allMedias.Count; i++)
         {
-            newRows.Add(new(_allMedias[i], columns, metaColumns, seriesEntries[i])
-            {
-                IsCompact = IsCompact,
-            });
+            newRows.Add(new(_allMedias[i], columns, metaColumns, seriesEntries[i]));
         }
 
         Rows.ReplaceAll(newRows);

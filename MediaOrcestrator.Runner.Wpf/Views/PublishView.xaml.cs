@@ -6,7 +6,7 @@ namespace MediaOrcestrator.Runner.Wpf.Views;
 
 public partial class PublishView : UserControl, IView<PublishViewModel>
 {
-    private const double StackedBreakpoint = 760;
+    private const double StackedBreakpoint = 820;
 
     private bool _isStacked;
 

@@ -197,6 +197,7 @@ public sealed partial class CommentsViewModel
             await _commentsService.CreateCommentAsync(source, link, editor.ParentExternalCommentId, text, editor.SelectedAuthor?.Id, cts.Token);
             action.ProgressPlus();
             action.Finish();
+            InvalidateSnapshotCache();
         }
         catch (OperationCanceledException)
         {
@@ -348,6 +349,7 @@ public sealed partial class CommentsViewModel
             action.Status = $"{source.TitleFull}: ок";
             action.ProgressPlus();
             action.Finish();
+            InvalidateSnapshotCache();
         }
         catch (OperationCanceledException)
         {

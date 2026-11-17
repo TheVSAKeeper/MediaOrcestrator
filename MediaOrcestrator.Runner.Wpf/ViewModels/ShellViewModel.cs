@@ -222,9 +222,9 @@ public sealed partial class ShellViewModel : ShellViewModelBase
 
     private void OnThemePropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(ThemeViewModel.Current) && Theme.Current == AppTheme.Tarkov)
+        if (e.PropertyName == nameof(ThemeViewModel.Current))
         {
-            IsTarkovBootPlaying = true;
+            IsTarkovBootPlaying = Theme.Current == AppTheme.Tarkov;
         }
     }
 

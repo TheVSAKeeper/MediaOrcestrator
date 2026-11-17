@@ -93,14 +93,19 @@
                     </Grid.ColumnDefinitions>
 
                     <StackPanel Grid.Column="0">
-                        <TextBlock FontWeight="SemiBold"
-                                   TextTrimming="CharacterEllipsis">
-                            <Run Text="{Binding Title, Mode=OneWay}" />
-                            <Run Text="·"
-                                 Foreground="{DynamicResource Fg.Muted}" />
-                            <Run Text="{Binding TypeId, Mode=OneWay}"
-                                 Foreground="{DynamicResource Fg.Secondary}" />
-                        </TextBlock>
+                        <TextBlock Text="{Binding Title, Mode=OneWay}"
+                                   FontWeight="SemiBold"
+                                   TextTrimming="CharacterEllipsis"
+                                   TextWrapping="NoWrap"
+                                   Margin="0,0,8,2"
+                                   ToolTip="{Binding Title, Mode=OneWay}" />
+                        <Border Style="{StaticResource Badge}"
+                                HorizontalAlignment="Left"
+                                Margin="0,0,0,2">
+                            <TextBlock Text="{Binding TypeId, Mode=OneWay}"
+                                       Style="{StaticResource TextBlock.Subtle}"
+                                       TextWrapping="NoWrap" />
+                        </Border>
                         <ItemsControl ItemsSource="{Binding Stats.Badges}"
                                       ItemTemplate="{StaticResource StatBadgeTemplate}"
                                       ItemsPanel="{StaticResource StatBadgesPanel}"
@@ -325,7 +330,8 @@
                                     IsEnabled="{Binding HasAtLeastTwoSources}"
                                     Padding="14,6"
                                     Height="{DynamicResource Control.Height.Default}"
-                                    HorizontalAlignment="Center">
+                                    HorizontalAlignment="Center"
+                                    AutomationProperties.Name="Добавить связь">
                                 <StackPanel Orientation="Horizontal">
                                     <iconPacks:PackIconLucide Kind="Plus"
                                                       Width="14"
@@ -369,7 +375,8 @@
                     IsEnabled="{Binding HasPluginTypes}"
                     Padding="18,8"
                     MinHeight="38"
-                    HorizontalAlignment="Center">
+                    HorizontalAlignment="Center"
+                    AutomationProperties.Name="Добавить источник">
                 <StackPanel Orientation="Horizontal">
                     <iconPacks:PackIconLucide Kind="Plus"
                                       Width="14"

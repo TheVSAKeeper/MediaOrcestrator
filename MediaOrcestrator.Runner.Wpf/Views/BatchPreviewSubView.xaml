@@ -131,11 +131,15 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <Border Grid.Row="0"
-                Style="{StaticResource Card.Inset}"
-                Margin="{DynamicResource Margin.StackItem}">
+        <ScrollViewer Grid.Row="0"
+                      VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled"
+                      MaxHeight="260"
+                      Margin="0,0,0,6">
+            <Border Style="{StaticResource Card.Inset}"
+                    Padding="{DynamicResource Padding.Panel.Dense}">
             <StackPanel>
-                <controls:BatchMediaToolbar Margin="{DynamicResource Margin.RowGap}"
+                <controls:BatchMediaToolbar Margin="0,0,0,4"
                                             MediasSummary="{Binding MediasSummary}"
                                             LoadAllMediaCommand="{Binding LoadAllMediaCommand}"
                                             ClearMediaCommand="{Binding ClearMediaCommand}"
@@ -143,17 +147,17 @@
                                             CanEditParameters="{Binding CanEditParameters}"
                                             StopOnError="{Binding StopOnError}" />
 
-                <Grid Margin="0,4,0,0">
+                <Grid Margin="0,2,0,0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
 
                     <StackPanel Grid.Column="0"
-                                Margin="0,0,14,0">
+                                Margin="0,0,12,0">
                         <TextBlock Text="Источник превью"
                                    Style="{StaticResource TextBlock.Subtle}"
-                                   Margin="0,0,0,4" />
+                                   Margin="0,0,0,2" />
 
                         <Border HorizontalAlignment="Left"
                                 Background="{DynamicResource Bg.SurfaceAlt}"
@@ -161,7 +165,7 @@
                                 BorderThickness="1"
                                 CornerRadius="{DynamicResource Radius.M}"
                                 Padding="2"
-                                Margin="0,0,0,8">
+                                Margin="0,0,0,6">
                             
                             <WrapPanel Orientation="Horizontal">
                                 <RadioButton Style="{StaticResource RadioButton.Segment}"
@@ -192,14 +196,32 @@
                         </Border>
 
                         <Grid>
-                            <ComboBox Style="{StaticResource ComboBox.Toolbar}"
-                                      ItemsSource="{Binding Donors}"
-                                      SelectedItem="{Binding SelectedDonor}"
-                                      DisplayMemberPath="TitleFull"
-                                      IsEnabled="{Binding IsDonorMode}"
-                                      ToolTip="Площадка-донор: с неё берётся текущее превью каждого видео"
-                                      AutomationProperties.Name="Площадка-донор"
-                                      Visibility="{Binding IsDonorMode, Converter={StaticResource BoolToVisibility}}" />
+                            <Grid Visibility="{Binding IsDonorMode, Converter={StaticResource BoolToVisibility}}">
+                                <ComboBox x:Name="DonorComboBox"
+                                          Style="{StaticResource ComboBox.Toolbar}"
+                                          ItemsSource="{Binding Donors}"
+                                          SelectedItem="{Binding SelectedDonor}"
+                                          DisplayMemberPath="TitleFull"
+                                          IsEnabled="{Binding IsDonorMode}"
+                                          ToolTip="Площадка-донор: с неё берётся текущее превью каждого видео"
+                                          AutomationProperties.Name="Площадка-донор" />
+                                <TextBlock Text="Выберите площадку-донора…"
+                                           Foreground="{DynamicResource Fg.Muted}"
+                                           VerticalAlignment="Center"
+                                           Margin="10,0,28,0"
+                                           IsHitTestVisible="False">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding SelectedItem, ElementName=DonorComboBox}" Value="{x:Null}">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Grid>
 
                             <controls:FilePickerField Path="{Binding FilePath, Mode=TwoWay}"
                                                       IsPathEditable="True"
@@ -220,13 +242,31 @@
                                     <ColumnDefinition Width="Auto" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
-                                <ComboBox Grid.Column="0"
-                                          Style="{StaticResource ComboBox.Toolbar}"
-                                          ItemsSource="{Binding TemplatePicker.Profiles}"
-                                          SelectedItem="{Binding TemplatePicker.SelectedProfileName, Mode=TwoWay}"
-                                          IsEnabled="{Binding IsTemplateMode}"
-                                          ToolTip="Профиль шаблона обложки"
-                                          AutomationProperties.Name="Профиль шаблона обложки" />
+                                <Grid Grid.Column="0">
+                                    <ComboBox x:Name="TemplateProfileComboBox"
+                                              Style="{StaticResource ComboBox.Toolbar}"
+                                              ItemsSource="{Binding TemplatePicker.Profiles}"
+                                              SelectedItem="{Binding TemplatePicker.SelectedProfileName, Mode=TwoWay}"
+                                              IsEnabled="{Binding IsTemplateMode}"
+                                              ToolTip="Профиль шаблона обложки"
+                                              AutomationProperties.Name="Профиль шаблона обложки" />
+                                    <TextBlock Text="Выберите профиль шаблона…"
+                                               Foreground="{DynamicResource Fg.Muted}"
+                                               VerticalAlignment="Center"
+                                               Margin="10,0,28,0"
+                                               IsHitTestVisible="False">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding SelectedItem, ElementName=TemplateProfileComboBox}" Value="{x:Null}">
+                                                        <Setter Property="Visibility" Value="Visible" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </Grid>
                                 <Button Grid.Column="1"
                                         Style="{StaticResource Button.Icon}"
                                         Command="{Binding TemplatePicker.DeleteProfileCommand}"
@@ -256,12 +296,12 @@
                                                        SelectAllCommand="{Binding SelectAllTargetsCommand}"
                                                        SelectNoneCommand="{Binding SelectNoTargetsCommand}"
                                                        HorizontalAlignment="Left"
-                                                       Margin="0,8,0,0" />
+                                                       Margin="0,6,0,0" />
                     </StackPanel>
 
                     <Border Grid.Column="1"
-                            Width="192"
-                            Height="108"
+                            Width="160"
+                            Height="90"
                             VerticalAlignment="Top"
                             Background="{DynamicResource Bg.SurfaceAlt}"
                             BorderBrush="{DynamicResource Border.Subtle}"
@@ -294,7 +334,8 @@
                     </Border>
                 </Grid>
             </StackPanel>
-        </Border>
+            </Border>
+        </ScrollViewer>
 
         <controls:OperationResultPanel Grid.Row="1"
                                        SelectAllCommand="{Binding SelectAllRowsCommand}"
@@ -303,7 +344,7 @@
                                        JournalSource="{Binding Journal}"
                                        ClearJournalCommand="{Binding ClearJournalCommand}"
                                        IsJournalOpen="{Binding IsJournalOpen}"
-                                       IsEmpty="{Binding IsSetEmpty}"
+                                       IsEmpty="{Binding IsResultEmpty}"
                                        IsCompact="{Binding IsCompact, Mode=TwoWay}">
             <controls:OperationResultPanel.HeaderLeft>
                 <TextBlock Text="{Binding StatusText}"
@@ -313,12 +354,37 @@
 
             <controls:OperationResultPanel.EmptyContent>
                 <keepshell:EmptyState VerticalAlignment="Center"
-                                     Icon="Image"
-                                     Heading="Набор пуст"
-                                     Description="Загрузите все медиа из хранилища или откройте набор из раздела «Медиа» (контекстное меню → «Открыть в Операциях»)."
-                                     DescriptionMaxWidth="420"
-                                     ActionText="Загрузить всё хранилище"
-                                     ActionCommand="{Binding LoadAllMediaCommand}" />
+                                      DescriptionMaxWidth="420">
+                    <keepshell:EmptyState.Style>
+                        <Style TargetType="keepshell:EmptyState">
+                            <Setter Property="Icon"
+                                    Value="Image" />
+                            <Setter Property="Heading"
+                                    Value="Набор пуст" />
+                            <Setter Property="Description"
+                                    Value="Загрузите все медиа из хранилища или откройте набор из раздела «Медиа» (контекстное меню → «Открыть в Операциях»)." />
+                            <Setter Property="ActionText"
+                                    Value="Загрузить всё хранилище" />
+                            <Setter Property="ActionCommand"
+                                    Value="{Binding LoadAllMediaCommand}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding HasMedias}"
+                                             Value="True">
+                                    <Setter Property="Icon"
+                                            Value="SlidersHorizontal" />
+                                    <Setter Property="Heading"
+                                            Value="Нет строк для обновления" />
+                                    <Setter Property="Description"
+                                            Value="Ни одно медиа из набора не пересекается с отмеченными целевыми площадками. Проверьте донора и список «Куда применить»." />
+                                    <Setter Property="ActionText"
+                                            Value="{x:Null}" />
+                                    <Setter Property="ActionCommand"
+                                            Value="{x:Null}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </keepshell:EmptyState.Style>
+                </keepshell:EmptyState>
             </controls:OperationResultPanel.EmptyContent>
 
             <ListBox ItemsSource="{Binding Rows}"

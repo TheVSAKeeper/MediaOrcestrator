@@ -2,6 +2,7 @@
 using MediaOrcestrator.Domain;
 using MediaOrcestrator.Domain.Comments;
 using MediaOrcestrator.Modules;
+using System.Collections.Concurrent;
 
 namespace MediaOrcestrator.Runner.Wpf.ViewModels.Comments;
 
@@ -12,9 +13,15 @@ internal sealed class CommentsTreeBuilder(
     private const int VisibleRepliesPerRoot = 2;
     private const int BranchToggleThreshold = 3;
 
-    public CommentsBuildResult Build(
-        List<CommentRecord> records,
-        bool truncated,
+    public (IReadOnlyDictionary<string, Source> SourceById, IReadOnlyDictionary<(string SourceId, string ExternalMediaId), (Media Media, int SortNumber)> MediaByPair) BuildLookupIndexes()
+    {
+        var sourceById = orcestrator.GetSources().ToDictionary(s => s.Id);
+        var mediaByPair = BuildMediaIndex();
+        return (sourceById, mediaByPair);
+    }
+
+    public CommentsBuildResult BuildFromSnapshot(
+        CommentsSnapshot snapshot,
         string search,
         CommentsLayoutMode layout,
         CommentsReplyStatusFilter replyStatus,
@@ -22,20 +29,24 @@ internal sealed class CommentsTreeBuilder(
         CommentsTreeCallbacks callbacks,
         CancellationToken ct)
     {
-        records = FilterByReplyStatus(records, replyStatus);
+        var records = FilterByReplyStatus(snapshot.Records, replyStatus);
 
         ct.ThrowIfCancellationRequested();
 
-        var sourceById = orcestrator.GetSources().ToDictionary(s => s.Id);
-        var mediaByPair = BuildMediaIndex();
-        var ctx = new TreeBuildContext(sourceById, mediaByPair, expandedBranches, callbacks, search);
+        var ctx = new TreeBuildContext(
+            snapshot.SourceById,
+            snapshot.MediaByPair,
+            snapshot.MediaExternalLinkCache,
+            expandedBranches,
+            callbacks,
+            search);
 
         return layout == CommentsLayoutMode.Grouped
-            ? BuildGrouped(records, truncated, ctx)
-            : BuildFlat(records, truncated, ctx);
+            ? BuildGrouped(records, snapshot.Truncated, ctx)
+            : BuildFlat(records, snapshot.Truncated, ctx);
     }
 
-    private static List<CommentRecord> FilterByReplyStatus(List<CommentRecord> records, CommentsReplyStatusFilter filter)
+    private static IReadOnlyList<CommentRecord> FilterByReplyStatus(IReadOnlyList<CommentRecord> records, CommentsReplyStatusFilter filter)
     {
         if (filter == CommentsReplyStatusFilter.All || records.Count == 0)
         {
@@ -127,7 +138,7 @@ internal sealed class CommentsTreeBuilder(
         };
     }
 
-    private static CommentsBuildResult BuildFlat(List<CommentRecord> records, bool truncated, TreeBuildContext ctx)
+    private static CommentsBuildResult BuildFlat(IReadOnlyList<CommentRecord> records, bool truncated, TreeBuildContext ctx)
     {
         var byId = records.ToDictionary(r => r.Id, StringComparer.Ordinal);
         var childrenByParent = BuildChildrenIndex(records, byId);
@@ -143,7 +154,7 @@ internal sealed class CommentsTreeBuilder(
         return new(rows, records.Count, truncated);
     }
 
-    private CommentsBuildResult BuildGrouped(List<CommentRecord> records, bool truncated, TreeBuildContext ctx)
+    private CommentsBuildResult BuildGrouped(IReadOnlyList<CommentRecord> records, bool truncated, TreeBuildContext ctx)
     {
         var groups = records
             .GroupBy(r => ResolveGroupKey(r, ctx.MediaByPair))
@@ -177,7 +188,7 @@ internal sealed class CommentsTreeBuilder(
                         s.Key,
                         firstExt,
                         src?.TitleFull ?? s.Key,
-                        HasMediaExternalLink(ctx.SourceById, s.Key, firstExt),
+                        HasMediaExternalLink(ctx, s.Key, firstExt),
                         src?.Type is ISupportsComments);
                 })
                 .OrderBy(s => s.SourceTitle, StringComparer.OrdinalIgnoreCase)
@@ -279,28 +290,36 @@ internal sealed class CommentsTreeBuilder(
             source?.Type is ISupportsCommentMutations,
             source?.Type is ISupportsCommentLikes,
             source?.Type is ISupportsCommentAuthors,
-            HasMediaExternalLink(ctx.SourceById, record.SourceId, record.ExternalMediaId),
+            HasMediaExternalLink(ctx, record.SourceId, record.ExternalMediaId),
             CountDescendants(record.Id, childrenByParent),
             layout,
             thumbnailUrl,
             showMediaThumbnail && depth == 0 && !string.IsNullOrEmpty(thumbnailUrl));
     }
 
-    private static bool HasMediaExternalLink(Dictionary<string, Source> sourceById, string sourceId, string externalMediaId)
+    private static bool HasMediaExternalLink(TreeBuildContext ctx, string sourceId, string externalMediaId)
     {
-        if (string.IsNullOrEmpty(externalMediaId) || !sourceById.TryGetValue(sourceId, out var src) || src.Type is null)
+        if (string.IsNullOrEmpty(externalMediaId))
         {
             return false;
         }
 
-        try
+        return ctx.MediaExternalLinkCache.GetOrAdd((sourceId, externalMediaId), key =>
         {
-            return src.Type.GetExternalUri(externalMediaId, src.Settings) is not null;
-        }
-        catch
-        {
-            return false;
-        }
+            if (!ctx.SourceById.TryGetValue(key.SourceId, out var src) || src.Type is null)
+            {
+                return false;
+            }
+
+            try
+            {
+                return src.Type.GetExternalUri(key.ExternalMediaId, src.Settings) is not null;
+            }
+            catch
+            {
+                return false;
+            }
+        });
     }
 
     private static int CountDescendants(string id, Dictionary<string, List<CommentRecord>> childrenByParent)
@@ -371,14 +390,15 @@ internal sealed class CommentsTreeBuilder(
     private static string? ResolveThumbnailUrl(Media? media) =>
         media?.Metadata.FirstOrDefault(m => m.Key == "PreviewUrl" && !string.IsNullOrEmpty(m.Value))?.Value;
 
-    private static string ResolveGroupKey(CommentRecord r, Dictionary<(string, string), (Media Media, int SortNumber)> mediaByPair) =>
+    private static string ResolveGroupKey(CommentRecord r, IReadOnlyDictionary<(string, string), (Media Media, int SortNumber)> mediaByPair) =>
         mediaByPair.TryGetValue((r.SourceId, r.ExternalMediaId), out var info)
             ? info.Media.Id
             : $"__orphan__|{r.SourceId}|{r.ExternalMediaId}";
 
     private sealed record TreeBuildContext(
-        Dictionary<string, Source> SourceById,
-        Dictionary<(string SourceId, string ExternalMediaId), (Media Media, int SortNumber)> MediaByPair,
+        IReadOnlyDictionary<string, Source> SourceById,
+        IReadOnlyDictionary<(string SourceId, string ExternalMediaId), (Media Media, int SortNumber)> MediaByPair,
+        ConcurrentDictionary<(string SourceId, string ExternalMediaId), bool> MediaExternalLinkCache,
         IReadOnlySet<string> ExpandedBranches,
         CommentsTreeCallbacks Callbacks,
         string Search);

@@ -18,6 +18,7 @@
                  Style="{StaticResource TextBox.Toolbar}"
                  Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
                  keepshell:PlaceholderBehavior.Placeholder="Название или ID в источнике"
+                 AutomationProperties.AutomationId="MediaSearchBox"
                  AutomationProperties.Name="Поиск по медиа"
                  MinWidth="160"
                  Padding="32,0,32,0" />

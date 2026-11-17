@@ -99,6 +99,7 @@ public sealed partial class BatchRenameSubViewModel : ObservableObject
         _logger = logger;
 
         _previewTimer = dispatcher.CreateTimer(TimeSpan.FromMilliseconds(PreviewDebounceMs), OnPreviewTimerTick);
+        Rows.CollectionChanged += (_, _) => OnPropertyChanged(nameof(IsResultEmpty));
 
         LoadPreferences();
     }
@@ -118,6 +119,8 @@ public sealed partial class BatchRenameSubViewModel : ObservableObject
     public bool HasMedias => _medias.Count > 0;
 
     public bool IsSetEmpty => !HasMedias;
+
+    public bool IsResultEmpty => Rows.Count == 0;
 
     public bool CanEditParameters => !IsApplying;
 

@@ -18,7 +18,7 @@ public partial class SettingsViewModel : ObservableObject, IPageHeader
 {
     public string PageTitle => "Настройки";
 
-    public string? PageDescription => "Пути хранения, тема оформления, уведомления, автообновление и MCP-сервер.";
+    public string? PageDescription => "Пути хранения, тема оформления, уведомления, фоновая синхронизация, обновления и MCP-сервер.";
     public const string SelectedSectionKey = "wpf.settings.section";
 
     private readonly ISettingsStore _store;
@@ -91,6 +91,7 @@ public partial class SettingsViewModel : ObservableObject, IPageHeader
             new(SettingsSectionKeys.Paths, "Пути", PackIconLucideKind.FolderTree, "база плагины папка temp"),
             new(SettingsSectionKeys.Appearance, "Интерфейс", PackIconLucideKind.Palette, "тема шрифт масштаб"),
             new(SettingsSectionKeys.Notifications, "Уведомления", PackIconLucideKind.Bell, "тосты toast"),
+            new(SettingsSectionKeys.Sync, "Синхронизация", PackIconLucideKind.RefreshCw, "синхронизация автосинк фон задержка старт"),
             new(SettingsSectionKeys.Updates, "Обновления", PackIconLucideKind.Download, "github релиз версия"),
             new(SettingsSectionKeys.Mcp, "Управление через ИИ (MCP)", PackIconLucideKind.Bot, "mcp ии управление автоматизация"));
 

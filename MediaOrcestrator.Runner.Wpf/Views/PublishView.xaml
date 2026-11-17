@@ -119,16 +119,35 @@
                                        Text="Описание"
                                        Style="{StaticResource FieldLabel}" />
 
-                            <ComboBox Grid.Column="1"
-                                      ItemsSource="{Binding DescriptionTemplates}"
-                                      DisplayMemberPath="Preview"
-                                      MinWidth="160"
-                                      MaxWidth="320"
-                                      Margin="8,0,0,0"
-                                      IsEnabled="{Binding CanEditFields}"
-                                      ToolTip="Шаблоны описания: сайдкар-файлы видео и история источника"
-                                      Visibility="{Binding HasDescriptionTemplates, Converter={StaticResource BoolToVisibility}}"
-                                      SelectionChanged="OnDescriptionTemplateChanged" />
+                            <Grid Grid.Column="1"
+                                  Margin="8,0,0,0"
+                                  Visibility="{Binding HasDescriptionTemplates, Converter={StaticResource BoolToVisibility}}">
+                                <ComboBox x:Name="DescriptionTemplateComboBox"
+                                          ItemsSource="{Binding DescriptionTemplates}"
+                                          DisplayMemberPath="Preview"
+                                          MinWidth="160"
+                                          MaxWidth="320"
+                                          IsEnabled="{Binding CanEditFields}"
+                                          ToolTip="Шаблоны описания: сайдкар-файлы видео и история источника"
+                                          AutomationProperties.Name="Шаблон описания"
+                                          SelectionChanged="OnDescriptionTemplateChanged" />
+                                <TextBlock Text="Вставить шаблон…"
+                                           Foreground="{DynamicResource Fg.Muted}"
+                                           VerticalAlignment="Center"
+                                           Margin="10,0,28,0"
+                                           IsHitTestVisible="False">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding SelectedItem, ElementName=DescriptionTemplateComboBox}" Value="{x:Null}">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Grid>
                         </Grid>
 
                         <TextBox Text="{Binding Description, UpdateSourceTrigger=PropertyChanged}"

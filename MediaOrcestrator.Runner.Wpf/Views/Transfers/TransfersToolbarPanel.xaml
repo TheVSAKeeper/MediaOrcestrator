@@ -40,6 +40,7 @@
                              Style="{StaticResource TextBox.Toolbar}"
                              Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
                              keepshell:PlaceholderBehavior.Placeholder="Название медиа"
+                             AutomationProperties.AutomationId="TransfersSearchBox"
                              AutomationProperties.Name="Поиск по плану передач"
                              MinWidth="150"
                              Padding="32,0,32,0" />
@@ -167,7 +168,7 @@
 
             <keepshell:StretchWrapPanel Grid.Row="1" Margin="0,8,0,0">
                 <Grid keepshell:StretchWrapPanel.Stretch="True"
-                      keepshell:StretchWrapPanel.StretchWidth="220"
+                      keepshell:StretchWrapPanel.StretchWidth="320"
                       VerticalAlignment="Center"
                       Margin="0,2,12,2">
                     <Grid.ColumnDefinitions>
@@ -246,12 +247,25 @@
                 </Grid>
 
                 <TextBlock Text="{Binding StatusText}"
-                           Style="{StaticResource TextBlock.Subtle}"
+                           MaxWidth="360"
                            TextTrimming="CharacterEllipsis"
                            TextWrapping="NoWrap"
                            ToolTip="{Binding StatusText}"
                            VerticalAlignment="Center"
-                           Margin="0,2,12,2" />
+                           Margin="0,2,12,2">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock" BasedOn="{StaticResource TextBlock.Subtle}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding HasPlanError}" Value="True">
+                                    <Setter Property="Foreground" Value="{DynamicResource State.Error}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding HasRunErrors}" Value="True">
+                                    <Setter Property="Foreground" Value="{DynamicResource State.Error}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
 
                 <StackPanel Orientation="Horizontal" Margin="0,2,0,2" VerticalAlignment="Center">
                     <ToggleButton x:Name="RunOptionsToggle"

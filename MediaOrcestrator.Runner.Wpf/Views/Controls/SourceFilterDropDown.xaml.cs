@@ -54,10 +54,13 @@ public partial class SourceFilterDropDown : UserControl
 
     private INotifyCollectionChanged? _collection;
     private readonly List<SourceCheckOptionViewModel> _hookedItems = [];
+    private bool _isAttached;
 
     public SourceFilterDropDown()
     {
         InitializeComponent();
+        Loaded += OnLoaded;
+        Unloaded += OnUnloaded;
     }
 
     public IEnumerable? ItemsSource
@@ -104,10 +107,53 @@ public partial class SourceFilterDropDown : UserControl
 
     private static void OnItemsSourceChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
-        ((SourceFilterDropDown)d).Rebind(e.OldValue as IEnumerable, e.NewValue as IEnumerable);
+        ((SourceFilterDropDown)d).OnItemsSourceChanged(e.NewValue as IEnumerable);
     }
 
-    private void Rebind(IEnumerable? oldValue, IEnumerable? newValue)
+    private void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        _isAttached = true;
+        Attach(ItemsSource);
+    }
+
+    private void OnUnloaded(object sender, RoutedEventArgs e)
+    {
+        _isAttached = false;
+        Detach();
+    }
+
+    private void OnItemsSourceChanged(IEnumerable? newValue)
+    {
+        if (_isAttached || IsLoaded)
+        {
+            Attach(newValue);
+        }
+        else
+        {
+            Detach();
+            UpdateSummary(newValue);
+        }
+    }
+
+    private void Attach(IEnumerable? items)
+    {
+        Detach();
+
+        if ((_isAttached || IsLoaded) && items is not null)
+        {
+            if (items is INotifyCollectionChanged incc)
+            {
+                _collection = incc;
+                _collection.CollectionChanged += OnCollectionChanged;
+            }
+
+            HookItems(items);
+        }
+
+        UpdateSummary(items);
+    }
+
+    private void Detach()
     {
         if (_collection is not null)
         {
@@ -116,15 +162,6 @@ public partial class SourceFilterDropDown : UserControl
         }
 
         UnhookItems();
-
-        if (newValue is INotifyCollectionChanged incc)
-        {
-            _collection = incc;
-            _collection.CollectionChanged += OnCollectionChanged;
-        }
-
-        HookItems(newValue);
-        Recompute();
     }
 
     private void OnCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -168,8 +205,30 @@ public partial class SourceFilterDropDown : UserControl
 
     private void Recompute()
     {
-        var total = _hookedItems.Count;
-        var selected = _hookedItems.Count(i => i.IsChecked);
+        UpdateSummary(_hookedItems);
+    }
+
+    private void UpdateSummary(IEnumerable? items)
+    {
+        if (items is null)
+        {
+            SetCurrentValue(SummaryProperty, "0/0");
+            return;
+        }
+
+        var total = 0;
+        var selected = 0;
+
+        foreach (var item in items.OfType<SourceCheckOptionViewModel>())
+        {
+            total++;
+
+            if (item.IsChecked)
+            {
+                selected++;
+            }
+        }
+
         SetCurrentValue(SummaryProperty, $"{selected}/{total}");
     }
 }

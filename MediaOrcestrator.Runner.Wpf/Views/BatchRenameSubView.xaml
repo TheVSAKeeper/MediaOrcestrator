@@ -208,9 +208,12 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <Border Grid.Row="0"
-                Style="{StaticResource Card.Inset}"
-                Margin="{DynamicResource Margin.StackItem}">
+        <ScrollViewer Grid.Row="0"
+                      VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled"
+                      MaxHeight="260"
+                      Margin="{DynamicResource Margin.StackItem}">
+            <Border Style="{StaticResource Card.Inset}">
             <StackPanel>
                 <controls:BatchMediaToolbar Margin="{DynamicResource Margin.RowGap}"
                                             MediasSummary="{Binding MediasSummary}"
@@ -309,7 +312,8 @@
                     </StackPanel>
                 </Border>
             </StackPanel>
-        </Border>
+            </Border>
+        </ScrollViewer>
 
         <controls:OperationResultPanel Grid.Row="1"
                                        SelectAllCommand="{Binding SelectAllRowsCommand}"
@@ -318,7 +322,7 @@
                                        JournalSource="{Binding Journal}"
                                        ClearJournalCommand="{Binding ClearJournalCommand}"
                                        IsJournalOpen="{Binding IsJournalOpen}"
-                                       IsEmpty="{Binding IsSetEmpty}"
+                                       IsEmpty="{Binding IsResultEmpty}"
                                        IsCompact="{Binding IsCompact, Mode=TwoWay}">
             <controls:OperationResultPanel.HeaderLeft>
                 <TextBlock Text="{Binding StatusText}"
@@ -328,12 +332,37 @@
 
             <controls:OperationResultPanel.EmptyContent>
                 <keepshell:EmptyState VerticalAlignment="Center"
-                                     Icon="Layers"
-                                     Heading="Набор пуст"
-                                     Description="Загрузите все медиа из хранилища или откройте набор из раздела «Медиа» (контекстное меню → «Открыть в Операциях»)."
-                                     DescriptionMaxWidth="420"
-                                     ActionText="Загрузить всё хранилище"
-                                     ActionCommand="{Binding LoadAllMediaCommand}" />
+                                      DescriptionMaxWidth="420">
+                    <keepshell:EmptyState.Style>
+                        <Style TargetType="keepshell:EmptyState">
+                            <Setter Property="Icon"
+                                    Value="Layers" />
+                            <Setter Property="Heading"
+                                    Value="Набор пуст" />
+                            <Setter Property="Description"
+                                    Value="Загрузите все медиа из хранилища или откройте набор из раздела «Медиа» (контекстное меню → «Открыть в Операциях»)." />
+                            <Setter Property="ActionText"
+                                    Value="Загрузить всё хранилище" />
+                            <Setter Property="ActionCommand"
+                                    Value="{Binding LoadAllMediaCommand}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding HasMedias}"
+                                             Value="True">
+                                    <Setter Property="Icon"
+                                            Value="SlidersHorizontal" />
+                                    <Setter Property="Heading"
+                                            Value="Нет подходящих строк" />
+                                    <Setter Property="Description"
+                                            Value="В текущем наборе нет строк для выбранных площадок. Отметьте другие площадки выше или дополните набор." />
+                                    <Setter Property="ActionText"
+                                            Value="{x:Null}" />
+                                    <Setter Property="ActionCommand"
+                                            Value="{x:Null}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </keepshell:EmptyState.Style>
+                </keepshell:EmptyState>
             </controls:OperationResultPanel.EmptyContent>
 
             <ListBox ItemsSource="{Binding Rows}"

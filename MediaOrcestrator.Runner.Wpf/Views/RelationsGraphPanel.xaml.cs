@@ -2,6 +2,7 @@
 using MediaOrcestrator.Runner.Wpf.ViewModels;
 using Microsoft.Msagl.WpfGraphControl;
 using System.Collections.Specialized;
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -16,25 +17,23 @@ public partial class RelationsGraphPanel : UserControl
 {
     private GraphViewer? _viewer;
     private SourcesRelationsViewModel? _vm;
+    private bool _isDirty = true;
 
     public RelationsGraphPanel()
     {
         InitializeComponent();
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
+        IsVisibleChanged += OnIsVisibleChanged;
         DataContextChanged += OnDataContextChanged;
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
-        if (_viewer is null)
-        {
-            _viewer = new();
-            _viewer.BindToPanel(GraphHost);
-        }
-
+        AttachToVm(DataContext as SourcesRelationsViewModel);
+        ThemeManager.Changed -= OnThemeChanged;
         ThemeManager.Changed += OnThemeChanged;
-        RebuildGraph();
+        RebuildIfReady();
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
@@ -43,22 +42,44 @@ public partial class RelationsGraphPanel : UserControl
         DetachFromVm();
     }
 
+    private void OnIsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
+    {
+        if (IsVisible)
+        {
+            RebuildIfReady();
+        }
+    }
+
     private void OnThemeChanged(object? sender, ThemeDefinition theme)
     {
-        RebuildGraph();
+        RequestRebuild();
     }
 
     private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
     {
+        AttachToVm(e.NewValue as SourcesRelationsViewModel);
+        RebuildIfReady();
+    }
+
+    private void AttachToVm(SourcesRelationsViewModel? vm)
+    {
+        if (ReferenceEquals(_vm, vm))
+        {
+            return;
+        }
+
         DetachFromVm();
 
-        if (e.NewValue is SourcesRelationsViewModel vm)
+        if (vm is null)
         {
-            _vm = vm;
-            _vm.Sources.CollectionChanged += OnDataChanged;
-            _vm.Relations.CollectionChanged += OnDataChanged;
-            RebuildGraph();
+            return;
         }
+
+        _vm = vm;
+        _vm.Sources.CollectionChanged += OnDataChanged;
+        _vm.Relations.CollectionChanged += OnDataChanged;
+        _vm.PropertyChanged += OnVmPropertyChanged;
+        _isDirty = true;
     }
 
     private void DetachFromVm()
@@ -70,11 +91,44 @@ public partial class RelationsGraphPanel : UserControl
 
         _vm.Sources.CollectionChanged -= OnDataChanged;
         _vm.Relations.CollectionChanged -= OnDataChanged;
+        _vm.PropertyChanged -= OnVmPropertyChanged;
         _vm = null;
+        _isDirty = true;
+    }
+
+    private void OnVmPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(SourcesRelationsViewModel.IsGraphMode) && _vm is { IsGraphMode: true })
+        {
+            RebuildIfReady();
+        }
     }
 
     private void OnDataChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
+        RequestRebuild();
+    }
+
+    private void RequestRebuild()
+    {
+        _isDirty = true;
+        RebuildIfReady();
+    }
+
+    private void RebuildIfReady()
+    {
+        if (!IsLoaded || !IsVisible || _vm is not { IsGraphMode: true } || !_isDirty)
+        {
+            return;
+        }
+
+        if (_viewer is null)
+        {
+            _viewer = new();
+            _viewer.BindToPanel(GraphHost);
+        }
+
+        _isDirty = false;
         RebuildGraph();
     }
 
@@ -104,6 +158,16 @@ public partial class RelationsGraphPanel : UserControl
                 BackgroundColor = palette.PanelBackground,
             },
         };
+        var knownSourceIds = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var card in _vm.Sources)
+        {
+            if (!string.IsNullOrEmpty(card.Source.Id))
+            {
+                knownSourceIds.Add(card.Source.Id);
+            }
+        }
+
         var hasOut = new HashSet<string>(StringComparer.Ordinal);
         var hasIn = new HashSet<string>(StringComparer.Ordinal);
 
@@ -112,7 +176,10 @@ public partial class RelationsGraphPanel : UserControl
             var fromId = relCard.Relation.FromId;
             var toId = relCard.Relation.ToId;
 
-            if (string.IsNullOrEmpty(fromId) || string.IsNullOrEmpty(toId))
+            if (string.IsNullOrEmpty(fromId)
+                || string.IsNullOrEmpty(toId)
+                || !knownSourceIds.Contains(fromId)
+                || !knownSourceIds.Contains(toId))
             {
                 continue;
             }
@@ -148,7 +215,10 @@ public partial class RelationsGraphPanel : UserControl
             var fromId = relCard.Relation.FromId;
             var toId = relCard.Relation.ToId;
 
-            if (string.IsNullOrEmpty(fromId) || string.IsNullOrEmpty(toId))
+            if (string.IsNullOrEmpty(fromId)
+                || string.IsNullOrEmpty(toId)
+                || !knownSourceIds.Contains(fromId)
+                || !knownSourceIds.Contains(toId))
             {
                 continue;
             }

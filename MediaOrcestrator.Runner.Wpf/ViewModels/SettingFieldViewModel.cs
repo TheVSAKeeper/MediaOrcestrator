@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 using KeepShell.Services.Platform;
 using MediaOrcestrator.Modules;
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.IO;
 
 namespace MediaOrcestrator.Runner.Wpf.ViewModels;
@@ -47,9 +48,21 @@ public sealed partial class SettingFieldViewModel : ObservableObject
 
     public string Key => Setting.Key;
 
-    public string Title => Setting.Title;
+    public string Title => FormatDisplayTitle(Setting.Title);
 
-    public string LabelWithRequired => Setting.IsRequired ? Setting.Title + " *" : Setting.Title;
+    public string LabelWithRequired => Setting.IsRequired ? Title + " *" : Title;
+
+    private static string FormatDisplayTitle(string? title)
+    {
+        if (string.IsNullOrEmpty(title))
+        {
+            return string.Empty;
+        }
+
+        return char.IsLower(title[0])
+            ? char.ToUpper(title[0], CultureInfo.CurrentCulture) + title[1..]
+            : title;
+    }
 
     public string? Description => Setting.Description;
 

@@ -6,6 +6,7 @@ using MediaOrcestrator.Runner.Wpf.Bootstrap;
 using MediaOrcestrator.Runner.Wpf.MediaContextMenu;
 using MediaOrcestrator.Runner.Wpf.Services;
 using Microsoft.Extensions.Logging;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -32,6 +33,7 @@ public sealed partial class MediaViewModel : ObservableObject, IMediaActionUi, I
 
     public const double DefaultInspectorWidth = 480;
     public const double MinInspectorWidth = 260;
+    public const double AutoCollapseWindowWidth = 1050;
     private const double MaxInspectorWidth = 1000;
 
     private readonly Orcestrator _orcestrator;
@@ -47,6 +49,10 @@ public sealed partial class MediaViewModel : ObservableObject, IMediaActionUi, I
     private double _inspectorWidth = DefaultInspectorWidth;
     private bool _loaded;
     private bool _suppressPrefPersist;
+    private bool _userCollapsedPreference;
+    private bool _autoCollapsedByViewport;
+    private bool _manualOverrideOnNarrow;
+    private bool _isNarrowViewport;
 
     public MediaViewModel(
         Orcestrator orcestrator,
@@ -73,9 +79,11 @@ public sealed partial class MediaViewModel : ObservableObject, IMediaActionUi, I
         Grid = new(Filter, Inspector, actionContextFactory, this, contextMenuBuilder, settings, () => _allSources, dispatcher)
         {
             PublishMetric = PublishRenderMetric,
+            RetryLoadAction = ReloadAsync,
         };
 
-        Grid.RequestExpandInspector += (_, _) => IsInspectorCollapsed = false;
+        Grid.RequestExpandInspector += OnRequestExpandInspector;
+        Grid.PropertyChanged += OnGridPropertyChanged;
 
         LoadViewPreferences();
     }
@@ -120,7 +128,7 @@ public sealed partial class MediaViewModel : ObservableObject, IMediaActionUi, I
             return false;
         }
 
-        IsInspectorCollapsed = true;
+        CollapseInspectorFromUser();
         return true;
     }
 
@@ -177,11 +185,15 @@ public sealed partial class MediaViewModel : ObservableObject, IMediaActionUi, I
         {
             _logger.LogError(ex, "Не удалось загрузить медиа");
             action.Fail("Ошибка: " + ex.Message, ex);
-            Grid.LoadError = ex.Message;
+            _dispatcher.Invoke(() =>
+            {
+                Grid.LoadError = ex.Message;
+                Grid.ClearOnLoadError();
+            });
         }
         finally
         {
-            Grid.IsLoading = false;
+            _dispatcher.Invoke(() => Grid.IsLoading = false);
         }
 
         if (breakdown is { } b)
@@ -203,6 +215,13 @@ public sealed partial class MediaViewModel : ObservableObject, IMediaActionUi, I
     private void ToggleInspectorCollapsed()
     {
         IsInspectorCollapsed = !IsInspectorCollapsed;
+        _userCollapsedPreference = IsInspectorCollapsed;
+        _autoCollapsedByViewport = false;
+
+        if (_isNarrowViewport)
+        {
+            _manualOverrideOnNarrow = true;
+        }
     }
 
     internal void SetBusyForAutomation(bool isBusy, double progressValue = 0, double progressMax = 100, string? statusCaption = null)
@@ -362,6 +381,7 @@ public sealed partial class MediaViewModel : ObservableObject, IMediaActionUi, I
         {
             if (bool.TryParse(_settings.GetStringValue(InspectorCollapsedSettingKey), out var collapsed))
             {
+                _userCollapsedPreference = collapsed;
                 IsInspectorCollapsed = collapsed;
             }
 

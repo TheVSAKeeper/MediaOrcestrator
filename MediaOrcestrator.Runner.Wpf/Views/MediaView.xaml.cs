@@ -13,24 +13,33 @@ public partial class MediaView : UserControl, IView<MediaViewModel>
     private const double MinPanelWidth = MediaViewModel.MinInspectorWidth;
 
     private MediaViewModel? _vm;
+    private Window? _hostWindow;
 
     public MediaView()
     {
         InitializeComponent();
 
         Loaded += OnLoaded;
+        Unloaded += OnUnloaded;
         SizeChanged += OnSizeChanged;
         DataContextChanged += OnDataContextChanged;
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
+        AttachHostWindow();
+        UpdateViewportWidth();
         ApplyInspectorLayout();
 
         if (DataContext is MediaViewModel vm)
         {
             await vm.EnsureLoadedAsync();
         }
+    }
+
+    private void OnUnloaded(object sender, RoutedEventArgs e)
+    {
+        DetachHostWindow();
     }
 
     private async void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
@@ -47,6 +56,12 @@ public partial class MediaView : UserControl, IView<MediaViewModel>
         {
             _vm.PropertyChanged += OnViewModelPropertyChanged;
             _vm.SearchFocusRequested += OnSearchFocusRequested;
+
+            if (IsLoaded)
+            {
+                UpdateViewportWidth();
+            }
+
             ApplyInspectorLayout();
             await _vm.EnsureLoadedAsync();
         }
@@ -65,9 +80,62 @@ public partial class MediaView : UserControl, IView<MediaViewModel>
         }
     }
 
+    private void OnHostWindowSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        UpdateViewportWidth();
+    }
+
     private void OnSizeChanged(object sender, SizeChangedEventArgs e)
     {
+        UpdateViewportWidth();
         ApplyInspectorLayout();
+    }
+
+    private void AttachHostWindow()
+    {
+        var window = Window.GetWindow(this);
+
+        if (ReferenceEquals(_hostWindow, window))
+        {
+            return;
+        }
+
+        DetachHostWindow();
+
+        if (window is not null)
+        {
+            window.SizeChanged += OnHostWindowSizeChanged;
+            _hostWindow = window;
+        }
+    }
+
+    private void DetachHostWindow()
+    {
+        if (_hostWindow is not null)
+        {
+            _hostWindow.SizeChanged -= OnHostWindowSizeChanged;
+            _hostWindow = null;
+        }
+    }
+
+    private void UpdateViewportWidth()
+    {
+        if (_vm is null)
+        {
+            return;
+        }
+
+        var hostWidth = _hostWindow?.ActualWidth ?? 0;
+
+        if (hostWidth <= 0 && ActualWidth > 0)
+        {
+            hostWidth = ActualWidth + 240;
+        }
+
+        if (hostWidth > 0)
+        {
+            _vm.UpdateViewportWidth(hostWidth);
+        }
     }
 
     private void ApplyInspectorLayout()

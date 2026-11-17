@@ -104,9 +104,29 @@ public sealed partial class SourcesRelationsViewModel : ObservableObject, IPageH
 
     public bool ShowEmptyRelationsState => HasSources && !HasRelations;
 
-    public bool IsListMode => ViewMode == SourcesRelationsViewMode.List;
+    public bool IsListMode
+    {
+        get => ViewMode == SourcesRelationsViewMode.List;
+        set
+        {
+            if (value)
+            {
+                ViewMode = SourcesRelationsViewMode.List;
+            }
+        }
+    }
 
-    public bool IsGraphMode => ViewMode == SourcesRelationsViewMode.Graph;
+    public bool IsGraphMode
+    {
+        get => ViewMode == SourcesRelationsViewMode.Graph;
+        set
+        {
+            if (value)
+            {
+                ViewMode = SourcesRelationsViewMode.Graph;
+            }
+        }
+    }
 
     internal StateManager StateManager => _stateManager;
 
@@ -317,13 +337,8 @@ public sealed partial class SourcesRelationsViewModel : ObservableObject, IPageH
     {
         var relation = card.Relation;
 
-        if (relation.From is null || relation.To is null)
-        {
-            return;
-        }
-
         TryMutateAndReload("Связи", "Не удалось удалить связь",
-            () => _orcestrator.RemoveRelation(relation.From, relation.To));
+            () => _orcestrator.RemoveRelation(relation.FromId, relation.ToId));
     }
 
     partial void OnViewModeChanged(SourcesRelationsViewMode value)

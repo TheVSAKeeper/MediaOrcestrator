@@ -19,7 +19,16 @@
                  Margin="0,0,0,14"
                  Style="{StaticResource ListBox.Segmented}"
                  ItemsSource="{Binding Tabs}"
-                 SelectedIndex="{Binding SelectedIndex, Mode=TwoWay}" />
+                 SelectedIndex="{Binding SelectedIndex, Mode=TwoWay}"
+                 AutomationProperties.Name="Разделы обслуживания">
+            <ListBox.ItemContainerStyle>
+                <Style TargetType="ListBoxItem"
+                       BasedOn="{StaticResource SegmentedItem}">
+                    <Setter Property="AutomationProperties.Name"
+                            Value="{Binding Text}" />
+                </Style>
+            </ListBox.ItemContainerStyle>
+        </ListBox>
 
         <ContentControl Grid.Row="1"
                         Content="{Binding Current}" />

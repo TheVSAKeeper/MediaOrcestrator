@@ -30,6 +30,7 @@
                         Padding="14,6"
                         Height="{DynamicResource Control.Height.Default}"
                         Margin="0,0,8,0"
+                        AutomationProperties.Name="Добавить источник"
                         ToolTip="Добавить новый источник">
                     <StackPanel Orientation="Horizontal">
                         <iconPacks:PackIconLucide Kind="Plus"
@@ -47,6 +48,7 @@
                         Padding="{DynamicResource Padding.Control}"
                         Height="{DynamicResource Control.Height.Default}"
                         Margin="0,0,12,0"
+                        AutomationProperties.Name="Добавить связь"
                         ToolTip="Создать связь между двумя источниками">
                     <StackPanel Orientation="Horizontal">
                         <iconPacks:PackIconLucide Kind="Plus"
@@ -65,8 +67,7 @@
                     <StackPanel Orientation="Horizontal">
                         <RadioButton Style="{StaticResource RadioButton.Segment}"
                                      GroupName="SourcesViewMode"
-                                     IsChecked="{Binding IsListMode, Mode=OneWay}"
-                                     Command="{Binding SetListModeCommand}"
+                                     IsChecked="{Binding IsListMode, Mode=TwoWay}"
                                      AutomationProperties.Name="Режим списка">
                             <StackPanel Orientation="Horizontal">
                                 <iconPacks:PackIconLucide Kind="LayoutGrid"
@@ -79,8 +80,7 @@
                         </RadioButton>
                         <RadioButton Style="{StaticResource RadioButton.Segment}"
                                      GroupName="SourcesViewMode"
-                                     IsChecked="{Binding IsGraphMode, Mode=OneWay}"
-                                     Command="{Binding SetGraphModeCommand}"
+                                     IsChecked="{Binding IsGraphMode, Mode=TwoWay}"
                                      AutomationProperties.Name="Режим графа">
                             <StackPanel Orientation="Horizontal">
                                 <iconPacks:PackIconLucide Kind="Diamond"
@@ -99,33 +99,45 @@
         <StackPanel Grid.Row="1"
                     Orientation="Horizontal"
                     Margin="0,0,0,12">
-            <TextBlock Style="{StaticResource TextBlock.Subtle}">
-                <Run Text="Источников:" />
-                <Run Text="{Binding SourceCount, Mode=OneWay}" />
-                <Run Text="(" />
-                <InlineUIContainer BaselineAlignment="Center">
-                    <iconPacks:PackIconLucide Kind="Pause"
-                                      Width="12"
-                                      Height="12"
-                                      Margin="2,0,2,0" />
-                </InlineUIContainer>
-                <Run Text="{Binding DisabledSourceCount, Mode=OneWay}" />
-                <Run Text=")" />
-            </TextBlock>
-            <TextBlock Style="{StaticResource TextBlock.Subtle}"
-                       Margin="14,0,0,0">
-                <Run Text="Связей:" />
-                <Run Text="{Binding RelationCount, Mode=OneWay}" />
-                <Run Text="(" />
-                <InlineUIContainer BaselineAlignment="Center">
-                    <iconPacks:PackIconLucide Kind="Pause"
-                                      Width="12"
-                                      Height="12"
-                                      Margin="2,0,2,0" />
-                </InlineUIContainer>
-                <Run Text="{Binding DisabledRelationCount, Mode=OneWay}" />
-                <Run Text=")" />
-            </TextBlock>
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Style="{StaticResource TextBlock.Subtle}"
+                           Text="{Binding SourceCount, Mode=OneWay, StringFormat='Источников: {0}'}" />
+                <TextBlock Margin="4,0,0,0"
+                           Text="{Binding DisabledSourceCount, Mode=OneWay, StringFormat='(выкл.: {0})'}">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock"
+                               BasedOn="{StaticResource TextBlock.Subtle}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding DisabledSourceCount}"
+                                             Value="0">
+                                    <Setter Property="Visibility"
+                                            Value="Collapsed" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal"
+                        Margin="14,0,0,0">
+                <TextBlock Style="{StaticResource TextBlock.Subtle}"
+                           Text="{Binding RelationCount, Mode=OneWay, StringFormat='Связей: {0}'}" />
+                <TextBlock Margin="4,0,0,0"
+                           Text="{Binding DisabledRelationCount, Mode=OneWay, StringFormat='(выкл.: {0})'}">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock"
+                               BasedOn="{StaticResource TextBlock.Subtle}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding DisabledRelationCount}"
+                                             Value="0">
+                                    <Setter Property="Visibility"
+                                            Value="Collapsed" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+            </StackPanel>
         </StackPanel>
 
         <Border Grid.Row="2"

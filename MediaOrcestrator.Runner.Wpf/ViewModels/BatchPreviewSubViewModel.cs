@@ -117,6 +117,7 @@ public sealed partial class BatchPreviewSubViewModel : ObservableObject
         TemplatePicker = new(coverGenerator, coverTemplateStore, dialogs, filePicker, editorWindow);
         TemplatePicker.TemplateChanged += OnTemplateChanged;
         TemplatePicker.PropertyChanged += OnTemplatePickerPropertyChanged;
+        Rows.CollectionChanged += (_, _) => OnPropertyChanged(nameof(IsResultEmpty));
 
         LoadPreferences();
         RefreshPreviewTile();
@@ -135,6 +136,8 @@ public sealed partial class BatchPreviewSubViewModel : ObservableObject
     public bool HasMedias => _medias.Count > 0;
 
     public bool IsSetEmpty => !HasMedias;
+
+    public bool IsResultEmpty => Rows.Count == 0;
 
     public bool HasFilePath => !string.IsNullOrEmpty(FilePath) && File.Exists(FilePath);
 

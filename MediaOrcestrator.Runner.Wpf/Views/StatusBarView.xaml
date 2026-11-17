@@ -140,12 +140,13 @@
                 <StackPanel Orientation="Horizontal"
                             VerticalAlignment="Center"
                             Visibility="{Binding CurrentPageStatus.IsBusy, Converter={StaticResource BoolToVisibility}, FallbackValue=Collapsed, TargetNullValue=Collapsed}">
-                    <TextBlock Text="{Binding CurrentPageStatus.StatusCaption}"
+                    <TextBlock Text="{Binding PageStatusCaption}"
                                Style="{StaticResource TextBlock.Subtle}"
                                VerticalAlignment="Center"
                                Margin="0,0,10,0"
                                TextTrimming="CharacterEllipsis"
-                               MaxWidth="360" />
+                               MaxWidth="360"
+                               Visibility="{Binding PageStatusCaption, Converter={StaticResource NullToVisibility}, FallbackValue=Collapsed, TargetNullValue=Collapsed}" />
                     <ProgressBar Width="160"
                                  Height="6"
                                  Minimum="0"

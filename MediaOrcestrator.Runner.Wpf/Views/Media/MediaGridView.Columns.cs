@@ -1,5 +1,6 @@
 ﻿using MediaOrcestrator.Domain;
 using MediaOrcestrator.Runner.Wpf.ViewModels;
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.IO;
 using System.Windows;
@@ -57,15 +58,17 @@ public partial class MediaGridView
         """
         <DataTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                       xmlns:iconPacks="http://metro.mahapps.com/winfx/xaml/iconpacks">
-            <iconPacks:PackIconLucide Kind="{{Binding Cells[{0}].Icon}}"
-                                      Foreground="{{Binding Cells[{0}].Brush}}"
-                                      ToolTip="{{Binding Cells[{0}].Tooltip}}"
+            <iconPacks:PackIconLucide Kind="{{Binding Cells[{0}].Icon, Mode=OneTime}}"
+                                      Foreground="{{Binding Cells[{0}].Brush, Mode=OneTime}}"
+                                      ToolTip="{{Binding Cells[{0}].Tooltip, Mode=OneTime}}"
                                       Width="16"
                                       Height="16"
                                       HorizontalAlignment="Center"
                                       VerticalAlignment="Center" />
         </DataTemplate>
         """;
+
+    private static readonly ConcurrentDictionary<int, DataTemplate> SourceCellTemplateCache = new();
 
     private static readonly DataTemplate SourceHeaderTemplate = ParseTemplate(SourceHeaderTemplateXaml);
 
@@ -82,7 +85,7 @@ public partial class MediaGridView
         DetachColumnWidthTracking();
         MediaGrid.Columns.Clear();
 
-        var cellTextStyle = (Style)FindResource("MatrixCellText");
+        var titleCellStyle = GetTitleCellStyle(vm.IsCompact);
         var metadataCellTextStyle = (Style)FindResource("MetadataCellText");
 
         var titleCol = new DataGridTextColumn
@@ -90,9 +93,9 @@ public partial class MediaGridView
             Header = "Название",
             Width = new(1, DataGridLengthUnitType.Star),
             MinWidth = 200,
-            Binding = new Binding(nameof(MediaRowViewModel.Title)),
+            Binding = new Binding(nameof(MediaRowViewModel.Title)) { Mode = BindingMode.OneTime },
             SortMemberPath = nameof(MediaRowViewModel.Title),
-            ElementStyle = cellTextStyle,
+            ElementStyle = titleCellStyle,
         };
         MediaGrid.Columns.Add(titleCol);
 
@@ -106,7 +109,7 @@ public partial class MediaGridView
                 HeaderTemplate = MetadataHeaderTemplate,
                 Width = vm.TryGetColumnWidth(key, out var metaWidth) ? new(metaWidth) : new(MetadataColumnWidth),
                 MinWidth = 80,
-                Binding = new Binding($"MetadataCells[{i}]"),
+                Binding = new Binding($"MetadataCells[{i}]") { Mode = BindingMode.OneTime },
                 CanUserSort = true,
                 ElementStyle = metadataCellTextStyle,
             };
@@ -218,11 +221,23 @@ public partial class MediaGridView
         }
     }
 
-    private static DataTemplate BuildCellTemplate(int columnIndex)
+    private Style GetTitleCellStyle(bool isCompact) =>
+        (Style)FindResource(isCompact ? "MatrixCellCompactText" : "MatrixCellComfortableText");
+
+    private void UpdateTitleColumnStyle(bool isCompact)
     {
-        var xaml = string.Format(CultureInfo.InvariantCulture, SourceCellTemplateXamlFormat, columnIndex);
-        return ParseTemplate(xaml);
+        if (MediaGrid.Columns.Count > 0 && MediaGrid.Columns[0] is DataGridTextColumn titleCol)
+        {
+            titleCol.ElementStyle = GetTitleCellStyle(isCompact);
+        }
     }
+
+    private static DataTemplate BuildCellTemplate(int columnIndex) =>
+        SourceCellTemplateCache.GetOrAdd(columnIndex, static index =>
+        {
+            var xaml = string.Format(CultureInfo.InvariantCulture, SourceCellTemplateXamlFormat, index);
+            return ParseTemplate(xaml);
+        });
 
     private static DataTemplate ParseTemplate(string xaml)
     {

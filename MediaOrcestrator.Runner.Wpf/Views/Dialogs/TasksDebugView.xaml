@@ -9,8 +9,10 @@
              d:DataContext="{d:DesignInstance vm:TasksDebugViewModel}"
              d:DesignHeight="600"
              d:DesignWidth="880"
-             Width="{DynamicResource Dialog.Width.Large}"
-             MinHeight="520"
+             MinWidth="360"
+             MinHeight="260"
+             MaxWidth="{DynamicResource Dialog.Width.Large}"
+             MaxHeight="620"
              Loaded="OnLoaded"
              KeyboardNavigation.TabNavigation="Cycle">
     
@@ -41,6 +43,7 @@
                    Margin="0,6,0,12" />
 
         <Border Grid.Row="2"
+                MinHeight="120"
                 BorderBrush="{DynamicResource Border.Subtle}"
                 BorderThickness="1"
                 CornerRadius="{DynamicResource Radius.M}"
