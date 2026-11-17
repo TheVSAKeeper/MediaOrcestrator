@@ -122,10 +122,9 @@ public class Orcestrator(
             var sourceTypes = GetSourceTypes();
             var sources = GetSources();
 
-            if (filterSource != null)
-            {
-                sources = sources.Where(x => x.Id == filterSource.Id).ToList();
-            }
+            sources = filterSource != null
+                ? sources.Where(x => x.Id == filterSource.Id).ToList()
+                : sources.Where(x => !x.IsDisable).ToList();
 
             var parentCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             var syncModeText = onlyNew ? "Только новые" : isFull ? "Полная синхронизация" : "Обновление";
@@ -138,6 +137,14 @@ public class Orcestrator(
                     parentCts,
                     syncModeText,
                     ActionKind.Sync);
+
+            if (filterSource == null && sources.Count == 0)
+            {
+                logger.LogInformation("Активных источников для синхронизации нет");
+                progress?.Report("Нет активных источников");
+                parentAction?.Finish("Нет активных источников");
+                return;
+            }
 
             var failedSources = new ConcurrentBag<string>();
             var syncCancelled = false;

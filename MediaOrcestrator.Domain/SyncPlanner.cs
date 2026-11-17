@@ -12,7 +12,15 @@ public class SyncPlanner(ILogger<SyncPlanner> logger)
 
         var rootIntents = new List<SyncIntent>();
 
-        var activeRelations = relations.Where(r => !r.IsDisable).ToList();
+        var brokenCount = relations.Count(r => r.From is null || r.To is null);
+        if (brokenCount > 0)
+        {
+            logger.LogWarning("Пропущено связей с отсутствующим источником: {BrokenCount}", brokenCount);
+        }
+
+        var activeRelations = relations
+            .Where(r => !r.IsDisable && r.From is not null && r.To is not null)
+            .ToList();
         foreach (var media in medias)
         {
             foreach (var relation in activeRelations)
