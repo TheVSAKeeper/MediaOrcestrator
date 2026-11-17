@@ -31,7 +31,8 @@ public sealed class DesignSettingsViewModel : SettingsViewModel
             new DesignClipboardService(),
             new DesignShellLauncher(),
             new DesignFilePicker(),
-            new ToastHostViewModel())
+            new ToastHostViewModel(),
+            new DesignWinFormsImportLauncher())
     {
         Paths[1].EditValue = @"D:\Data\MediaOrcestrator\MyData.db";
         Paths[2].EditValue = string.Empty;
@@ -106,6 +107,11 @@ internal sealed class DesignFilePicker : IFilePicker
     public string? PickFile(FileOpenRequest request) => null;
 
     public string? SaveFile(FileSaveRequest request) => null;
+}
+
+internal sealed class DesignWinFormsImportLauncher : IWinFormsImportLauncher
+{
+    public Task OpenAsync(bool isFirstRunPrompt = false) => Task.CompletedTask;
 }
 
 internal static class DesignUpdates

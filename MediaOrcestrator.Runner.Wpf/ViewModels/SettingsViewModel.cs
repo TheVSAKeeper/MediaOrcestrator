@@ -29,6 +29,7 @@ public partial class SettingsViewModel : ObservableObject, IPageHeader
     private readonly IShellLauncher _shellLauncher;
     private readonly McpServerOptions _mcpOptions;
     private readonly ToastHostViewModel _toasts;
+    private readonly IWinFormsImportLauncher _importLauncher;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSavedRecently))]
@@ -57,7 +58,8 @@ public partial class SettingsViewModel : ObservableObject, IPageHeader
         IClipboardService clipboard,
         IShellLauncher shellLauncher,
         IFilePicker filePicker,
-        ToastHostViewModel toasts)
+        ToastHostViewModel toasts,
+        IWinFormsImportLauncher importLauncher)
     {
         _store = store;
         _dialogs = dialogs;
@@ -67,6 +69,7 @@ public partial class SettingsViewModel : ObservableObject, IPageHeader
         _shellLauncher = shellLauncher;
         _mcpOptions = mcpOptions;
         _toasts = toasts;
+        _importLauncher = importLauncher;
         Preferences = preferences;
         Theme = theme;
         Updates = updates;
@@ -92,7 +95,7 @@ public partial class SettingsViewModel : ObservableObject, IPageHeader
         };
 
         Sections = new(
-            new(SettingsSectionKeys.Paths, "Пути", PackIconLucideKind.FolderTree, "база плагины папка temp"),
+            new(SettingsSectionKeys.Paths, "Пути", PackIconLucideKind.FolderTree, "база плагины папка temp импорт перенос миграция winforms"),
             new(SettingsSectionKeys.Appearance, "Интерфейс", PackIconLucideKind.Palette, "тема шрифт масштаб заголовок стартовая страница запуск боковое меню навигация рейл свернуть"),
             new(SettingsSectionKeys.Notifications, "Уведомления", PackIconLucideKind.Bell, "тосты toast"),
             new(SettingsSectionKeys.Sync, "Синхронизация", PackIconLucideKind.RefreshCw, "синхронизация автосинк фон задержка старт"),
@@ -243,6 +246,9 @@ public partial class SettingsViewModel : ObservableObject, IPageHeader
             _dialogs.Warning("Настройки", "Не удалось открыть проводник");
         }
     }
+
+    [RelayCommand]
+    private Task OpenWinFormsImportAsync() => _importLauncher.OpenAsync();
 
     [RelayCommand]
     private void CopySettingsPath()

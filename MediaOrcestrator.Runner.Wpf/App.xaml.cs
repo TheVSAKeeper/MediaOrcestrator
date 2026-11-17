@@ -2,6 +2,7 @@
 using KeepShell.Diagnostics;
 using KeepShell.Mcp;
 using MediaOrcestrator.Domain;
+using MediaOrcestrator.Domain.Migration;
 using MediaOrcestrator.Runner.Wpf.Bootstrap;
 using MediaOrcestrator.Runner.Wpf.Bootstrap.Gallery;
 using MediaOrcestrator.Runner.Wpf.Mcp;
@@ -52,8 +53,16 @@ public partial class App : Application
             return;
         }
 
+        var applyImportPid = StartupCommandLine.TryGetApplyImportPid(e.Args);
+        if (applyImportPid is int previousPid && previousPid != Environment.ProcessId)
+        {
+            await Task.Run(() => StartupImportCoordinator.WaitForPreviousProcessExit(previousPid, TimeSpan.FromSeconds(30)));
+        }
+
         _startupCommand = StartupCommandLine.ToCommand(e.Args);
-        _singleInstanceGuard = SingleInstanceGuard.Acquire("MediaOrcestrator");
+        _singleInstanceGuard = applyImportPid.HasValue
+            ? await Task.Run(() => AcquireSingleInstanceWithRestartGrace("MediaOrcestrator", TimeSpan.FromSeconds(10)))
+            : SingleInstanceGuard.Acquire("MediaOrcestrator");
 
         if (!_singleInstanceGuard.IsPrimaryInstance)
         {
@@ -82,10 +91,25 @@ public partial class App : Application
         try
         {
             var startupWatch = Stopwatch.StartNew();
-            var paths = PathsLoader.Load();
-            var settingsPath = Path.Combine(AppContext.BaseDirectory, TomlSettingsFile.PrimaryFileName);
+            var baseDir = AppContext.BaseDirectory;
+            var hadLegacySettingsTxt = File.Exists(Path.Combine(baseDir, TomlSettingsFile.LegacyFileName));
+            var appliedImportOutcome = WinFormsPendingImportApplier.ApplyIfPending(baseDir);
+            if (appliedImportOutcome?.Status == WinFormsPendingImportOutcomeStatus.RollbackFailed)
+            {
+                StyledMessageBox.Show(
+                    appliedImportOutcome.Message,
+                    "Критическая ошибка переноса данных",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
 
-            var loggingOptions = BuildLoggingOptions(Path.Combine(AppContext.BaseDirectory, "logs"));
+                Shutdown(1);
+                return;
+            }
+
+            var paths = PathsLoader.Load();
+            var settingsPath = Path.Combine(baseDir, TomlSettingsFile.PrimaryFileName);
+
+            var loggingOptions = BuildLoggingOptions(Path.Combine(baseDir, "logs"));
 
             _host = Host.CreateDefaultBuilder()
                 .UseSerilog((_, _, configuration) => ConfigureSerilog(configuration, loggingOptions))
@@ -93,6 +117,7 @@ public partial class App : Application
                 .Build();
 
             Log.Information("MediaOrcestrator.Runner.Wpf запускается...");
+            StartupImportCoordinator.LogPendingOutcome(appliedImportOutcome);
             var updaterCheck = UpdaterLogChecker.Check();
 
             var restoreLogger = _host.Services.GetRequiredService<ILogger<DatabaseBackupService>>();
@@ -177,6 +202,14 @@ public partial class App : Application
             {
                 ShowUpdaterErrorWarning(updaterCheck);
             }
+
+            var importOutcome = WinFormsPendingImportApplier.TryReadAndConsumeResult(baseDir) ?? appliedImportOutcome;
+            StartupImportCoordinator.HandlePostStartupOutcomeOrPrompt(
+                _host.Services,
+                importOutcome,
+                updaterCheck.HasErrors,
+                applyImportPid.HasValue,
+                hadLegacySettingsTxt);
         }
         catch (Exception ex)
         {
@@ -421,5 +454,22 @@ public partial class App : Application
         }
 
         return assembly.GetName().Version?.ToString() ?? "–";
+    }
+
+    private static SingleInstanceGuard AcquireSingleInstanceWithRestartGrace(string mutexName, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+
+        while (true)
+        {
+            var guard = SingleInstanceGuard.Acquire(mutexName);
+            if (guard.IsPrimaryInstance || DateTime.UtcNow >= deadline)
+            {
+                return guard;
+            }
+
+            guard.Dispose();
+            Thread.Sleep(200);
+        }
     }
 }

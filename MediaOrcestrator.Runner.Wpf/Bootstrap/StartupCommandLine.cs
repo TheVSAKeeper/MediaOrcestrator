@@ -1,9 +1,20 @@
-﻿namespace MediaOrcestrator.Runner.Wpf.Bootstrap;
+﻿using System.Globalization;
+
+namespace MediaOrcestrator.Runner.Wpf.Bootstrap;
 
 internal static class StartupCommandLine
 {
     public const string NavCommandPrefix = "nav:";
     public const string DrawerCommandPrefix = "drawer:";
+    public const string ApplyImportArgument = "--apply-import";
+
+    public static int? TryGetApplyImportPid(string[] args)
+    {
+        var raw = Find(args, ApplyImportArgument);
+        return int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var pid) && pid > 0
+            ? pid
+            : null;
+    }
 
     public static string? ToCommand(string[] args)
     {

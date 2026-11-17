@@ -25,6 +25,7 @@ public sealed partial class DatabaseCleanupViewModel : ObservableObject
     private readonly IAppLifetime _lifetime;
     private readonly ILogger<DatabaseCleanupViewModel> _logger;
     private readonly IShellLauncher _shellLauncher;
+    private readonly IWinFormsImportLauncher _importLauncher;
     private CancellationTokenSource? _runCts;
     private List<BackupItemViewModel> _allBackups = [];
 
@@ -77,7 +78,8 @@ public sealed partial class DatabaseCleanupViewModel : ObservableObject
         IDialogService dialogs,
         IAppLifetime lifetime,
         ILogger<DatabaseCleanupViewModel> logger,
-        IShellLauncher shellLauncher)
+        IShellLauncher shellLauncher,
+        IWinFormsImportLauncher importLauncher)
     {
         _maintenance = maintenance;
         _backups = backups;
@@ -86,6 +88,7 @@ public sealed partial class DatabaseCleanupViewModel : ObservableObject
         _lifetime = lifetime;
         _logger = logger;
         _shellLauncher = shellLauncher;
+        _importLauncher = importLauncher;
 
         DatabasePath = _maintenance.DatabasePath;
         BackupsPath = _maintenance.BackupsPath;
@@ -270,6 +273,13 @@ public sealed partial class DatabaseCleanupViewModel : ObservableObject
 
     [RelayCommand]
     private void SelectNoneDanger() => SetSelection(DangerItems, false);
+
+    [RelayCommand]
+    private async Task OpenWinFormsImportAsync()
+    {
+        await _importLauncher.OpenAsync();
+        await RefreshAsync();
+    }
 
     private static void SetSelection(IEnumerable<MaintenanceItemViewModel> items, bool value)
     {

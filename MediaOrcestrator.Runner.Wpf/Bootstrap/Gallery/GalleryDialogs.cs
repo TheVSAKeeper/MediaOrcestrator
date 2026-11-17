@@ -17,6 +17,7 @@ internal static class GalleryDialogs
     public const string CommentsFetch = "comments-fetch";
     public const string TasksDebug = "tasks-debug";
     public const string Docs = "docs";
+    public const string WinFormsImport = "winforms-import";
 
     public static IReadOnlyList<string> All { get; } =
     [
@@ -28,6 +29,7 @@ internal static class GalleryDialogs
         CommentsFetch,
         TasksDebug,
         Docs,
+        WinFormsImport,
     ];
 
     public static string Section(string key)
@@ -35,7 +37,7 @@ internal static class GalleryDialogs
         return key switch
         {
             AddSource or SourceSettings or AddRelation or Docs => "sources",
-            AppUpdate => "settings",
+            AppUpdate or WinFormsImport => "settings",
             CommentsAppearance or CommentsFetch => "comments",
             TasksDebug => "tasks",
             _ => throw new ArgumentOutOfRangeException(nameof(key), key, "Неизвестный диалог галереи."),
@@ -78,9 +80,20 @@ internal static class GalleryDialogs
                 OpenDocs(services, fixture, modals);
                 break;
 
+            case WinFormsImport:
+                OpenWinFormsImport(services, modals);
+                break;
+
             default:
                 throw new ArgumentOutOfRangeException(nameof(key), key, "Неизвестный диалог галереи.");
         }
+    }
+
+    private static void OpenWinFormsImport(IServiceProvider services, ModalHostViewModel modals)
+    {
+        var viewModel = services.GetRequiredService<WinFormsImportDialogViewModel>();
+        viewModel.Configure(isFirstRunPrompt: false);
+        _ = modals.ShowAsync(viewModel);
     }
 
     private static void OpenAddSource(IServiceProvider services, ModalHostViewModel modals)
