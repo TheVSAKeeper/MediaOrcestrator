@@ -88,7 +88,7 @@ internal static partial class RutubeChannelLog
         this ILogger logger,
         long fileSize);
 
-    [LoggerMessage(EventId = 2116, Level = LogLevel.Information, Message = "Кодек не найден в метаданных, определяем через ffprobe: {FilePath}")]
+    [LoggerMessage(EventId = 2116, Level = LogLevel.Information, Message = "Определяем кодек видео через ffprobe: {FilePath}")]
     public static partial void DetectingCodec(
         this ILogger logger,
         string filePath);

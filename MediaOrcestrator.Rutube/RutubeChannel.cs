@@ -22,6 +22,20 @@ public sealed class RutubeChannel(
 {
     private readonly ConcurrentDictionary<string, CachedService> _serviceCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly SemaphoreSlim _cacheLock = new(1, 1);
+    private readonly IRutubeTranscoder? _transcoderOverride;
+    private readonly IRutubeUploadGateway? _uploadGatewayOverride;
+
+    internal RutubeChannel(
+        ILogger<RutubeChannel> logger,
+        IRutubeServiceFactory rutubeServiceFactory,
+        IToolPathProvider toolPathProvider,
+        IRutubeTranscoder transcoder,
+        IRutubeUploadGateway uploadGateway)
+        : this(logger, rutubeServiceFactory, toolPathProvider, null!)
+    {
+        _transcoderOverride = transcoder;
+        _uploadGatewayOverride = uploadGateway;
+    }
 
     public SyncDirection ChannelType => SyncDirection.Full;
 
@@ -251,20 +265,18 @@ public sealed class RutubeChannel(
 
         logger.FileFound(new FileInfo(filePath).Length);
 
-        // Проверяем именно подготовленный к загрузке файл. Метаданные MediaDto могут
-        // описывать исходник и не совпадать с результатом скачивания/конвертации.
         logger.DetectingCodec(filePath);
-        var codec = await videoTranscoder.GetVideoCodecAsync(filePath, cancellationToken);
+        var transcoder = _transcoderOverride ?? new VideoTranscoderAdapter(videoTranscoder);
+        var codec = await transcoder.GetVideoCodecAsync(filePath, cancellationToken);
 
         if (string.IsNullOrEmpty(codec))
         {
             throw new NonRetriableException("В файле не найдена видеодорожка — определить кодек видео невозможно");
         }
 
-        var requiresH264Transcode = string.Equals(codec, "vp9", StringComparison.OrdinalIgnoreCase)
-                                    || string.Equals(codec, "av1", StringComparison.OrdinalIgnoreCase);
-
-        if (requiresH264Transcode)
+        var isAv1 = string.Equals(codec, "av1", StringComparison.OrdinalIgnoreCase);
+        var isVp9 = string.Equals(codec, "vp9", StringComparison.OrdinalIgnoreCase);
+        if (isAv1 || isVp9)
         {
             logger.TranscodingToH264(codec, filePath);
 
@@ -280,13 +292,13 @@ public sealed class RutubeChannel(
                 totalDuration = parsed;
             }
 
-            var transcodeOk = string.Equals(codec, "av1", StringComparison.OrdinalIgnoreCase)
-                ? await videoTranscoder.TranscodeAv1ToH264Async(filePath,
+            var transcodeOk = isAv1
+                ? await transcoder.TranscodeAv1ToH264Async(filePath,
                     transcodedPath,
                     totalDuration,
                     null,
                     cancellationToken)
-                : await videoTranscoder.TranscodeVp9ToH264Async(filePath,
+                : await transcoder.TranscodeVp9ToH264Async(filePath,
                     transcodedPath,
                     totalDuration,
                     null,
@@ -307,7 +319,9 @@ public sealed class RutubeChannel(
         logger.VideoCodec(codec);
 
         var rutubeCategoryId = settings["category_id"];
-        var rutubeService = await CreateRutubeServiceAsync(settings, cancellationToken);
+        var rutubeService = _uploadGatewayOverride is null
+            ? await CreateRutubeServiceAsync(settings, cancellationToken)
+            : null;
 
         DateTime? publishAt = null;
         if (settings.TryGetValue("publish_at", out var publishAtRaw) && !string.IsNullOrWhiteSpace(publishAtRaw))
@@ -334,16 +348,28 @@ public sealed class RutubeChannel(
         {
             var uploadBytesPerSecond = SpeedLimitHelper.ParseUploadBytesPerSecond(settings);
             var uploadProgress = UploadProgressLogger.CreateBucketed(logger, media.Id, external: progress);
-            var result = await rutubeService.UploadVideoAsync(null,
-                filePath,
-                media.Title,
-                media.Description,
-                rutubeCategoryId,
-                media.TempPreviewPath,
-                publishAt,
-                uploadBytesPerSecond,
-                uploadProgress,
-                cancellationToken);
+            var result = _uploadGatewayOverride is not null
+                ? await _uploadGatewayOverride.UploadVideoAsync(
+                    settings,
+                    filePath,
+                    media.Title,
+                    media.Description,
+                    rutubeCategoryId,
+                    media.TempPreviewPath,
+                    publishAt,
+                    uploadBytesPerSecond,
+                    uploadProgress,
+                    cancellationToken)
+                : await rutubeService!.UploadVideoAsync(null,
+                    filePath,
+                    media.Title,
+                    media.Description,
+                    rutubeCategoryId,
+                    media.TempPreviewPath,
+                    publishAt,
+                    uploadBytesPerSecond,
+                    uploadProgress,
+                    cancellationToken);
 
             logger.VideoUploaded(result.Status.Id, result.Id, media.Title);
 
@@ -868,4 +894,66 @@ public sealed class RutubeChannel(
     }
 
     private sealed record CachedService(RutubeService Service, DateTime LastWriteUtc);
+
+    internal interface IRutubeTranscoder
+    {
+        Task<string?> GetVideoCodecAsync(string filePath, CancellationToken cancellationToken);
+
+        Task<bool> TranscodeVp9ToH264Async(
+            string inputPath,
+            string outputPath,
+            TimeSpan totalDuration,
+            IProgress<double>? progress,
+            CancellationToken cancellationToken);
+
+        Task<bool> TranscodeAv1ToH264Async(
+            string inputPath,
+            string outputPath,
+            TimeSpan totalDuration,
+            IProgress<double>? progress,
+            CancellationToken cancellationToken);
+    }
+
+    internal interface IRutubeUploadGateway
+    {
+        Task<UploadResult> UploadVideoAsync(
+            Dictionary<string, string> settings,
+            string filePath,
+            string title,
+            string description,
+            string categoryId,
+            string? thumbnailPath,
+            DateTime? publishAt,
+            long? uploadBytesPerSecond,
+            IProgress<double>? uploadProgress,
+            CancellationToken cancellationToken);
+    }
+
+    private sealed class VideoTranscoderAdapter(VideoTranscoder inner) : IRutubeTranscoder
+    {
+        public Task<string?> GetVideoCodecAsync(string filePath, CancellationToken cancellationToken)
+        {
+            return inner.GetVideoCodecAsync(filePath, cancellationToken);
+        }
+
+        public Task<bool> TranscodeVp9ToH264Async(
+            string inputPath,
+            string outputPath,
+            TimeSpan totalDuration,
+            IProgress<double>? progress,
+            CancellationToken cancellationToken)
+        {
+            return inner.TranscodeVp9ToH264Async(inputPath, outputPath, totalDuration, progress, cancellationToken);
+        }
+
+        public Task<bool> TranscodeAv1ToH264Async(
+            string inputPath,
+            string outputPath,
+            TimeSpan totalDuration,
+            IProgress<double>? progress,
+            CancellationToken cancellationToken)
+        {
+            return inner.TranscodeAv1ToH264Async(inputPath, outputPath, totalDuration, progress, cancellationToken);
+        }
+    }
 }

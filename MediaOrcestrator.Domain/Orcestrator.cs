@@ -29,41 +29,7 @@ public class Orcestrator(
     {
         pluginManager.Init();
         var sources = GetSourceTypes();
-        MigrateMediaLinkFieldsFromParent();
-    }
-
-    private void MigrateMediaLinkFieldsFromParent()
-    {
-        var collection = db.GetCollection<Media>("medias");
-        var medias = collection.FindAll().ToList();
-        var migrated = 0;
-
-        foreach (var media in medias)
-        {
-            var dirty = false;
-
-            foreach (var link in media.Sources)
-            {
-                if (link.Description is null)
-                {
-                    link.Description = media.Description;
-                    dirty = true;
-                }
-
-                if (link.Title is null)
-                {
-                    link.Title = media.Title;
-                    dirty = true;
-                }
-            }
-
-            if (dirty)
-            {
-                collection.Update(media);
-                migrated++;
-            }
-        }
-
+        var migrated = MediaLinkBsonMigrator.BackfillMissingFields(db, _dbWriteLock);
         if (migrated > 0)
         {
             logger.LogInformation("Миграция MediaLink: проставлены Title/Description из родителя для {Count} медиа", migrated);
