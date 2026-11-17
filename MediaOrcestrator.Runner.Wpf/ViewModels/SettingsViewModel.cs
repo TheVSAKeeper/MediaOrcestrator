@@ -93,7 +93,7 @@ public partial class SettingsViewModel : ObservableObject, IPageHeader
 
         Sections = new(
             new(SettingsSectionKeys.Paths, "Пути", PackIconLucideKind.FolderTree, "база плагины папка temp"),
-            new(SettingsSectionKeys.Appearance, "Интерфейс", PackIconLucideKind.Palette, "тема шрифт масштаб"),
+            new(SettingsSectionKeys.Appearance, "Интерфейс", PackIconLucideKind.Palette, "тема шрифт масштаб заголовок стартовая страница запуск боковое меню навигация рейл свернуть"),
             new(SettingsSectionKeys.Notifications, "Уведомления", PackIconLucideKind.Bell, "тосты toast"),
             new(SettingsSectionKeys.Sync, "Синхронизация", PackIconLucideKind.RefreshCw, "синхронизация автосинк фон задержка старт"),
             new(SettingsSectionKeys.Updates, "Обновления", PackIconLucideKind.Download, "github релиз версия"),
@@ -122,6 +122,24 @@ public partial class SettingsViewModel : ObservableObject, IPageHeader
     public SettingsSectionList Sections { get; }
 
     public SettingsResetCatalog Reset { get; }
+
+    public IReadOnlyList<StartupPageOption> StartupOptions => SettingsOptions.StartupPages;
+
+    public StartupPageOption SelectedStartupOption
+    {
+        get => StartupOptions.FirstOrDefault(o => string.Equals(o.Key, Preferences.StartupSection, StringComparison.Ordinal))
+            ?? StartupOptions[0];
+        set
+        {
+            if (value is null || string.Equals(value.Key, Preferences.StartupSection, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            Preferences.StartupSection = value.Key;
+            OnPropertyChanged();
+        }
+    }
 
     public ShellPreferences Preferences { get; }
 
@@ -274,6 +292,11 @@ public partial class SettingsViewModel : ObservableObject, IPageHeader
 
     private void OnHolderPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName is nameof(ShellPreferences.StartupSection))
+        {
+            OnPropertyChanged(nameof(SelectedStartupOption));
+        }
+
         RefreshResetState();
     }
 

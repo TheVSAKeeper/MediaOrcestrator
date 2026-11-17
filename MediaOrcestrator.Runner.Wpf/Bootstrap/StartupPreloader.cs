@@ -23,6 +23,7 @@ internal static class StartupPreloader
         var tools = services.GetRequiredService<ToolsViewModel>();
         var updateManager = services.GetRequiredService<AppUpdateManager>();
         var appUpdate = services.GetRequiredService<AppUpdateViewModel>();
+        var updatePreferences = services.GetRequiredService<UpdatePreferences>();
         var preloadSignal = services.GetRequiredService<PreloadCompletionSignal>();
         var performanceMonitor = services.GetRequiredService<PerformanceMonitor>();
 
@@ -37,20 +38,13 @@ internal static class StartupPreloader
             new("План передач", _ => transfers.EnsureLoadedAsync()),
         };
 
-        var ioSteps = new PreloadStep[]
-        {
-            new("Проверка инструментов", _ => SafeCheckToolsAsync(tools)),
-            new("Проверка обновлений приложения", async ct =>
-            {
-                var note = await SafeCheckAppUpdateAsync(updateManager, appUpdate, ct);
-
-                if (!string.IsNullOrWhiteSpace(note))
-                {
-                    appUpdateNote = note;
-                }
-            }),
-            new("Прогрев редактора ответов", _ => SafePreheatReplyEditorAsync(dispatcher)),
-        };
+        var ioSteps = BuildIoSteps(
+            tools,
+            updateManager,
+            appUpdate,
+            updatePreferences,
+            dispatcher,
+            note => appUpdateNote = note);
 
         var totalSteps = dbSteps.Length + ioSteps.Length;
 
@@ -155,7 +149,37 @@ internal static class StartupPreloader
         }
     }
 
-    private sealed record PreloadStep(string Status, Func<CancellationToken, Task> Action);
+    internal sealed record PreloadStep(string Status, Func<CancellationToken, Task> Action);
+
+    internal static PreloadStep[] BuildIoSteps(
+        ToolsViewModel tools,
+        AppUpdateManager updateManager,
+        AppUpdateViewModel appUpdate,
+        UpdatePreferences updatePreferences,
+        Dispatcher dispatcher,
+        Action<string> onUpdateNote)
+    {
+        List<PreloadStep> steps =
+        [
+            new("Проверка инструментов", _ => SafeCheckToolsAsync(tools)),
+            new("Прогрев редактора ответов", _ => SafePreheatReplyEditorAsync(dispatcher)),
+        ];
+
+        if (updatePreferences.CheckOnStartup)
+        {
+            steps.Insert(1, new("Проверка обновлений приложения", async ct =>
+            {
+                var note = await SafeCheckAppUpdateAsync(updateManager, appUpdate, ct);
+
+                if (!string.IsNullOrWhiteSpace(note))
+                {
+                    onUpdateNote(note);
+                }
+            }));
+        }
+
+        return [.. steps];
+    }
 
     private static async Task SafePreheatReplyEditorAsync(Dispatcher dispatcher)
     {

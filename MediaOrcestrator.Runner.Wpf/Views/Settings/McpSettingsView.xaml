@@ -10,6 +10,15 @@
              d:DataContext="{d:DesignInstance Type=design:DesignSettingsViewModel, IsDesignTimeCreatable=True}"
              d:DesignHeight="760"
              d:DesignWidth="640">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary
+                    Source="pack://application:,,,/MediaOrcestrator.Runner.Wpf;component/Views/Settings/SettingsResources.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
     <HeaderedContentControl x:Name="McpSettingsCard"
                             Style="{StaticResource Form.Panel}"
                             Header="Управление через ИИ (MCP)"
@@ -53,7 +62,12 @@
                         AutomationProperties.Name="{Binding AutomationName}" />
             </Grid>
             <TextBlock Style="{StaticResource Form.CheckHint}"
-                       Text="Один флаг на всё: помощник сможет нажимать кнопки, вводить текст, закрывать приложение и запускать доменные операции. Без флага доступно только чтение." />
+                       Text="Без галки помощник только читает состояние и переключает страницы." />
+            <Expander Style="{StaticResource Setting.Details}"
+                      Header="Какие действия открывает галка">
+                <TextBlock Style="{StaticResource Setting.DetailsBody}"
+                           Text="Один флаг на всё: с галкой помощник сможет нажимать кнопки, вводить текст, закрывать приложение и запускать доменные операции." />
+            </Expander>
 
             <keepshell:SettingRowPanel Margin="0,18,0,0">
                 <StackPanel>
@@ -177,25 +191,32 @@
                     BorderThickness="1"
                     CornerRadius="{DynamicResource Radius.M}"
                     Visibility="{Binding McpElevatedWarning, Converter={StaticResource BoolToVisibility}}">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
 
-                    <iconPacks:PackIconLucide Grid.Column="0"
-                                              Kind="TriangleAlert"
-                                              Width="14"
-                                              Height="14"
-                                              Foreground="{DynamicResource State.WarningText}"
-                                              VerticalAlignment="Center"
-                                              Margin="0,0,10,0"
-                                              AutomationProperties.Name="Внимание" />
-                    <TextBlock Grid.Column="1"
-                               Text="Приложение запущено с правами администратора, а токен лежит открытым текстом в settings.toml. Любой процесс под вашим пользователем получит админский доступ к окну."
-                               VerticalAlignment="Center"
-                               TextWrapping="Wrap" />
-                </Grid>
+                        <iconPacks:PackIconLucide Grid.Column="0"
+                                                  Kind="TriangleAlert"
+                                                  Width="14"
+                                                  Height="14"
+                                                  Foreground="{DynamicResource State.WarningText}"
+                                                  VerticalAlignment="Center"
+                                                  Margin="0,0,10,0"
+                                                  AutomationProperties.Name="Внимание" />
+                        <TextBlock Grid.Column="1"
+                                   Text="Приложение запущено с правами администратора – с теми же правами работает и сервер."
+                                   VerticalAlignment="Center"
+                                   TextWrapping="Wrap" />
+                    </Grid>
+                    <Expander Style="{StaticResource Setting.Details}"
+                              Header="Чем рискует токен">
+                        <TextBlock Style="{StaticResource Setting.DetailsBody}"
+                                   Text="Токен лежит открытым текстом в settings.toml – любой процесс под вашим пользователем сможет прочитать его и получить админский доступ к окну. Держите сервер выключенным, когда он не нужен." />
+                    </Expander>
+                </StackPanel>
             </Border>
 
             <TextBlock Text="Подключение"

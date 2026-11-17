@@ -8,7 +8,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=design:DesignSettingsViewModel, IsDesignTimeCreatable=True}"
-             d:DesignHeight="320"
+             d:DesignHeight="340"
              d:DesignWidth="640">
     <HeaderedContentControl Style="{StaticResource Form.Panel}"
                             Header="Обновления"
@@ -46,24 +46,43 @@
 
             <Grid Margin="0,18,0,0">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
+                <CheckBox Content="Проверять обновления при запуске"
+                          IsChecked="{Binding Updates.CheckOnStartup, Mode=TwoWay}"
+                          VerticalAlignment="Center" />
+                <Button Grid.Column="1"
+                        Style="{StaticResource Form.RowReset}"
+                        DataContext="{Binding ResetFields[wpf.update.check]}"
+                        Command="{Binding ResetCommand}"
+                        ToolTip="{Binding Hint}"
+                        AutomationProperties.Name="{Binding AutomationName}" />
+            </Grid>
+            <TextBlock Style="{StaticResource Form.CheckHint}"
+                       Text="В фоне спрашивает GitHub при старте окна. Выключите, чтобы проверять обновления только вручную." />
 
-                <Button Grid.Column="0"
-                        Style="{StaticResource Button.Base}"
+            <WrapPanel Margin="0,18,0,-8">
+                <Button Style="{StaticResource Button.Base}"
                         Command="{Binding AppUpdate.CheckNowCommand}"
                         Content="Проверить сейчас"
+                        Margin="0,0,10,8"
                         ToolTip="Спросить GitHub о свежем релизе прямо сейчас"
                         ToolTipService.ShowOnDisabled="True" />
 
-                <TextBlock Grid.Column="1"
-                           Text="{Binding AppUpdate.CheckStatus}"
-                           Margin="12,0,0,0"
+                <Button Style="{StaticResource Button.Primary}"
+                        Content="{Binding AppUpdate.VersionLabel}"
+                        Command="{Binding AppUpdate.ShowDetailsCommand}"
+                        Margin="0,0,12,8"
+                        Visibility="{Binding AppUpdate.HasPendingUpdate, Converter={StaticResource BoolToVisibility}}"
+                        ToolTip="Открыть описание релиза и установку обновления" />
+
+                <TextBlock Text="{Binding AppUpdate.CheckStatus}"
+                           Style="{StaticResource Form.Hint}"
+                           Margin="0,0,0,8"
                            VerticalAlignment="Center"
-                           TextWrapping="Wrap"
                            Visibility="{Binding AppUpdate.HasCheckStatus, Converter={StaticResource BoolToVisibility}}" />
-            </Grid>
+            </WrapPanel>
 
             <StackPanel Orientation="Horizontal"
                         Margin="0,14,0,0">

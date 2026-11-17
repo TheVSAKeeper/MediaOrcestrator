@@ -2,9 +2,10 @@
 
 namespace MediaOrcestrator.Runner.Wpf.ViewModels;
 
-public sealed class UpdatePreferences : ObservableObject
+public sealed partial class UpdatePreferences : ObservableObject
 {
     public const string RepoKey = "update_repo";
+    public const string CheckOnStartupKey = "wpf.update.check";
 
     private const string LastResortRepo = "TheVSAKeeper/MediaOrcestrator";
 
@@ -14,10 +15,14 @@ public sealed class UpdatePreferences : ObservableObject
 
     private string _repo;
 
+    [ObservableProperty]
+    private bool _checkOnStartup = true;
+
     public UpdatePreferences(ISettingsStore settings)
     {
         _settings = settings;
         _repo = Normalize(settings.GetStringValue(RepoKey));
+        _checkOnStartup = settings.GetBool(CheckOnStartupKey, fallback: true);
         _loaded = true;
     }
 
@@ -49,6 +54,14 @@ public sealed class UpdatePreferences : ObservableObject
     public void ResetRepo()
     {
         Repo = FactoryRepo;
+    }
+
+    partial void OnCheckOnStartupChanged(bool value)
+    {
+        if (_loaded)
+        {
+            _settings.SetBool(CheckOnStartupKey, value);
+        }
     }
 
     private static string Normalize(string? raw)

@@ -84,7 +84,7 @@ public sealed partial class AppUpdateViewModel : ObservableObject
 
             _settings.SetValue(SkippedVersionKey, string.Empty);
             SetPendingUpdate(update);
-            CheckStatus = $"Доступна версия {update.Version} – баннер с деталями наверху окна.";
+            CheckStatus = $"Доступна версия {update.Version}";
         }
         catch (OperationCanceledException)
         {

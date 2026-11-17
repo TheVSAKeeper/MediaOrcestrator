@@ -11,6 +11,7 @@ using MediaOrcestrator.Runner.Wpf.ViewModels.Settings;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using System.IO;
+using System.Windows.Threading;
 
 namespace MediaOrcestrator.Runner.Wpf.Tests.Unit;
 
@@ -158,6 +159,50 @@ public sealed class SettingsResetCatalogTests
             Assert.That(snippets.Distinct(StringComparer.Ordinal).Count(), Is.EqualTo(5));
             Assert.That(snippets[0], Does.Contain("mcpServers"));
             Assert.That(snippets[1], Does.Contain("claude mcp add"));
+        }
+    }
+
+    [Test]
+    public void ResetSection_ПриИзменённыхЗапускеИАвтопроверкеОбновлений_ВозвращаетЗаводскиеЗначения()
+    {
+        var transferOption = _viewModel.StartupOptions.First(o => o.Key == "transfers");
+        _viewModel.SelectedStartupOption = transferOption;
+        _viewModel.Preferences.NavCollapsed = true;
+        _viewModel.Updates.CheckOnStartup = false;
+
+        _viewModel.ResetSectionCommand.Execute(_viewModel.Reset[SettingsSectionKeys.Appearance]);
+        _viewModel.ResetSectionCommand.Execute(_viewModel.Reset[SettingsSectionKeys.Updates]);
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(_viewModel.Preferences.StartupSection, Is.EqualTo(ShellPreferences.DefaultStartupSection));
+            Assert.That(_viewModel.SelectedStartupOption.Key, Is.EqualTo(ShellPreferences.DefaultStartupSection));
+            Assert.That(_viewModel.Preferences.NavCollapsed, Is.False);
+            Assert.That(_viewModel.Updates.CheckOnStartup, Is.True);
+            Assert.That(_ctx.Settings.GetStringValue(ShellPreferences.StartupSectionKey), Is.EqualTo(ShellPreferences.DefaultStartupSection));
+            Assert.That(_ctx.Settings.GetStringValue(ShellPreferences.NavCollapsedKey), Is.EqualTo("false"));
+            Assert.That(_ctx.Settings.GetStringValue(UpdatePreferences.CheckOnStartupKey), Is.EqualTo("true"));
+        }
+    }
+
+    [Test]
+    public void StartupPreloader_BuildIoSteps_ПропускаетПроверкуОбновленийПриВыключеннойНастройке()
+    {
+        var tools = _provider.GetRequiredService<ToolsViewModel>();
+        var updateManager = _provider.GetRequiredService<AppUpdateManager>();
+        var appUpdate = _provider.GetRequiredService<AppUpdateViewModel>();
+
+        _viewModel.Updates.CheckOnStartup = true;
+        var enabledSteps = StartupPreloader.BuildIoSteps(tools, updateManager, appUpdate, _viewModel.Updates, Dispatcher.CurrentDispatcher, _ => { });
+
+        _viewModel.Updates.CheckOnStartup = false;
+        var disabledSteps = StartupPreloader.BuildIoSteps(tools, updateManager, appUpdate, _viewModel.Updates, Dispatcher.CurrentDispatcher, _ => { });
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(enabledSteps.Select(s => s.Status), Does.Contain("Проверка обновлений приложения"));
+            Assert.That(disabledSteps.Select(s => s.Status), Does.Not.Contain("Проверка обновлений приложения"));
+            Assert.That(disabledSteps, Has.Length.EqualTo(enabledSteps.Length - 1));
         }
     }
 }

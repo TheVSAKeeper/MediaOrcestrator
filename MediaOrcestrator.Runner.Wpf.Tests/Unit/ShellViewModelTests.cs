@@ -260,4 +260,82 @@ public sealed partial class ShellViewModelTests
             return true;
         }
     }
+
+    [Test]
+    public void NavCollapsed_ПриПереключенииИИзмененииНастройки_ПерсиститсяИСинхронизируется()
+    {
+        _shell.ToggleNavCommand.Execute(null);
+        var afterToggle = _shell.IsNavCollapsed;
+        var storedAfterToggle = _ctx.Settings.GetStringValue(ShellPreferences.NavCollapsedKey);
+
+        _shell.Preferences.NavCollapsed = false;
+        var afterPreferenceChange = _shell.IsNavCollapsed;
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(afterToggle, Is.True);
+            Assert.That(storedAfterToggle, Is.EqualTo("true"));
+            Assert.That(afterPreferenceChange, Is.False);
+        }
+    }
+
+    [TestCase("transfers", "transfers", false)]
+    [TestCase("merge", "merge", true)]
+    [TestCase("nonexistent-page", "media", false)]
+    public void StartupPage_ПриСозданииShellViewModel_ВыбираетНастроеннуюИлиФоллбэкНаМедиа(
+        string configuredKey,
+        string expectedKey,
+        bool expectedOperationsExpanded)
+    {
+        using var ctx = new TestDomainContext();
+        ctx.Settings.SetValue(ShellPreferences.StartupSectionKey, configuredKey);
+
+        using var provider = BuildProvider(ctx);
+        var shell = provider.GetRequiredService<ShellViewModel>();
+        var operationsGroup = shell.Sections.First(s => s.Key == "operations");
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(shell.Selected?.Key, Is.EqualTo(expectedKey));
+            Assert.That(operationsGroup.IsExpanded, Is.EqualTo(expectedOperationsExpanded));
+            Assert.That(ctx.Settings.GetStringValue("wpf.shell.nav_operations_expanded"), Is.Null);
+        }
+    }
+
+    [Test]
+    public void StartupPageLastUsed_ИгнорируетНастройкиИОПрограммеПриЗапоминанииПоследнейСтраницы()
+    {
+        using var ctx = new TestDomainContext();
+        ctx.Settings.SetValue(ShellPreferences.StartupSectionKey, ShellPreferences.LastUsedStartupSection);
+
+        using (var firstProvider = BuildProvider(ctx))
+        {
+            var firstShell = firstProvider.GetRequiredService<ShellViewModel>();
+            firstShell.NavigateByKey("chronology");
+            firstShell.TryNavigate("settings");
+            firstShell.NavigateByKey("about");
+        }
+
+        using var secondProvider = BuildProvider(ctx);
+        var secondShell = secondProvider.GetRequiredService<ShellViewModel>();
+
+        Assert.That(secondShell.Selected?.Key, Is.EqualTo("chronology"));
+    }
+
+    private static ServiceProvider BuildProvider(TestDomainContext ctx)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        ServiceRegistration.AddMediaOrcestrator(
+            services,
+            ctx.Paths,
+            ctx.Settings,
+            new WpfLogSink(16),
+            new KeepShellLoggingOptions { LogsDirectory = Path.Combine(ctx.Root, "logs") });
+        services.AddSingleton<IUiDispatcher>(ctx.Dispatcher);
+        services.AddSingleton<IPageRenderProbe>(ctx.RenderProbe);
+        services.AddSingleton(ctx.Dialogs);
+
+        return services.BuildServiceProvider();
+    }
 }

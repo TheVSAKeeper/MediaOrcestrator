@@ -170,6 +170,48 @@
             </Grid>
             <TextBlock Style="{StaticResource Form.CheckHint}"
                        Text="Скрывает плашку с названием раздела и кратким описанием над содержимым каждой страницы." />
+
+            <keepshell:SettingRowPanel Margin="0,18,0,0">
+                <StackPanel>
+                    <TextBlock Text="Стартовая страница"
+                               Style="{StaticResource Form.Label}"
+                               TextWrapping="Wrap" />
+                    <TextBlock Text="Что открывать при запуске приложения."
+                               Style="{StaticResource Form.Hint}"
+                               Margin="0,2,0,0" />
+                </StackPanel>
+                <ComboBox Style="{StaticResource ComboBox.Form}"
+                          ItemsSource="{Binding StartupOptions}"
+                          SelectedItem="{Binding SelectedStartupOption}"
+                          DisplayMemberPath="Label"
+                          Width="{StaticResource Setting.ControlWidth}"
+                          Margin="16,0,0,0"
+                          VerticalAlignment="Center"
+                          AutomationProperties.Name="Стартовая страница" />
+                <Button Style="{StaticResource Form.RowReset}"
+                        DataContext="{Binding ResetFields[wpf.shell.startup_page]}"
+                        Command="{Binding ResetCommand}"
+                        ToolTip="{Binding Hint}"
+                        AutomationProperties.Name="{Binding AutomationName}" />
+            </keepshell:SettingRowPanel>
+
+            <Grid Margin="0,18,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <CheckBox Content="Свёрнутое боковое меню"
+                          IsChecked="{Binding Preferences.NavCollapsed, Mode=TwoWay}"
+                          VerticalAlignment="Center" />
+                <Button Grid.Column="1"
+                        Style="{StaticResource Form.RowReset}"
+                        DataContext="{Binding ResetFields[wpf.shell.nav_collapsed]}"
+                        Command="{Binding ResetCommand}"
+                        ToolTip="{Binding Hint}"
+                        AutomationProperties.Name="{Binding AutomationName}" />
+            </Grid>
+            <TextBlock Style="{StaticResource Form.CheckHint}"
+                       Text="Применяется сразу и запоминается до следующего запуска. То же делает кнопка в верхней части бокового меню." />
         </StackPanel>
     </HeaderedContentControl>
 </UserControl>

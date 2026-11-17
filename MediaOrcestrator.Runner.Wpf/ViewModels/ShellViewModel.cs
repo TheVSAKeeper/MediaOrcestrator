@@ -100,8 +100,16 @@ public sealed partial class ShellViewModel : ShellViewModelBase
         RefreshStatusText();
 
         _suppressPersist = true;
-        IsTasksDrawerOpen = bool.TryParse(_settings.GetStringValue(TasksDrawerOpenKey), out var drawerOpen) && drawerOpen;
-        _suppressPersist = false;
+
+        try
+        {
+            IsTasksDrawerOpen = bool.TryParse(_settings.GetStringValue(TasksDrawerOpenKey), out var drawerOpen) && drawerOpen;
+            IsNavCollapsed = _preferences.NavCollapsed;
+        }
+        finally
+        {
+            _suppressPersist = false;
+        }
 
         _settingsItem = new("Настройки", PackIconLucideKind.Settings, settings, key: "settings");
 
@@ -118,7 +126,16 @@ public sealed partial class ShellViewModel : ShellViewModelBase
         Sections.Add(new("Диагностика", PackIconLucideKind.Activity, diagnostics, key: "diagnostics"));
         Sections.Add(new("О программе", PackIconLucideKind.Info, about, key: "about"));
 
-        Selected = Sections[0];
+        _suppressPersist = true;
+
+        try
+        {
+            Selected = ResolveStartupSection();
+        }
+        finally
+        {
+            _suppressPersist = false;
+        }
     }
 
     private NavigationItem BuildOperationsGroup(OperationsViewModel operations, bool isExpanded)
@@ -171,6 +188,7 @@ public sealed partial class ShellViewModel : ShellViewModelBase
             return;
         }
 
+        var wasSuppressed = _suppressPersist;
         _suppressPersist = true;
 
         try
@@ -179,7 +197,7 @@ public sealed partial class ShellViewModel : ShellViewModelBase
         }
         finally
         {
-            _suppressPersist = false;
+            _suppressPersist = wasSuppressed;
         }
     }
 
@@ -197,6 +215,14 @@ public sealed partial class ShellViewModel : ShellViewModelBase
 
     public bool HasPageRenderStages => PageRenderStages is { Count: > 0 };
 
+    protected override void OnNavCollapsedChanged(bool value)
+    {
+        if (!_suppressPersist)
+        {
+            _preferences.NavCollapsed = value;
+        }
+    }
+
     protected override void OnSelectionChanged(NavigationItem? value)
     {
         ExpandOwningGroup(value);
@@ -204,6 +230,26 @@ public sealed partial class ShellViewModel : ShellViewModelBase
         AttachEscapeHandler(value?.Content as IPageEscapeHandler);
         FocusPageSearchCommand.NotifyCanExecuteChanged();
         BeginMeasurePageRender();
+
+        if (!_suppressPersist
+            && value is { IsGroup: false, Key.Length: > 0 }
+            && !ReferenceEquals(value, _settingsItem)
+            && !string.Equals(value.Key, "about", StringComparison.Ordinal))
+        {
+            _preferences.LastSection = value.Key;
+        }
+    }
+
+    private NavigationItem ResolveStartupSection()
+    {
+        var configured = _preferences.StartupSection;
+        var targetKey = string.Equals(configured, ShellPreferences.LastUsedStartupSection, StringComparison.Ordinal)
+            ? _preferences.LastSection
+            : configured;
+
+        return FindByKey(targetKey) is { IsGroup: false } item
+            ? item
+            : Sections[0];
     }
 
     private void OnPreferencesPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -212,6 +258,21 @@ public sealed partial class ShellViewModel : ShellViewModelBase
         {
             OnPropertyChanged(nameof(EffectivePageHeader));
             OnPropertyChanged(nameof(ContentMargin));
+        }
+
+        if (e.PropertyName is nameof(ShellPreferences.NavCollapsed))
+        {
+            var wasSuppressed = _suppressPersist;
+            _suppressPersist = true;
+
+            try
+            {
+                IsNavCollapsed = _preferences.NavCollapsed;
+            }
+            finally
+            {
+                _suppressPersist = wasSuppressed;
+            }
         }
     }
 
