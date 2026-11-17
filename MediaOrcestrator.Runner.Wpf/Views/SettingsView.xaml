@@ -11,10 +11,20 @@
              d:DataContext="{d:DesignInstance Type=design:DesignSettingsViewModel, IsDesignTimeCreatable=True}"
              d:DesignHeight="640"
              d:DesignWidth="900">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary
+                    Source="pack://application:,,,/MediaOrcestrator.Runner.Wpf;component/Views/Settings/SettingsResources.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
     <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="Auto" />
-            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="*"
+                              MaxWidth="{StaticResource Setting.ContentWidth}" />
         </Grid.ColumnDefinitions>
 
         <keepshell:SettingsRail Grid.Column="0"
@@ -36,33 +46,7 @@
                     <settings:PathsSettingsView Visibility="{Binding Sections[paths].IsSelected, Converter={StaticResource BoolToVisibility}}" />
                     <settings:AppearanceSettingsView Visibility="{Binding Sections[appearance].IsSelected, Converter={StaticResource BoolToVisibility}}" />
                     <settings:NotificationsSettingsView Visibility="{Binding Sections[notifications].IsSelected, Converter={StaticResource BoolToVisibility}}" />
-                    <HeaderedContentControl Style="{StaticResource Form.Panel}"
-                                            Header="Синхронизация"
-                                            keepshell:Form.ResetCommand="{Binding ResetSectionCommand}"
-                                            keepshell:Form.ResetCommandParameter="{Binding Reset[sync]}"
-                                            keepshell:Form.ResetHint="{Binding Reset[sync].Hint}"
-                                            Visibility="{Binding Sections[sync].IsSelected, Converter={StaticResource BoolToVisibility}}">
-                        <StackPanel>
-                            <CheckBox Content="Автосинхронизация источников в фоне"
-                                      IsChecked="{Binding Preferences.AutoSyncEnabled, Mode=TwoWay}"
-                                      VerticalAlignment="Center" />
-                            <TextBlock Style="{StaticResource Form.CheckHint}"
-                                       Text="Раз в час опрашивает активные источники на новые медиа. Выключенные источники пропускаются, ручная синхронизация работает в любом случае." />
-
-                            <TextBlock Text="Пауза после запуска, с"
-                                       Style="{StaticResource Form.Label}"
-                                       Margin="0,18,0,0" />
-                            <TextBox Text="{Binding Preferences.AutoSyncStartupDelaySeconds, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
-                                     IsEnabled="{Binding Preferences.AutoSyncEnabled}"
-                                     Margin="0,8,0,0"
-                                     HorizontalAlignment="Left"
-                                     MinWidth="120"
-                                     FontFamily="{DynamicResource Font.Mono}"
-                                     AutomationProperties.Name="Пауза перед первой автосинхронизацией в секундах" />
-                            <TextBlock Style="{StaticResource Form.Hint}"
-                                       Text="0…3600 с (по умолчанию 60). Откладывает первый фоновый опрос после прогрева базы, чтобы не нагружать старт окна." />
-                        </StackPanel>
-                    </HeaderedContentControl>
+                    <settings:SyncSettingsView Visibility="{Binding Sections[sync].IsSelected, Converter={StaticResource BoolToVisibility}}" />
                     <settings:UpdatesSettingsView Visibility="{Binding Sections[updates].IsSelected, Converter={StaticResource BoolToVisibility}}" />
                     <settings:McpSettingsView Visibility="{Binding Sections[mcp].IsSelected, Converter={StaticResource BoolToVisibility}}" />
 

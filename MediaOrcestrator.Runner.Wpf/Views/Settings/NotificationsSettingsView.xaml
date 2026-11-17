@@ -15,17 +15,40 @@
                             keepshell:Form.ResetCommandParameter="{Binding Reset[notifications]}"
                             keepshell:Form.ResetHint="{Binding Reset[notifications].Hint}">
         <StackPanel>
-            <CheckBox Content="Уведомления о завершении задач"
-                      IsChecked="{Binding Preferences.EnableToastNotifications, Mode=TwoWay}"
-                      VerticalAlignment="Center" />
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <CheckBox Content="Уведомления о завершении задач"
+                          IsChecked="{Binding Preferences.EnableToastNotifications, Mode=TwoWay}"
+                          VerticalAlignment="Center" />
+                <Button Grid.Column="1"
+                        Style="{StaticResource Form.RowReset}"
+                        DataContext="{Binding ResetFields[wpf.notifications.toast]}"
+                        Command="{Binding ResetCommand}"
+                        ToolTip="{Binding Hint}"
+                        AutomationProperties.Name="{Binding AutomationName}" />
+            </Grid>
             <TextBlock Style="{StaticResource Form.CheckHint}"
                        Text="Встроенные всплывающие карточки внутри активного окна и системные Windows-тосты для долгих и упавших задач. Отменённые и короткие успехи молчат." />
 
-            <CheckBox Content="Системный Windows-тост только когда окно неактивно"
-                      IsChecked="{Binding Preferences.ToastOnlyWhenInactive, Mode=TwoWay}"
-                      IsEnabled="{Binding Preferences.EnableToastNotifications}"
-                      Margin="0,18,0,0"
-                      VerticalAlignment="Center" />
+            <Grid Margin="0,18,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <CheckBox Content="Системный Windows-тост только когда окно неактивно"
+                          IsChecked="{Binding Preferences.ToastOnlyWhenInactive, Mode=TwoWay}"
+                          IsEnabled="{Binding Preferences.EnableToastNotifications}"
+                          VerticalAlignment="Center" />
+                <Button Grid.Column="1"
+                        Style="{StaticResource Form.RowReset}"
+                        DataContext="{Binding ResetFields[wpf.notifications.toast.only_when_inactive]}"
+                        Command="{Binding ResetCommand}"
+                        ToolTip="{Binding Hint}"
+                        AutomationProperties.Name="{Binding AutomationName}" />
+            </Grid>
             <TextBlock Style="{StaticResource Form.CheckHint}"
                        Text="Пока окно на переднем плане, достаточно карточки в углу окна – системный баннер Windows в этот момент только дублирует сообщение." />
         </StackPanel>

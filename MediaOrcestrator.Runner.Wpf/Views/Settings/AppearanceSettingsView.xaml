@@ -11,91 +11,163 @@
              d:DataContext="{d:DesignInstance Type=design:DesignSettingsViewModel, IsDesignTimeCreatable=True}"
              d:DesignHeight="520"
              d:DesignWidth="640">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary
+                    Source="pack://application:,,,/MediaOrcestrator.Runner.Wpf;component/Views/Settings/SettingsResources.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
     <HeaderedContentControl Style="{StaticResource Form.Panel}"
                             Header="Интерфейс"
                             keepshell:Form.ResetCommand="{Binding ResetSectionCommand}"
                             keepshell:Form.ResetCommandParameter="{Binding Reset[appearance]}"
                             keepshell:Form.ResetHint="{Binding Reset[appearance].Hint}">
         <StackPanel>
-            <TextBlock Text="Тема"
-                       Style="{StaticResource Form.Label}" />
-            <WrapPanel Orientation="Horizontal"
-                       Margin="0,4,0,0">
-                <Button Style="{StaticResource Theme.SegmentButton}"
-                        Command="{Binding Theme.ApplyCommand}"
-                        CommandParameter="{x:Static bs:AppTheme.System}"
-                        Tag="{Binding Theme.IsSystem}"
-                        Padding="12,4"
-                        Margin="0,4,6,0"
-                        AutomationProperties.Name="Системная тема">
-                    <StackPanel Orientation="Horizontal">
-                        <iconPacks:PackIconLucide Kind="Monitor"
-                                                  Width="16"
-                                                  Height="16"
-                                                  Margin="0,0,6,0" />
-                        <TextBlock Text="Системная"
-                                   VerticalAlignment="Center" />
-                    </StackPanel>
-                </Button>
-                <Button Style="{StaticResource Theme.SegmentButton}"
-                        Command="{Binding Theme.ApplyCommand}"
-                        CommandParameter="{x:Static bs:AppTheme.Light}"
-                        Tag="{Binding Theme.IsLight}"
-                        Padding="12,4"
-                        Margin="0,4,6,0"
-                        AutomationProperties.Name="Светлая тема">
-                    <StackPanel Orientation="Horizontal">
-                        <iconPacks:PackIconLucide Kind="Sun"
-                                                  Width="16"
-                                                  Height="16"
-                                                  Margin="0,0,6,0" />
-                        <TextBlock Text="Светлая"
-                                   VerticalAlignment="Center" />
-                    </StackPanel>
-                </Button>
-                <Button Style="{StaticResource Theme.SegmentButton}"
-                        Command="{Binding Theme.ApplyCommand}"
-                        CommandParameter="{x:Static bs:AppTheme.Dark}"
-                        Tag="{Binding Theme.IsDark}"
-                        Padding="12,4"
-                        Margin="0,4,6,0"
-                        AutomationProperties.Name="Тёмная тема">
-                    <StackPanel Orientation="Horizontal">
-                        <iconPacks:PackIconLucide Kind="Moon"
-                                                  Width="16"
-                                                  Height="16"
-                                                  Margin="0,0,6,0" />
-                        <TextBlock Text="Тёмная"
-                                   VerticalAlignment="Center" />
-                    </StackPanel>
-                </Button>
-                <Button Style="{StaticResource Theme.SegmentButton}"
-                        Command="{Binding Theme.ApplyCommand}"
-                        CommandParameter="{x:Static bs:AppTheme.Tarkov}"
-                        Tag="{Binding Theme.IsTarkov}"
-                        Padding="12,4"
-                        Margin="0,4,0,0"
-                        AutomationProperties.Name="Tarkov-тема">
-                    <StackPanel Orientation="Horizontal">
-                        <iconPacks:PackIconLucide Kind="Target"
-                                                  Width="16"
-                                                  Height="16"
-                                                  Margin="0,0,6,0" />
-                        <TextBlock Text="Tarkov"
-                                   VerticalAlignment="Center" />
-                    </StackPanel>
-                </Button>
-            </WrapPanel>
-            <TextBlock Style="{StaticResource Form.Hint}"
-                       Text="Переключается сразу, без перезапуска. Tarkov добавляет короткую заставку при входе." />
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <StackPanel Grid.Row="0"
+                            Grid.Column="0">
+                    <TextBlock Text="Тема"
+                               Style="{StaticResource Form.Label}" />
+                    <TextBlock Style="{StaticResource Form.Hint}"
+                               Margin="0,2,0,0"
+                               Text="Переключается сразу, без перезапуска. Tarkov добавляет короткую заставку при входе." />
+                </StackPanel>
+                <Button Grid.Row="0"
+                        Grid.Column="1"
+                        Style="{StaticResource Form.RowReset}"
+                        VerticalAlignment="Top"
+                        DataContext="{Binding ResetFields[_system_theme]}"
+                        Command="{Binding ResetCommand}"
+                        ToolTip="{Binding Hint}"
+                        AutomationProperties.Name="{Binding AutomationName}" />
+                <WrapPanel Grid.Row="1"
+                           Grid.Column="0"
+                           Grid.ColumnSpan="2"
+                           Orientation="Horizontal"
+                           Margin="0,6,0,0">
+                    <Button Style="{StaticResource Theme.SegmentButton}"
+                            Command="{Binding Theme.ApplyCommand}"
+                            CommandParameter="{x:Static bs:AppTheme.System}"
+                            Tag="{Binding Theme.IsSystem}"
+                            Padding="12,4"
+                            Margin="0,4,6,0"
+                            AutomationProperties.Name="Системная тема">
+                        <StackPanel Orientation="Horizontal">
+                            <iconPacks:PackIconLucide Kind="Monitor"
+                                                      Width="16"
+                                                      Height="16"
+                                                      Margin="0,0,6,0" />
+                            <TextBlock Text="Системная"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource Theme.SegmentButton}"
+                            Command="{Binding Theme.ApplyCommand}"
+                            CommandParameter="{x:Static bs:AppTheme.Light}"
+                            Tag="{Binding Theme.IsLight}"
+                            Padding="12,4"
+                            Margin="0,4,6,0"
+                            AutomationProperties.Name="Светлая тема">
+                        <StackPanel Orientation="Horizontal">
+                            <iconPacks:PackIconLucide Kind="Sun"
+                                                      Width="16"
+                                                      Height="16"
+                                                      Margin="0,0,6,0" />
+                            <TextBlock Text="Светлая"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource Theme.SegmentButton}"
+                            Command="{Binding Theme.ApplyCommand}"
+                            CommandParameter="{x:Static bs:AppTheme.Dark}"
+                            Tag="{Binding Theme.IsDark}"
+                            Padding="12,4"
+                            Margin="0,4,6,0"
+                            AutomationProperties.Name="Тёмная тема">
+                        <StackPanel Orientation="Horizontal">
+                            <iconPacks:PackIconLucide Kind="Moon"
+                                                      Width="16"
+                                                      Height="16"
+                                                      Margin="0,0,6,0" />
+                            <TextBlock Text="Тёмная"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource Theme.SegmentButton}"
+                            Command="{Binding Theme.ApplyCommand}"
+                            CommandParameter="{x:Static bs:AppTheme.Tarkov}"
+                            Tag="{Binding Theme.IsTarkov}"
+                            Padding="12,4"
+                            Margin="0,4,0,0"
+                            AutomationProperties.Name="Tarkov-тема">
+                        <StackPanel Orientation="Horizontal">
+                            <iconPacks:PackIconLucide Kind="Target"
+                                                      Width="16"
+                                                      Height="16"
+                                                      Margin="0,0,6,0" />
+                            <TextBlock Text="Tarkov"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                </WrapPanel>
+            </Grid>
 
-            <keepshell:FontScaleField Scale="{Binding Preferences.FontScale, Mode=TwoWay}"
-                                      Margin="0,18,0,0" />
+            <keepshell:SettingRowPanel Margin="0,18,0,0">
+                <StackPanel>
+                    <TextBlock Text="Масштаб шрифта"
+                               Style="{StaticResource Form.Label}"
+                               TextWrapping="Wrap" />
+                    <TextBlock Text="Размер текста по всему приложению. 100 % – стандартный."
+                               Style="{StaticResource Form.Hint}"
+                               Margin="0,2,0,0" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal"
+                            Margin="16,0,0,0"
+                            VerticalAlignment="Center">
+                    <Slider Minimum="{x:Static keepshell:FontScaleManager.MinScale}"
+                            Maximum="{x:Static keepshell:FontScaleManager.MaxScale}"
+                            Value="{Binding Preferences.FontScale, Mode=TwoWay}"
+                            TickFrequency="0.1"
+                            IsSnapToTickEnabled="True"
+                            Width="{StaticResource Setting.SliderWidth}"
+                            VerticalAlignment="Center"
+                            AutomationProperties.Name="Масштаб шрифта" />
+                    <TextBlock Text="{Binding Preferences.FontScale, StringFormat={}{0:P0}}"
+                               Style="{StaticResource Form.Value}" />
+                </StackPanel>
+                <Button Style="{StaticResource Form.RowReset}"
+                        DataContext="{Binding ResetFields[wpf.shell.font_scale]}"
+                        Command="{Binding ResetCommand}"
+                        ToolTip="{Binding Hint}"
+                        AutomationProperties.Name="{Binding AutomationName}" />
+            </keepshell:SettingRowPanel>
 
-            <CheckBox Content="Показывать заголовок страницы с описанием"
-                      IsChecked="{Binding Preferences.ShowPageHeader, Mode=TwoWay}"
-                      Margin="0,18,0,0"
-                      VerticalAlignment="Center" />
+            <Grid Margin="0,18,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <CheckBox Content="Показывать заголовок страницы с описанием"
+                          IsChecked="{Binding Preferences.ShowPageHeader, Mode=TwoWay}"
+                          VerticalAlignment="Center" />
+                <Button Grid.Column="1"
+                        Style="{StaticResource Form.RowReset}"
+                        DataContext="{Binding ResetFields[wpf.shell.show_page_header]}"
+                        Command="{Binding ResetCommand}"
+                        ToolTip="{Binding Hint}"
+                        AutomationProperties.Name="{Binding AutomationName}" />
+            </Grid>
             <TextBlock Style="{StaticResource Form.CheckHint}"
                        Text="Скрывает плашку с названием раздела и кратким описанием над содержимым каждой страницы." />
         </StackPanel>

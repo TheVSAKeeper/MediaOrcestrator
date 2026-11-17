@@ -2,6 +2,7 @@
 using CommunityToolkit.Mvvm.Input;
 using KeepShell.Services.Platform;
 using MediaOrcestrator.Runner.Wpf.Bootstrap;
+using MediaOrcestrator.Runner.Wpf.ViewModels.Settings;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.IO;
@@ -64,6 +65,8 @@ public sealed partial class PathSettingViewModel : ObservableValidator
     public string FactoryValue { get; }
 
     public SettingPathKind Kind { get; }
+
+    public SettingsResetField? ResetField { get; internal set; }
 
     public bool IsDirty => !string.Equals(EditValue?.Trim() ?? string.Empty,
         StoredValue ?? string.Empty,

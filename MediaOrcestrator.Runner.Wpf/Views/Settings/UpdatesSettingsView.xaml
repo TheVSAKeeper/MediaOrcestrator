@@ -16,15 +16,33 @@
                             keepshell:Form.ResetCommandParameter="{Binding Reset[updates]}"
                             keepshell:Form.ResetHint="{Binding Reset[updates].Hint}">
         <StackPanel>
-            <TextBlock Text="Репозиторий релизов"
-                       Style="{StaticResource Form.Label}" />
-            <TextBox Text="{Binding Updates.Repo, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="Репозиторий релизов"
+                               Style="{StaticResource Form.Label}" />
+                    <TextBlock Style="{StaticResource Form.Hint}"
+                               Margin="0,2,0,0"
+                               Text="В формате «владелец/репозиторий». Отсюда приложение тянет zip релиза и текст изменений; пустое поле откатывается к тому, что зашито в сборку." />
+                </StackPanel>
+                <Button Grid.Column="1"
+                        Style="{StaticResource Form.RowReset}"
+                        VerticalAlignment="Top"
+                        Margin="12,0,0,0"
+                        DataContext="{Binding ResetFields[update_repo]}"
+                        Command="{Binding ResetCommand}"
+                        ToolTip="{Binding Hint}"
+                        AutomationProperties.Name="{Binding AutomationName}" />
+            </Grid>
+            <TextBox Style="{StaticResource TextBox.Form}"
+                     Text="{Binding Updates.Repo, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
                      Margin="0,8,0,0"
                      MinWidth="200"
                      FontFamily="{DynamicResource Font.Mono}"
                      AutomationProperties.Name="Репозиторий GitHub, откуда берутся релизы" />
-            <TextBlock Style="{StaticResource Form.Hint}"
-                       Text="В формате «владелец/репозиторий». Отсюда приложение тянет zip релиза и текст изменений; пустое поле откатывается к тому, что зашито в сборку." />
 
             <Grid Margin="0,18,0,0">
                 <Grid.ColumnDefinitions>

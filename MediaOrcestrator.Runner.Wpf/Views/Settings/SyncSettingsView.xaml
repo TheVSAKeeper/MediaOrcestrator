@@ -1,0 +1,71 @@
+﻿<UserControl x:Class="MediaOrcestrator.Runner.Wpf.Views.Settings.SyncSettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:design="clr-namespace:MediaOrcestrator.Runner.Wpf.ViewModels.Design"
+             xmlns:keepshell="https://schemas.keepshell.dev/wpf"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=design:DesignSettingsViewModel, IsDesignTimeCreatable=True}"
+             d:DesignHeight="280"
+             d:DesignWidth="640">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary
+                    Source="pack://application:,,,/MediaOrcestrator.Runner.Wpf;component/Views/Settings/SettingsResources.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <HeaderedContentControl Style="{StaticResource Form.Panel}"
+                            Header="Синхронизация"
+                            keepshell:Form.ResetCommand="{Binding ResetSectionCommand}"
+                            keepshell:Form.ResetCommandParameter="{Binding Reset[sync]}"
+                            keepshell:Form.ResetHint="{Binding Reset[sync].Hint}">
+        <StackPanel>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <CheckBox Content="Автосинхронизация источников в фоне"
+                          IsChecked="{Binding Preferences.AutoSyncEnabled, Mode=TwoWay}"
+                          VerticalAlignment="Center" />
+                <Button Grid.Column="1"
+                        Style="{StaticResource Form.RowReset}"
+                        DataContext="{Binding ResetFields[wpf.sync.auto_enabled]}"
+                        Command="{Binding ResetCommand}"
+                        ToolTip="{Binding Hint}"
+                        AutomationProperties.Name="{Binding AutomationName}" />
+            </Grid>
+            <TextBlock Style="{StaticResource Form.CheckHint}"
+                       Text="Раз в час опрашивает активные источники на новые медиа. Выключенные источники пропускаются, ручная синхронизация работает в любом случае." />
+
+            <keepshell:SettingRowPanel Margin="0,18,0,0"
+                                      IsEnabled="{Binding Preferences.AutoSyncEnabled}">
+                <StackPanel>
+                    <TextBlock Text="Пауза после запуска, с"
+                               Style="{StaticResource Form.Label}"
+                               TextWrapping="Wrap" />
+                    <TextBlock Style="{StaticResource Form.Hint}"
+                               Margin="0,2,0,0"
+                               Text="0…3600 с (по умолчанию 60). Откладывает первый фоновый опрос после прогрева базы, чтобы не нагружать старт окна." />
+                </StackPanel>
+                <TextBox Style="{StaticResource TextBox.Form}"
+                         Text="{Binding Preferences.AutoSyncStartupDelaySeconds, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                         Margin="16,0,0,0"
+                         Width="120"
+                         VerticalAlignment="Top"
+                         FontFamily="{DynamicResource Font.Mono}"
+                         AutomationProperties.Name="Пауза перед первой автосинхронизацией в секундах" />
+                <Button Style="{StaticResource Form.RowReset}"
+                        VerticalAlignment="Top"
+                        DataContext="{Binding ResetFields[wpf.sync.startup_delay_seconds]}"
+                        Command="{Binding ResetCommand}"
+                        ToolTip="{Binding Hint}"
+                        AutomationProperties.Name="{Binding AutomationName}" />
+            </keepshell:SettingRowPanel>
+        </StackPanel>
+    </HeaderedContentControl>
+</UserControl>

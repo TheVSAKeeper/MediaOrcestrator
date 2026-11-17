@@ -37,6 +37,10 @@ public partial class SettingsViewModel : ObservableObject, IPageHeader
     [ObservableProperty]
     private string _searchText = string.Empty;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(McpConnectSnippet))]
+    private int _selectedMcpFormatIndex;
+
     public SettingsViewModel(
         ISettingsStore store,
         Paths paths,
@@ -95,7 +99,7 @@ public partial class SettingsViewModel : ObservableObject, IPageHeader
             new(SettingsSectionKeys.Updates, "Обновления", PackIconLucideKind.Download, "github релиз версия"),
             new(SettingsSectionKeys.Mcp, "Управление через ИИ (MCP)", PackIconLucideKind.Bot, "mcp ии управление автоматизация"));
 
-        Reset = new(Paths, preferences, theme, updates, mcp, mcpOptions);
+        Reset = new(Paths, preferences, theme, updates, mcp, mcpOptions, OnFieldReset);
 
         Sections.Restore(store.GetStringValue(SelectedSectionKey));
         Sections.PropertyChanged += OnSectionsPropertyChanged;
@@ -135,7 +139,18 @@ public partial class SettingsViewModel : ObservableObject, IPageHeader
 
     public string McpUrl => $"http://127.0.0.1:{Mcp.Port}{_mcpOptions.EndpointPath}";
 
-    public string McpConnectSnippet => McpConnectSnippets.For(0, McpUrl, Mcp.Token, _mcpOptions.ServerName);
+    public IReadOnlyList<SegmentOption> McpConnectFormats { get; } =
+    [
+        new(PackIconLucideKind.Braces, "JSON", "Фрагмент конфигурации MCP-клиента (mcpServers)"),
+        new(PackIconLucideKind.Bot, "Claude Code", "Команда claude mcp add"),
+        new(PackIconLucideKind.SquareTerminal, "Codex", "Блок для ~/.codex/config.toml"),
+        new(PackIconLucideKind.SquareCode, "OpenCode", "Блок для opencode.json"),
+        new(PackIconLucideKind.Link, "Адрес", "Адрес и заголовок для клиента, который спрашивает их формой"),
+    ];
+
+    public string McpConnectSnippet => McpConnectSnippets.For(SelectedMcpFormatIndex, McpUrl, Mcp.Token, _mcpOptions.ServerName);
+
+    public bool McpElevatedWarning => Mcp.Enabled && McpServer.IsElevated;
 
     public string McpStatusText => McpServer.Endpoint is { } endpoint
         ? $"Сервер слушает {endpoint}"
@@ -152,16 +167,6 @@ public partial class SettingsViewModel : ObservableObject, IPageHeader
     public bool HasSavedRecently => !string.IsNullOrEmpty(StatusMessage);
 
     public bool CanSave => HasUnsavedChanges && !HasInvalidPaths;
-
-    [RelayCommand(CanExecute = nameof(CanResetSection))]
-    private void ResetSection(SettingsResetPlan? plan)
-    {
-        plan?.Apply();
-        Reset.Refresh();
-        ResetSectionCommand.NotifyCanExecuteChanged();
-    }
-
-    private bool CanResetSection(SettingsResetPlan? plan) => plan?.CanReset ?? false;
 
     [RelayCommand(CanExecute = nameof(HasUnsavedChanges))]
     private void RevertPaths()
@@ -283,6 +288,7 @@ public partial class SettingsViewModel : ObservableObject, IPageHeader
         if (e.PropertyName is nameof(McpPreferences.Enabled))
         {
             OnPropertyChanged(nameof(McpStatusText));
+            OnPropertyChanged(nameof(McpElevatedWarning));
         }
 
         RefreshResetState();
@@ -294,12 +300,6 @@ public partial class SettingsViewModel : ObservableObject, IPageHeader
         {
             OnPropertyChanged(nameof(McpStatusText));
         }
-    }
-
-    private void RefreshResetState()
-    {
-        Reset.Refresh();
-        ResetSectionCommand.NotifyCanExecuteChanged();
     }
 
     private bool Persist()

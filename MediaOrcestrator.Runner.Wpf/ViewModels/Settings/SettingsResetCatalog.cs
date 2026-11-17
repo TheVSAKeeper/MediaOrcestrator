@@ -1,4 +1,5 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using KeepShell.Mcp;
 using MediaOrcestrator.Runner.Wpf.Bootstrap;
 using System.IO;
@@ -16,22 +17,56 @@ public static class SettingsSectionKeys
     public const string Mcp = "mcp";
 }
 
-public sealed class SettingsResetField(string key, string caption, string factoryLabel, Func<bool> isFactory, Action apply)
+public sealed class SettingsResetField
 {
-    public string Key { get; } = key;
+    private readonly Func<bool> _isFactory;
+    private readonly Action _apply;
+    private readonly Action<SettingsResetField> _onReset;
 
-    public string Caption { get; } = caption;
+    public SettingsResetField(
+        string key,
+        string caption,
+        string factoryLabel,
+        Func<bool> isFactory,
+        Action apply,
+        Action<SettingsResetField> onReset)
+    {
+        Key = key;
+        Caption = caption;
+        FactoryLabel = factoryLabel;
+        _isFactory = isFactory;
+        _apply = apply;
+        _onReset = onReset;
+        ResetCommand = new RelayCommand(() => _onReset(this), () => !IsFactory);
+    }
 
-    public string FactoryLabel { get; } = factoryLabel;
+    public string Key { get; }
 
-    public bool IsFactory => isFactory();
+    public string SectionKey { get; internal set; } = string.Empty;
+
+    public string Caption { get; }
+
+    public string FactoryLabel { get; }
+
+    public string Hint => $"Вернуть к заводскому значению: {FactoryLabel}";
+
+    public string AutomationName => $"Сбросить: {Caption}";
+
+    public bool IsFactory => _isFactory();
+
+    public IRelayCommand ResetCommand { get; }
 
     public void Apply()
     {
         if (!IsFactory)
         {
-            apply();
+            _apply();
         }
+    }
+
+    public void RefreshAvailability()
+    {
+        ResetCommand.NotifyCanExecuteChanged();
     }
 }
 
@@ -44,6 +79,11 @@ public sealed class SettingsResetPlan : ObservableObject
         SectionKey = sectionKey;
         Fields = fields;
         _untouched = untouched;
+
+        foreach (var field in fields)
+        {
+            field.SectionKey = sectionKey;
+        }
     }
 
     public string SectionKey { get; }
@@ -54,14 +94,18 @@ public sealed class SettingsResetPlan : ObservableObject
 
     public string Hint => BuildHint();
 
-    public void Apply()
+    public IReadOnlyList<SettingsResetField> Apply()
     {
-        foreach (var entry in Fields)
+        var changed = Fields.Where(entry => !entry.IsFactory).ToArray();
+
+        foreach (var entry in changed)
         {
             entry.Apply();
         }
 
         Refresh();
+
+        return changed;
     }
 
     public void Refresh()
@@ -105,73 +149,88 @@ public sealed class SettingsResetCatalog
         ThemeViewModel theme,
         UpdatePreferences updates,
         McpPreferences mcp,
-        McpServerOptions mcpOptions)
+        McpServerOptions mcpOptions,
+        Action<SettingsResetField> onFieldReset)
     {
         var baseDirectory = AppContext.BaseDirectory;
+
+        SettingsResetField Field(string key, string caption, string factoryLabel, Func<bool> isFactory, Action apply) =>
+            new(key, caption, factoryLabel, isFactory, apply, onFieldReset);
 
         _plans = new(StringComparer.Ordinal)
         {
             [SettingsSectionKeys.Paths] = new SettingsResetPlan(SettingsSectionKeys.Paths,
                 "В файл ничего не пишется – нажмите «Сохранить».",
-                [.. paths.Select(path => PathField(path, baseDirectory))]),
+                [.. paths.Select(path => PathField(path, baseDirectory, onFieldReset))]),
 
             [SettingsSectionKeys.Appearance] = new(SettingsSectionKeys.Appearance,
                 null,
-                new(ThemeManager.SettingsKeyName, "Тема", "системная",
+                Field(ThemeManager.SettingsKeyName, "Тема", "системная",
                     () => theme.Current == AppTheme.System,
                     () => theme.ApplyCommand.Execute(AppTheme.System)),
-                new(ShellPreferences.FontScaleKey, "Масштаб шрифта", "100 %",
+                Field(ShellPreferences.FontScaleKey, "Масштаб шрифта", "100 %",
                     () => Math.Abs(shell.FontScale - FontScaleManager.DefaultScale) < 0.005,
                     () => shell.FontScale = FontScaleManager.DefaultScale),
-                new(ShellPreferences.ShowPageHeaderKey, "Заголовок страницы", "показывать",
+                Field(ShellPreferences.ShowPageHeaderKey, "Заголовок страницы", "показывать",
                     () => shell.ShowPageHeader,
                     () => shell.ShowPageHeader = true)),
 
             [SettingsSectionKeys.Notifications] = new(SettingsSectionKeys.Notifications,
                 null,
-                new(ShellPreferences.EnableToastNotificationsKey, "Системные уведомления", "включены",
+                Field(ShellPreferences.EnableToastNotificationsKey, "Уведомления о задачах", "включены",
                     () => shell.EnableToastNotifications,
                     () => shell.EnableToastNotifications = true),
-                new(ShellPreferences.ToastOnlyWhenInactiveKey, "Только когда окно неактивно", "включено",
+                Field(ShellPreferences.ToastOnlyWhenInactiveKey, "Только когда окно неактивно", "включено",
                     () => shell.ToastOnlyWhenInactive,
                     () => shell.ToastOnlyWhenInactive = true)),
 
             [SettingsSectionKeys.Sync] = new(SettingsSectionKeys.Sync,
                 null,
-                new(ShellPreferences.AutoSyncEnabledKey, "Автосинхронизация в фоне", "включена",
+                Field(ShellPreferences.AutoSyncEnabledKey, "Автосинхронизация в фоне", "включена",
                     () => shell.AutoSyncEnabled,
                     () => shell.AutoSyncEnabled = true),
-                new(ShellPreferences.AutoSyncStartupDelaySecondsKey, "Пауза после запуска", $"{ShellPreferences.DefaultAutoSyncStartupDelaySeconds} с",
+                Field(ShellPreferences.AutoSyncStartupDelaySecondsKey, "Пауза после запуска", $"{ShellPreferences.DefaultAutoSyncStartupDelaySeconds} с",
                     () => shell.AutoSyncStartupDelaySeconds == ShellPreferences.DefaultAutoSyncStartupDelaySeconds,
                     () => shell.AutoSyncStartupDelaySeconds = ShellPreferences.DefaultAutoSyncStartupDelaySeconds)),
 
             [SettingsSectionKeys.Updates] = new(SettingsSectionKeys.Updates,
                 null,
-                new SettingsResetField(UpdatePreferences.RepoKey, "Репозиторий релизов", UpdatePreferences.FactoryRepo,
+                Field(UpdatePreferences.RepoKey, "Репозиторий релизов", UpdatePreferences.FactoryRepo,
                     () => updates.IsFactoryRepo,
                     updates.ResetRepo)),
 
             [SettingsSectionKeys.Mcp] = new(SettingsSectionKeys.Mcp,
                 "Токен останется прежним – для него своя кнопка.",
-                new(McpPreferences.EnabledKey, "Сервер", "выключен",
+                Field(McpPreferences.EnabledKey, "Сервер", "выключен",
                     () => !mcp.Enabled,
                     () => mcp.Enabled = false),
-                new(McpPreferences.PortKey, "Порт", mcpOptions.DefaultPort.ToString(),
+                Field(McpPreferences.PortKey, "Порт", mcpOptions.DefaultPort.ToString(),
                     () => mcp.Port == mcpOptions.DefaultPort,
                     () => mcp.Port = mcpOptions.DefaultPort),
-                new(McpPreferences.AllowMutationsKey, "Изменяющие операции", "запрещены",
+                Field(McpPreferences.AllowMutationsKey, "Изменяющие операции", "запрещены",
                     () => !mcp.AllowMutations,
                     () => mcp.AllowMutations = false)),
         };
+
+        Fields = _plans.Values
+            .SelectMany(plan => plan.Fields)
+            .ToDictionary(field => field.Key, StringComparer.Ordinal);
     }
 
     public SettingsResetPlan this[string sectionKey] => _plans[sectionKey];
+
+    public IReadOnlyDictionary<string, SettingsResetField> Fields { get; }
 
     public void Refresh()
     {
         foreach (var plan in _plans.Values)
         {
             plan.Refresh();
+        }
+
+        foreach (var field in Fields.Values)
+        {
+            field.RefreshAvailability();
         }
     }
 
@@ -201,13 +260,22 @@ public sealed class SettingsResetCatalog
         throw new InvalidOperationException(message.ToString());
     }
 
-    private static SettingsResetField PathField(PathSettingViewModel path, string baseDirectory)
+    private static SettingsResetField PathField(
+        PathSettingViewModel path,
+        string baseDirectory,
+        Action<SettingsResetField> onFieldReset)
     {
-        return new(path.Key,
+        var field = new SettingsResetField(
+            path.Key,
             path.Title,
             path.FactoryValue,
             () => SamePath(path.EditValue, path.FactoryValue, baseDirectory),
-            () => path.EditValue = path.FactoryValue);
+            () => path.EditValue = path.FactoryValue,
+            onFieldReset);
+
+        path.ResetField = field;
+
+        return field;
     }
 
     private static bool SamePath(string? left, string right, string baseDirectory)

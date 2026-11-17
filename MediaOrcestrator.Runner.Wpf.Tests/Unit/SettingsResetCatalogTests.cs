@@ -94,4 +94,70 @@ public sealed class SettingsResetCatalogTests
             Assert.That(_viewModel.Reset[SettingsSectionKeys.Appearance].CanReset, Is.False);
         }
     }
+
+    [Test]
+    public void ResetField_ПриИзмененииОтдельногоПоля_СбрасываетТолькоЕгоИПоказываетТост()
+    {
+        var toasts = _provider.GetRequiredService<ToastHostViewModel>();
+        _viewModel.Preferences.FontScale = 1.3;
+        _viewModel.Preferences.ShowPageHeader = false;
+
+        var scaleField = _viewModel.ResetFields[ShellPreferences.FontScaleKey];
+        var headerField = _viewModel.ResetFields[ShellPreferences.ShowPageHeaderKey];
+
+        Assert.That(scaleField.ResetCommand.CanExecute(null), Is.True);
+
+        scaleField.ResetCommand.Execute(null);
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(_viewModel.Preferences.FontScale, Is.EqualTo(FontScaleManager.DefaultScale).Within(0.001));
+            Assert.That(_viewModel.Preferences.ShowPageHeader, Is.False);
+            Assert.That(scaleField.ResetCommand.CanExecute(null), Is.False);
+            Assert.That(headerField.ResetCommand.CanExecute(null), Is.True);
+            Assert.That(_viewModel.Reset[SettingsSectionKeys.Appearance].CanReset, Is.True);
+            Assert.That(toasts.Toasts.Count, Is.EqualTo(1));
+        }
+    }
+
+    [Test]
+    public void PathSetting_ResetField_СвязаноСКнопкойСтрокиИНеПишетВStore()
+    {
+        var pathSetting = _viewModel.Paths[0];
+        var customPath = Path.Combine(_ctx.Root, "custom-plugins");
+        Directory.CreateDirectory(customPath);
+        pathSetting.EditValue = customPath;
+
+        Assert.That(pathSetting.ResetField, Is.Not.Null);
+        Assert.That(pathSetting.ResetField!.ResetCommand.CanExecute(null), Is.True);
+
+        pathSetting.ResetField.ResetCommand.Execute(null);
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(pathSetting.EditValue, Is.EqualTo(pathSetting.FactoryValue));
+            Assert.That(_ctx.Settings.GetStringValue(pathSetting.Key), Is.Null);
+            Assert.That(pathSetting.ResetField.ResetCommand.CanExecute(null), Is.False);
+        }
+    }
+
+    [Test]
+    public void McpConnectSnippet_ПриСменеФормата_ВозвращаетВсеПятьФорматов()
+    {
+        var snippets = Enumerable.Range(0, _viewModel.McpConnectFormats.Count)
+            .Select(index =>
+            {
+                _viewModel.SelectedMcpFormatIndex = index;
+                return _viewModel.McpConnectSnippet;
+            })
+            .ToArray();
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(snippets, Has.Length.EqualTo(5));
+            Assert.That(snippets.Distinct(StringComparer.Ordinal).Count(), Is.EqualTo(5));
+            Assert.That(snippets[0], Does.Contain("mcpServers"));
+            Assert.That(snippets[1], Does.Contain("claude mcp add"));
+        }
+    }
 }

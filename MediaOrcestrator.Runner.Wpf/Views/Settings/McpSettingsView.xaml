@@ -8,7 +8,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=design:DesignSettingsViewModel, IsDesignTimeCreatable=True}"
-             d:DesignHeight="720"
+             d:DesignHeight="760"
              d:DesignWidth="640">
     <HeaderedContentControl x:Name="McpSettingsCard"
                             Style="{StaticResource Form.Panel}"
@@ -21,22 +21,63 @@
                        Margin="0,0,0,0"
                        Text="Встроенный сервер на loopback: ИИ-помощник подключается к запущенному окну и видит то же, что вы – открытую страницу, дерево контролов, журнал, кадр. Нужен, только пока вы им пользуетесь, в обычной работе держите выключенным." />
 
-            <CheckBox Content="Поднимать сервер"
-                      IsChecked="{Binding Mcp.Enabled, Mode=TwoWay}"
-                      Margin="0,14,0,0"
-                      VerticalAlignment="Center" />
+            <Grid Margin="0,14,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <CheckBox Content="Поднимать сервер"
+                          IsChecked="{Binding Mcp.Enabled, Mode=TwoWay}"
+                          VerticalAlignment="Center" />
+                <Button Grid.Column="1"
+                        Style="{StaticResource Form.RowReset}"
+                        DataContext="{Binding ResetFields[wpf.mcp.enabled]}"
+                        Command="{Binding ResetCommand}"
+                        ToolTip="{Binding Hint}"
+                        AutomationProperties.Name="{Binding AutomationName}" />
+            </Grid>
 
-            <TextBlock Text="Порт"
-                       Style="{StaticResource Form.Label}"
-                       Margin="0,18,0,0" />
-            <TextBox Text="{Binding Mcp.Port, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
-                     Margin="0,8,0,0"
-                     HorizontalAlignment="Left"
-                     MinWidth="120"
-                     FontFamily="{DynamicResource Font.Mono}"
-                     AutomationProperties.Name="Порт MCP-сервера" />
-            <TextBlock Style="{StaticResource Form.Hint}"
-                       Text="1024…65535, только 127.0.0.1. Смена порта применяется сразу – сервер перезапускается." />
+            <Grid Margin="0,12,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <CheckBox Content="Разрешить изменяющие операции"
+                          IsChecked="{Binding Mcp.AllowMutations, Mode=TwoWay}"
+                          VerticalAlignment="Center" />
+                <Button Grid.Column="1"
+                        Style="{StaticResource Form.RowReset}"
+                        DataContext="{Binding ResetFields[wpf.mcp.allow_mutations]}"
+                        Command="{Binding ResetCommand}"
+                        ToolTip="{Binding Hint}"
+                        AutomationProperties.Name="{Binding AutomationName}" />
+            </Grid>
+            <TextBlock Style="{StaticResource Form.CheckHint}"
+                       Text="Один флаг на всё: помощник сможет нажимать кнопки, вводить текст, закрывать приложение и запускать доменные операции. Без флага доступно только чтение." />
+
+            <keepshell:SettingRowPanel Margin="0,18,0,0">
+                <StackPanel>
+                    <TextBlock Text="Порт"
+                               Style="{StaticResource Form.Label}"
+                               TextWrapping="Wrap" />
+                    <TextBlock Style="{StaticResource Form.Hint}"
+                               Margin="0,2,0,0"
+                               Text="1024…65535, только 127.0.0.1. Смена порта применяется сразу – сервер перезапускается." />
+                </StackPanel>
+                <TextBox Style="{StaticResource TextBox.Form}"
+                         Text="{Binding Mcp.Port, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                         Margin="16,0,0,0"
+                         Width="120"
+                         VerticalAlignment="Top"
+                         FontFamily="{DynamicResource Font.Mono}"
+                         AutomationProperties.Name="Порт MCP-сервера" />
+                <Button Style="{StaticResource Form.RowReset}"
+                        VerticalAlignment="Top"
+                        DataContext="{Binding ResetFields[wpf.mcp.port]}"
+                        Command="{Binding ResetCommand}"
+                        ToolTip="{Binding Hint}"
+                        AutomationProperties.Name="{Binding AutomationName}" />
+            </keepshell:SettingRowPanel>
 
             <TextBlock Text="Токен"
                        Style="{StaticResource Form.Label}"
@@ -48,8 +89,8 @@
                 </Grid.ColumnDefinitions>
 
                 <TextBox Grid.Column="0"
-                         Text="{Binding Mcp.Token, Mode=OneWay}"
-                         IsReadOnly="True"
+                         Style="{StaticResource TextBox.Form}"
+                         Text="{Binding Mcp.Token, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
                          FontFamily="{DynamicResource Font.Mono}"
                          FontSize="{DynamicResource Font.Size.S}"
                          AutomationProperties.Name="Токен доступа MCP" />
@@ -81,12 +122,32 @@
                 </StackPanel>
             </Grid>
 
-            <CheckBox Content="Разрешить изменяющие операции"
-                      IsChecked="{Binding Mcp.AllowMutations, Mode=TwoWay}"
-                      Margin="0,18,0,0"
-                      VerticalAlignment="Center" />
-            <TextBlock Style="{StaticResource Form.CheckHint}"
-                       Text="Один флаг на всё: помощник сможет нажимать кнопки, вводить текст, закрывать приложение и запускать доменные операции. Без флага доступно только чтение." />
+            <Border Padding="12,10"
+                    Margin="0,12,0,0"
+                    Background="{DynamicResource State.ErrorSoft}"
+                    BorderBrush="{DynamicResource State.Error}"
+                    BorderThickness="1"
+                    CornerRadius="{DynamicResource Radius.M}"
+                    Visibility="{Binding Mcp.TokenMissing, Converter={StaticResource BoolToVisibility}}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <iconPacks:PackIconLucide Grid.Column="0"
+                                              Kind="ShieldAlert"
+                                              Width="14"
+                                              Height="14"
+                                              Foreground="{DynamicResource State.ErrorText}"
+                                              VerticalAlignment="Center"
+                                              Margin="0,0,10,0"
+                                              AutomationProperties.Name="Нет токена" />
+                    <TextBlock Grid.Column="1"
+                               Text="Без токена сервер не запускается: подключение без секрета приняло бы кого угодно. Вставьте свой токен или сгенерируйте новый."
+                               VerticalAlignment="Center"
+                               TextWrapping="Wrap" />
+                </Grid>
+            </Border>
 
             <StackPanel Orientation="Horizontal"
                         Margin="0,18,0,0">
@@ -104,7 +165,7 @@
             </StackPanel>
 
             <TextBlock Text="{Binding McpServer.LastError}"
-                       Foreground="{DynamicResource State.Error}"
+                       Foreground="{DynamicResource State.ErrorText}"
                        Margin="0,6,0,0"
                        TextWrapping="Wrap"
                        Visibility="{Binding McpServer.LastError, Converter={StaticResource NullToVisibility}}" />
@@ -115,7 +176,7 @@
                     BorderBrush="{DynamicResource State.Warning}"
                     BorderThickness="1"
                     CornerRadius="{DynamicResource Radius.M}"
-                    Visibility="{Binding McpServer.IsElevated, Converter={StaticResource BoolToVisibility}}">
+                    Visibility="{Binding McpElevatedWarning, Converter={StaticResource BoolToVisibility}}">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
@@ -126,7 +187,7 @@
                                               Kind="TriangleAlert"
                                               Width="14"
                                               Height="14"
-                                              Foreground="{DynamicResource State.Warning}"
+                                              Foreground="{DynamicResource State.WarningText}"
                                               VerticalAlignment="Center"
                                               Margin="0,0,10,0"
                                               AutomationProperties.Name="Внимание" />
@@ -137,40 +198,35 @@
                 </Grid>
             </Border>
 
-            <Grid Margin="0,18,0,0">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-
-                <StackPanel Grid.Column="0">
-                    <TextBlock Text="Строка подключения"
-                               Style="{StaticResource Form.Label}" />
-                    <TextBox Text="{Binding McpConnectSnippet, Mode=OneWay}"
-                             IsReadOnly="True"
-                             Margin="0,8,0,0"
-                             MaxHeight="180"
-                             AcceptsReturn="True"
-                             VerticalScrollBarVisibility="Auto"
-                             FontFamily="{DynamicResource Font.Mono}"
-                             FontSize="{DynamicResource Font.Size.S}"
-                             AutomationProperties.Name="Строка подключения к MCP-серверу в формате JSON" />
-                </StackPanel>
-
-                <Button Grid.Column="1"
-                        Style="{StaticResource Button.Icon}"
-                        Command="{Binding CopyMcpConnectSnippetCommand}"
-                        Margin="8,0,0,0"
-                        VerticalAlignment="Bottom"
-                        AutomationProperties.Name="Скопировать строку подключения"
-                        ToolTip="Скопировать JSON для настроек помощника">
-                    <iconPacks:PackIconLucide Kind="Clipboard"
-                                              Width="16"
-                                              Height="16"
-                                              HorizontalAlignment="Center"
-                                              VerticalAlignment="Center" />
-                </Button>
-            </Grid>
+            <TextBlock Text="Подключение"
+                       Style="{StaticResource Form.Label}"
+                       Margin="0,18,0,0" />
+            <TextBlock Style="{StaticResource Form.Hint}"
+                       Text="MCP поддерживают разные клиенты – выберите формат, который просит ваш." />
+            <ListBox ItemsSource="{Binding McpConnectFormats}"
+                     SelectedIndex="{Binding SelectedMcpFormatIndex}"
+                     Style="{StaticResource ListBox.Segmented}"
+                     HorizontalAlignment="Left"
+                     MinWidth="320"
+                     Margin="0,8,0,0"
+                     AutomationProperties.Name="Формат строки подключения" />
+            <TextBox Style="{StaticResource TextBox.Form}"
+                     Text="{Binding McpConnectSnippet, Mode=OneWay}"
+                     IsReadOnly="True"
+                     Margin="0,8,0,0"
+                     MaxHeight="200"
+                     AcceptsReturn="True"
+                     TextWrapping="Wrap"
+                     VerticalScrollBarVisibility="Auto"
+                     FontFamily="{DynamicResource Font.Mono}"
+                     FontSize="{DynamicResource Font.Size.S}"
+                     AutomationProperties.Name="Строка подключения к MCP-серверу" />
+            <Button Style="{StaticResource Button.Secondary}"
+                    Command="{Binding CopyMcpConnectSnippetCommand}"
+                    Content="Копировать"
+                    HorizontalAlignment="Left"
+                    Margin="0,8,0,0"
+                    ToolTip="Скопировать строку подключения в буфер обмена" />
         </StackPanel>
     </HeaderedContentControl>
 </UserControl>
