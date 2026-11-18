@@ -18,6 +18,8 @@ public partial class TransfersView : UserControl, IView<TransfersViewModel>
     {
         InitializeComponent();
         Loaded += OnLoaded;
+        Unloaded += (_, _) => _vm?.SetViewVisible(false);
+        IsVisibleChanged += (_, _) => _vm?.SetViewVisible(IsVisible);
         SizeChanged += OnSizeChanged;
         DataContextChanged += OnDataContextChanged;
     }
@@ -27,6 +29,7 @@ public partial class TransfersView : UserControl, IView<TransfersViewModel>
         if (_vm is not null)
         {
             _vm.SearchFocusRequested -= OnSearchFocusRequested;
+            _vm.SetViewVisible(false);
         }
 
         _vm = e.NewValue as TransfersViewModel;
@@ -34,6 +37,7 @@ public partial class TransfersView : UserControl, IView<TransfersViewModel>
         if (_vm is not null)
         {
             _vm.SearchFocusRequested += OnSearchFocusRequested;
+            _vm.SetViewVisible(IsLoaded && IsVisible);
         }
     }
 
@@ -56,6 +60,7 @@ public partial class TransfersView : UserControl, IView<TransfersViewModel>
     {
         if (DataContext is TransfersViewModel vm)
         {
+            vm.SetViewVisible(IsVisible);
             await vm.EnsureLoadedAsync();
         }
     }

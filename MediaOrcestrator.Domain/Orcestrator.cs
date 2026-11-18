@@ -20,6 +20,12 @@ public class Orcestrator(
     // TODO: единая блокировка записи в БД на время синхронизации; при росте объёма – батч-запись после параллельного сбора
     private readonly object _dbWriteLock = new();
 
+    private long _transferPlanRevision;
+
+    public long TransferPlanRevision => Interlocked.Read(ref _transferPlanRevision);
+
+    private void MarkTransferPlanChanged() => Interlocked.Increment(ref _transferPlanRevision);
+
     public Dictionary<string, ISourceType> GetSourceTypes()
     {
         return pluginManager.MediaSources;
@@ -251,7 +257,7 @@ public class Orcestrator(
                             {
                                 lock (_dbWriteLock)
                                 {
-                                    mediaCol.Update(changedMedia);
+                                    UpdateMedia(changedMedia);
                                 }
                             }
                         }
@@ -304,6 +310,7 @@ public class Orcestrator(
                             lock (_dbWriteLock)
                             {
                                 mediaCol.Insert(myMedia);
+                                MarkTransferPlanChanged();
                             }
 
                             cache.GetMedia(mediaSource.Id).Add(newMediaSource);
@@ -336,7 +343,7 @@ public class Orcestrator(
 
                                         lock (_dbWriteLock)
                                         {
-                                            mediaCol.Update(existsVideo.Media);
+                                            UpdateMedia(existsVideo.Media);
                                         }
                                     }
                                 }
@@ -466,7 +473,10 @@ public class Orcestrator(
 
     public void UpdateMedia(Media media)
     {
-        db.GetCollection<Media>("medias").Update(media);
+        if (db.GetCollection<Media>("medias").Update(media))
+        {
+            MarkTransferPlanChanged();
+        }
     }
 
     public async Task<ChronologyPlan> BuildChronologyAsync(
@@ -657,7 +667,10 @@ public class Orcestrator(
 
     public void RemoveMedia(Media media)
     {
-        db.GetCollection<Media>("medias").Delete(media.Id);
+        if (db.GetCollection<Media>("medias").Delete(media.Id))
+        {
+            MarkTransferPlanChanged();
+        }
     }
 
     public void MergeMedia(Media target, IReadOnlyList<Media> toRemove)
@@ -675,6 +688,7 @@ public class Orcestrator(
             }
 
             db.Commit();
+            MarkTransferPlanChanged();
         }
         catch
         {
@@ -721,13 +735,17 @@ public class Orcestrator(
                 TypeId = typeId,
                 Settings = settings,
             });
+        MarkTransferPlanChanged();
     }
 
     public void RemoveSource(string sourceId)
     {
         lock (_dbWriteLock)
         {
-            db.GetCollection<Source>("sources").Delete(sourceId);
+            if (db.GetCollection<Source>("sources").Delete(sourceId))
+            {
+                MarkTransferPlanChanged();
+            }
             InvalidateAuthentication(sourceId);
         }
 
@@ -739,7 +757,10 @@ public class Orcestrator(
     {
         lock (_dbWriteLock)
         {
-            db.GetCollection<Source>("sources").Update(source);
+            if (db.GetCollection<Source>("sources").Update(source))
+            {
+                MarkTransferPlanChanged();
+            }
         }
     }
 
@@ -864,6 +885,7 @@ public class Orcestrator(
                 FromId = fromId,
                 ToId = toId,
             });
+        MarkTransferPlanChanged();
     }
 
     public void RemoveRelation(Source from, Source to)
@@ -873,8 +895,12 @@ public class Orcestrator(
 
     public void RemoveRelation(string fromId, string toId)
     {
-        db.GetCollection<SourceSyncRelation>("source_relations")
+        var removed = db.GetCollection<SourceSyncRelation>("source_relations")
             .DeleteMany(x => x.FromId == fromId && x.ToId == toId);
+        if (removed > 0)
+        {
+            MarkTransferPlanChanged();
+        }
     }
 
     public void InvertRelation(string fromId, string toId)
@@ -892,6 +918,7 @@ public class Orcestrator(
             });
 
             db.Commit();
+            MarkTransferPlanChanged();
         }
         catch
         {
@@ -900,32 +927,31 @@ public class Orcestrator(
         }
     }
 
-    public void ClearCollection(string collectionName)
+    public int ClearCollection(string collectionName)
     {
         logger.LogInformation("Очистка коллекции: {CollectionName}", collectionName);
         var collection = db.GetCollection(collectionName);
-        var count = collection.Count();
-        collection.DeleteAll();
+        var count = collection.DeleteAll();
+        if (count > 0 && collectionName.ToLowerInvariant() is "medias" or "source_relations" or "sources")
+        {
+            MarkTransferPlanChanged();
+        }
+
         logger.LogInformation("[✓] Коллекция {CollectionName} очищена. Удалено записей: {Count}", collectionName, count);
+        return count;
     }
 
     public void ClearDatabase()
     {
         logger.LogInformation("========== Начало очистки базы данных ==========");
 
-        var mediasCollection = db.GetCollection<Media>("medias");
-        var mediaCount = mediasCollection.Count();
-        mediasCollection.DeleteAll();
+        var mediaCount = ClearCollection("medias");
         logger.LogInformation("[✓] Коллекция медиа очищена. Удалено записей: {MediaCount}", mediaCount);
 
-        var relationsCollection = db.GetCollection<SourceSyncRelation>("source_relations");
-        var relationCount = relationsCollection.Count();
-        relationsCollection.DeleteAll();
+        var relationCount = ClearCollection("source_relations");
         logger.LogInformation("[✓] Коллекция связей очищена. Удалено записей: {RelationCount}", relationCount);
 
-        var sourcesCollection = db.GetCollection<Source>("sources");
-        var sourceCount = sourcesCollection.Count();
-        sourcesCollection.DeleteAll();
+        var sourceCount = ClearCollection("sources");
         logger.LogInformation("[✓] Коллекция источников очищена. Удалено записей: {SourceCount}", sourceCount);
 
         logger.LogInformation("========== Очистка БД завершена успешно ==========");
@@ -1043,6 +1069,7 @@ public class Orcestrator(
 
         media.Sources.Add(link);
         mediaCollection.Insert(media);
+        MarkTransferPlanChanged();
 
         tempManager.CleanMedia(mediaId);
 

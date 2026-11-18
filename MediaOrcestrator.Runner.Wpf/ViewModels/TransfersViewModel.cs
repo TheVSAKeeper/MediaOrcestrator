@@ -34,10 +34,12 @@ public sealed partial class TransfersViewModel : ObservableObject, IPageHeader, 
 
     private readonly List<SyncIntent> _allRootIntents = [];
     private readonly IUiTimer _searchTimer;
+    private readonly IUiTimer _planRevisionTimer;
     private List<Source> _planSources = [];
     private List<SourceSyncRelation> _planRelations = [];
 
     private CancellationTokenSource? _runCts;
+    private long _planRevision;
     private bool _loaded;
     private bool _suppressPersist;
     private bool _suppressFilterApply;
@@ -55,17 +57,17 @@ public sealed partial class TransfersViewModel : ObservableObject, IPageHeader, 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasAnySelected))]
     [NotifyPropertyChangedFor(nameof(SelectionSummary))]
-    [NotifyPropertyChangedFor(nameof(ExecuteButtonText))]
     [NotifyCanExecuteChangedFor(nameof(ExecuteSelectedCommand))]
     private int _selectedRoots;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SelectionSummary))]
-    [NotifyPropertyChangedFor(nameof(ExecuteButtonText))]
     private int _selectedSteps;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasPlan))]
+    [NotifyPropertyChangedFor(nameof(PlanSummary))]
+    [NotifyCanExecuteChangedFor(nameof(RunSingleStepCommand))]
     private bool _isPlanLoaded;
 
     [ObservableProperty]
@@ -73,6 +75,7 @@ public sealed partial class TransfersViewModel : ObservableObject, IPageHeader, 
     [NotifyCanExecuteChangedFor(nameof(ExecuteSelectedCommand))]
     [NotifyCanExecuteChangedFor(nameof(SelectAllCommand))]
     [NotifyCanExecuteChangedFor(nameof(DeselectAllCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RunSingleStepCommand))]
     private bool _isRebuilding;
 
     [ObservableProperty]
@@ -84,16 +87,15 @@ public sealed partial class TransfersViewModel : ObservableObject, IPageHeader, 
     [NotifyPropertyChangedFor(nameof(HasRunProgress))]
     [NotifyPropertyChangedFor(nameof(CanEditUploadInterval))]
     [NotifyPropertyChangedFor(nameof(CanEditUploadIntervalMinutes))]
+    [NotifyCanExecuteChangedFor(nameof(RunSingleStepCommand))]
     private bool _isRunning;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasRunProgress))]
-    [NotifyPropertyChangedFor(nameof(RunProgressPercent))]
     [NotifyPropertyChangedFor(nameof(RunProgressText))]
     private int _runStepsTotal;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(RunProgressPercent))]
     [NotifyPropertyChangedFor(nameof(RunProgressText))]
     private int _runStepsCompleted;
 
@@ -106,6 +108,8 @@ public sealed partial class TransfersViewModel : ObservableObject, IPageHeader, 
     private bool _hasPlanError;
 
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ExecuteSelectedCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RunSingleStepCommand))]
     private bool _isPlanStale;
 
     [ObservableProperty]
@@ -185,6 +189,7 @@ public sealed partial class TransfersViewModel : ObservableObject, IPageHeader, 
         RelationFilters = [];
 
         _searchTimer = dispatcher.CreateTimer(TimeSpan.FromMilliseconds(SearchDebounceMs), OnSearchTimerTick);
+        _planRevisionTimer = dispatcher.CreateTimer(TimeSpan.FromMilliseconds(500), RefreshPlanState);
 
         _suppressPersist = true;
         IsJournalOpen = bool.TryParse(_settings.GetStringValue(JournalOpenSettingsKey), out var open) && open;
@@ -234,9 +239,7 @@ public sealed partial class TransfersViewModel : ObservableObject, IPageHeader, 
 
     public string SelectionSummary => $"Выбрано: {SelectedRoots} цепочек / {SelectedSteps} шагов";
 
-    public string ExecuteButtonText => HasAnySelected
-        ? $"▶ Выполнить выбранное ({SelectedRoots} цепочек · {SelectedSteps} шагов)"
-        : "▶ Выполнить выбранное";
+    public bool CanRunPlan => IsPlanLoaded && !IsRunning && !IsRebuilding && !IsPlanStale;
 
     public bool HasRunProgress => IsRunning && RunStepsTotal > 0;
 
@@ -251,10 +254,6 @@ public sealed partial class TransfersViewModel : ObservableObject, IPageHeader, 
     public string UploadIntervalHint => IsUploadIntervalValid
         ? "Пауза после каждой успешной загрузки – ВК хуже показывает видео, залитые пачкой."
         : $"Интервал – целое число минут от 1 до {MaxUploadIntervalMinutes}.";
-
-    public double RunProgressPercent => RunStepsTotal > 0
-        ? Math.Min(100.0, RunStepsCompleted * 100.0 / RunStepsTotal)
-        : 0.0;
 
     public string RunProgressText => RunStepsTotal > 0
         ? RunStepsFailed > 0
@@ -275,6 +274,27 @@ public sealed partial class TransfersViewModel : ObservableObject, IPageHeader, 
 
     public void RequestSearchFocus() => SearchFocusRequested?.Invoke(this, EventArgs.Empty);
 
+    public void SetViewVisible(bool visible)
+    {
+        if (visible)
+        {
+            RefreshPlanState();
+            _planRevisionTimer.Start();
+        }
+        else
+        {
+            _planRevisionTimer.Stop();
+        }
+    }
+
+    private void RefreshPlanState()
+    {
+        if (!IsRunning && !IsRebuilding)
+        {
+            IsPlanStale = IsPlanLoaded && _planRevision != _orcestrator.TransferPlanRevision;
+        }
+    }
+
     public async Task EnsureLoadedAsync()
     {
         if (IsRebuilding || IsRunning)
@@ -284,11 +304,7 @@ public sealed partial class TransfersViewModel : ObservableObject, IPageHeader, 
 
         if (_loaded)
         {
-            if (IsPlanLoaded)
-            {
-                IsPlanStale = true;
-            }
-
+            RefreshPlanState();
             return;
         }
 
@@ -305,6 +321,7 @@ public sealed partial class TransfersViewModel : ObservableObject, IPageHeader, 
     {
         IsRebuilding = true;
         StatusText = "Построение плана…";
+        _planRevision = _orcestrator.TransferPlanRevision;
 
         long dbMs = 0;
         long filtersMs = 0;
@@ -412,6 +429,7 @@ public sealed partial class TransfersViewModel : ObservableObject, IPageHeader, 
         finally
         {
             IsRebuilding = false;
+            RefreshPlanState();
         }
 
         if (applyBreakdown is { } b)

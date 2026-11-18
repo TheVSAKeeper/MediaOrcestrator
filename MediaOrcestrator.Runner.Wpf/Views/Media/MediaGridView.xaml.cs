@@ -13,7 +13,8 @@ public partial class MediaGridView : UserControl, IView<MediaGridViewModel>
 {
     private const double MinSourceColumnWidth = 64;
     private const double MaxDefaultSourceColumnWidth = 240;
-    private const double MinCompactSourceColumnWidth = 30;
+    private const double SortIndicatorWidth = 12;
+    private const double MinCompactSourceColumnWidth = 36 + SortIndicatorWidth;
     private const double SourceHeaderChromePadding = 28;
     private const double MetadataColumnWidth = 140;
 
@@ -41,7 +42,7 @@ public partial class MediaGridView : UserControl, IView<MediaGridViewModel>
         DataContextChanged += OnDataContextChanged;
     }
 
-    private static double CompactSourceColumnWidth(int headerLength) => 22 + headerLength * 8;
+    private static double CompactSourceColumnWidth(int headerLength) => 28 + SortIndicatorWidth + headerLength * 8;
 
     private void OnIsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
     {

@@ -25,7 +25,7 @@
             <Setter Property="CornerRadius"
                     Value="{DynamicResource Radius.M}" />
             <Setter Property="Padding"
-                    Value="12,10" />
+                    Value="8,3" />
             <Setter Property="Cursor"
                     Value="Hand" />
             <Style.Triggers>
@@ -103,7 +103,8 @@
                 <StackPanel Grid.Column="1"
                             Orientation="Horizontal">
                     <Button Style="{StaticResource Button.Ghost}"
-                            Padding="10,4"
+                            Padding="{DynamicResource Padding.Control.Compact}"
+                            MinHeight="{DynamicResource Control.Height.Compact}"
                             Command="{Binding BrowseCommand, ElementName=Root}"
                             ToolTip="{Binding BrowseToolTip, ElementName=Root}"
                             AutomationProperties.Name="{Binding BrowseAutomationName, ElementName=Root}">
@@ -112,7 +113,8 @@
                                                   Height="16" />
                     </Button>
                     <Button Style="{StaticResource Button.Ghost}"
-                            Padding="10,4"
+                            Padding="{DynamicResource Padding.Control.Compact}"
+                            MinHeight="{DynamicResource Control.Height.Compact}"
                             Margin="4,0,0,0"
                             Command="{Binding ClearCommand, ElementName=Root}"
                             ToolTip="{Binding ClearToolTip, ElementName=Root}"

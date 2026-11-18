@@ -211,9 +211,9 @@
         <ScrollViewer Grid.Row="0"
                       VerticalScrollBarVisibility="Auto"
                       HorizontalScrollBarVisibility="Disabled"
-                      MaxHeight="260"
-                      Margin="{DynamicResource Margin.StackItem}">
-            <Border Style="{StaticResource Card.Inset}">
+                      MaxHeight="190"
+                      Margin="{DynamicResource Margin.RowGap}">
+            <Border Style="{StaticResource Card.Inset}" Padding="{DynamicResource Padding.Panel.Dense}">
             <StackPanel>
                 <controls:BatchMediaToolbar Margin="{DynamicResource Margin.RowGap}"
                                             MediasSummary="{Binding MediasSummary}"
@@ -223,9 +223,9 @@
                                             CanEditParameters="{Binding CanEditParameters}"
                                             StopOnError="{Binding StopOnError}" />
 
-                <StackPanel Margin="0,4,0,0">
+                <StackPanel>
                     <keepshell:UniformRowPanel>
-                        <Grid Margin="0,0,12,6">
+                        <Grid Margin="0,0,6,4">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
@@ -235,12 +235,13 @@
                                        Text="Найти:" />
                             <TextBox Grid.Column="1"
                                      Style="{StaticResource TextBox.Toolbar}"
-                                     MinWidth="140"
+                                     MinWidth="120"
+                                     AutomationProperties.Name="Найти"
                                      Text="{Binding Find, UpdateSourceTrigger=PropertyChanged}"
                                      IsEnabled="{Binding CanEditParameters}" />
                         </Grid>
 
-                        <Grid Margin="0,0,0,6">
+                        <Grid Margin="0,0,0,4">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
@@ -250,7 +251,8 @@
                                        Text="Заменить:" />
                             <TextBox Grid.Column="1"
                                      Style="{StaticResource TextBox.Toolbar}"
-                                     MinWidth="140"
+                                     MinWidth="120"
+                                     AutomationProperties.Name="Заменить"
                                      Text="{Binding Replace, UpdateSourceTrigger=PropertyChanged}"
                                      IsEnabled="{Binding CanEditParameters}" />
                         </Grid>
@@ -260,7 +262,7 @@
                                VerticalAlignment="Center">
                         <StackPanel Orientation="Horizontal"
                                     VerticalAlignment="Center"
-                                    Margin="0,2,14,2">
+                                    Margin="0,0,10,0">
                             <TextBlock Style="{StaticResource FieldLabel}"
                                        MinWidth="0"
                                        Text="Режим:" />
@@ -277,7 +279,7 @@
                         <CheckBox IsChecked="{Binding IgnoreCase}"
                                   IsEnabled="{Binding CanEditParameters}"
                                   VerticalAlignment="Center"
-                                  Margin="0,2,14,2"
+                                  Margin="0,0,10,0"
                                   Content="Без учёта регистра" />
 
                         <controls:SourceFilterDropDown Label="Площадки"
@@ -286,7 +288,7 @@
                                                        SelectAllCommand="{Binding SelectAllSourcesCommand}"
                                                        SelectNoneCommand="{Binding SelectNoSourcesCommand}"
                                                        VerticalAlignment="Center"
-                                                       Margin="0,2,0,2" />
+                                                       Margin="0" />
                     </WrapPanel>
                 </StackPanel>
 
@@ -376,25 +378,21 @@
                      VirtualizingStackPanel.VirtualizationMode="Recycling" />
         </controls:OperationResultPanel>
 
-        <Border Grid.Row="2"
-                Style="{StaticResource Card.Inset}"
-                Margin="0,8,0,0">
-            
-            <controls:OperationActionBar ApplyText="{Binding ApplyButtonText}"
-                                         ApplyCommand="{Binding ApplyCommand}"
-                                         CancelCommand="{Binding CancelCommand}"
-                                         IsBusy="{Binding IsApplying}"
-                                         ProgressValue="{Binding ProgressValue}"
-                                         ProgressMax="{Binding ProgressMax}"
-                                         ToggleJournalCommand="{Binding ToggleJournalCommand}">
-                <TextBlock Style="{StaticResource TextBlock.Subtle}"
-                           VerticalAlignment="Center">
-                    <Run Text="К применению: " />
-                    <Run Text="{Binding ActionableCount, Mode=OneWay}" />
-                    <Run Text=" из " />
-                    <Run Text="{Binding MediasCount, Mode=OneWay}" />
-                </TextBlock>
-            </controls:OperationActionBar>
-        </Border>
+        <controls:OperationActionBar Grid.Row="2"
+                                     ApplyText="{Binding ApplyButtonText}"
+                                     ApplyCommand="{Binding ApplyCommand}"
+                                     CancelCommand="{Binding CancelCommand}"
+                                     IsBusy="{Binding IsApplying}"
+                                     ProgressValue="{Binding ProgressValue}"
+                                     ProgressMax="{Binding ProgressMax}"
+                                     ToggleJournalCommand="{Binding ToggleJournalCommand}">
+            <TextBlock Style="{StaticResource TextBlock.Subtle}"
+                       VerticalAlignment="Center">
+                <Run Text="К применению: " />
+                <Run Text="{Binding ActionableCount, Mode=OneWay}" />
+                <Run Text=" из " />
+                <Run Text="{Binding MediasCount, Mode=OneWay}" />
+            </TextBlock>
+        </controls:OperationActionBar>
     </Grid>
 </UserControl>

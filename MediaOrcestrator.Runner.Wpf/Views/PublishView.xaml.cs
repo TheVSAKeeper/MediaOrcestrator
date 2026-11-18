@@ -53,9 +53,8 @@ public partial class PublishView : UserControl, IView<PublishViewModel>
             Grid.SetRow(PreviewCard, 1);
             PreviewColumn.SetCurrentValue(ColumnDefinition.WidthProperty, new GridLength(0));
             PreviewCard.SetCurrentValue(WidthProperty, double.NaN);
-            PreviewCard.SetCurrentValue(MaxWidthProperty, 480d);
             PreviewCard.SetCurrentValue(HorizontalAlignmentProperty, HorizontalAlignment.Stretch);
-            PreviewCard.SetCurrentValue(MarginProperty, new Thickness(0, 16, 0, 0));
+            PreviewCard.SetCurrentValue(MarginProperty, new Thickness(0, 6, 0, 0));
             OuterScrollViewer.SetCurrentValue(ScrollViewer.VerticalScrollBarVisibilityProperty, ScrollBarVisibility.Auto);
             FormScrollViewer.SetCurrentValue(ScrollViewer.VerticalScrollBarVisibilityProperty, ScrollBarVisibility.Disabled);
         }
@@ -65,9 +64,8 @@ public partial class PublishView : UserControl, IView<PublishViewModel>
             Grid.SetRow(PreviewCard, 0);
             PreviewColumn.SetCurrentValue(ColumnDefinition.WidthProperty, GridLength.Auto);
             PreviewCard.SetCurrentValue(WidthProperty, 340d);
-            PreviewCard.SetCurrentValue(MaxWidthProperty, double.PositiveInfinity);
             PreviewCard.SetCurrentValue(HorizontalAlignmentProperty, HorizontalAlignment.Left);
-            PreviewCard.SetCurrentValue(MarginProperty, new Thickness(16, 0, 0, 0));
+            PreviewCard.SetCurrentValue(MarginProperty, new Thickness(6, 0, 0, 0));
             OuterScrollViewer.SetCurrentValue(ScrollViewer.VerticalScrollBarVisibilityProperty, ScrollBarVisibility.Disabled);
             FormScrollViewer.SetCurrentValue(ScrollViewer.VerticalScrollBarVisibilityProperty, ScrollBarVisibility.Auto);
         }

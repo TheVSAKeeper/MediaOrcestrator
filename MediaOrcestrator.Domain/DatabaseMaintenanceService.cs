@@ -5,6 +5,7 @@ namespace MediaOrcestrator.Domain;
 
 public sealed class DatabaseMaintenanceService(
     LiteDatabase db,
+    Orcestrator orcestrator,
     DatabaseBackupService backupService,
     string databasePath,
     string tempPath,
@@ -43,21 +44,7 @@ public sealed class DatabaseMaintenanceService(
         }
     }
 
-    public int ClearCollection(string collectionName)
-    {
-        var collection = db.GetCollection(collectionName);
-        var count = collection.Count();
-
-        if (count == 0)
-        {
-            logger.LogInformation("Коллекция {CollectionName} уже пуста", collectionName);
-            return 0;
-        }
-
-        collection.DeleteAll();
-        logger.LogInformation("Коллекция {CollectionName}: удалено {Count} записей", collectionName, count);
-        return count;
-    }
+    public int ClearCollection(string collectionName) => orcestrator.ClearCollection(collectionName);
 
     public long MeasureFolder(string path, bool recursive = true)
     {

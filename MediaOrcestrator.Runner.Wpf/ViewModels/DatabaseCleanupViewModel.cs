@@ -107,8 +107,6 @@ public sealed partial class DatabaseCleanupViewModel : ObservableObject
         }
 
         Backups = new ObservableCollection<BackupItemViewModel>();
-
-        _ = RefreshAsync();
     }
 
     public ObservableCollection<MaintenanceItemViewModel> DangerItems { get; }
@@ -128,23 +126,20 @@ public sealed partial class DatabaseCleanupViewModel : ObservableObject
             : "Развернуть";
 
     [RelayCommand(CanExecute = nameof(CanRefresh))]
-    private async Task RefreshAsync()
+    private Task RefreshAsync() => IsBusy ? Task.CompletedTask : LoadDatabaseAsync();
+
+    internal async Task LoadDatabaseAsync()
     {
-        if (IsBusy)
+        var (counts, size) = await Task.Run(() =>
+            (DangerItems.Select(item => _maintenance.CountCollection(item.Key)).ToArray(),
+                _maintenance.MeasureDatabaseFile()));
+
+        for (var i = 0; i < counts.Length; i++)
         {
-            return;
+            DangerItems[i].SizeText = FormatCount(counts[i]);
         }
 
-        await Task.Run(() =>
-        {
-            foreach (var item in DangerItems)
-            {
-                item.SizeText = FormatCount(_maintenance.CountCollection(item.Key));
-            }
-
-            DatabaseSizeText = FormatBytes(_maintenance.MeasureDatabaseFile());
-        });
-
+        DatabaseSizeText = FormatBytes(size);
         await ReloadBackupsListAsync();
     }
 

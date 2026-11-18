@@ -281,7 +281,9 @@
         </Grid>
 
         <keepshell:EmptyState Grid.Row="1"
+                              HorizontalAlignment="Center"
                               VerticalAlignment="Center"
+                              DescriptionMaxWidth="360"
                               Icon="ListChecks"
                               Heading="Задач нет"
                               Description="Синк, передачи и пакетные операции появятся здесь, пока идут, и осядут в завершённых."

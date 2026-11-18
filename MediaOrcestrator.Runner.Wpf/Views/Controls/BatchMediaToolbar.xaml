@@ -8,67 +8,67 @@
              x:Name="Root"
              mc:Ignorable="d"
              d:DesignWidth="800">
-    
+
     <keepshell:StretchWrapPanel>
-        <WrapPanel keepshell:StretchWrapPanel.Stretch="True"
-                   keepshell:StretchWrapPanel.StretchWidth="340"
-                   Orientation="Horizontal"
-                   VerticalAlignment="Center">
-            <StackPanel Orientation="Horizontal"
-                        VerticalAlignment="Center"
-                        Margin="0,2,14,2">
-                <iconPacks:PackIconLucide Kind="Layers"
-                                          Width="16"
-                                          Height="16"
+        <StackPanel Orientation="Horizontal"
+                    VerticalAlignment="Center"
+                    Margin="0,0,10,0">
+            <iconPacks:PackIconLucide Kind="Layers"
+                                      Width="16"
+                                      Height="16"
+                                      VerticalAlignment="Center"
+                                      Foreground="{DynamicResource Fg.Secondary}"
+                                      Margin="0,0,6,0" />
+            <TextBlock Text="{Binding MediasSummary, ElementName=Root}"
+                       FontWeight="{DynamicResource Font.Weight.SemiBold}"
+                       Foreground="{DynamicResource Fg.Primary}"
+                       VerticalAlignment="Center" />
+        </StackPanel>
+
+        <Button Style="{StaticResource Button.Ghost}"
+                Command="{Binding LoadAllMediaCommand, ElementName=Root}"
+                IsEnabled="{Binding CanEditParameters, ElementName=Root}"
+                MinHeight="{DynamicResource Control.Height.Compact}"
+                Padding="{DynamicResource Padding.Control.Compact}"
+                Margin="{DynamicResource Margin.InlineGap}"
+                ToolTip="Загрузить в набор все медиа из хранилища"
+                AutomationProperties.Name="Загрузить всё хранилище">
+            <StackPanel Orientation="Horizontal">
+                <iconPacks:PackIconLucide Kind="Plus"
+                                          Width="14"
+                                          Height="14"
                                           VerticalAlignment="Center"
-                                          Foreground="{DynamicResource Fg.Secondary}"
                                           Margin="0,0,6,0" />
-                <TextBlock Text="{Binding MediasSummary, ElementName=Root}"
-                           FontWeight="{DynamicResource Font.Weight.SemiBold}"
-                           Foreground="{DynamicResource Fg.Primary}"
+                <TextBlock Text="Всё хранилище"
                            VerticalAlignment="Center" />
             </StackPanel>
-            
-            <Button Style="{StaticResource Button.Ghost}"
-                    Command="{Binding LoadAllMediaCommand, ElementName=Root}"
-                    IsEnabled="{Binding CanEditParameters, ElementName=Root}"
-                    Padding="{DynamicResource Padding.Control.Compact}"
-                    Margin="0,2,4,2"
-                    ToolTip="Загрузить в набор все медиа из хранилища"
-                    AutomationProperties.Name="Загрузить всё хранилище">
-                <StackPanel Orientation="Horizontal">
-                    <iconPacks:PackIconLucide Kind="Plus"
-                                              Width="14"
-                                              Height="14"
-                                              VerticalAlignment="Center"
-                                              Margin="0,0,6,0" />
-                    <TextBlock Text="Загрузить всё хранилище"
-                               VerticalAlignment="Center" />
-                </StackPanel>
-            </Button>
-            <Button Style="{StaticResource Button.Ghost}"
-                    Command="{Binding ClearMediaCommand, ElementName=Root}"
-                    IsEnabled="{Binding HasMedias, ElementName=Root}"
-                    Padding="{DynamicResource Padding.Control.Compact}"
-                    Margin="0,2,8,2"
-                    ToolTip="Очистить набор"
-                    AutomationProperties.Name="Очистить набор">
-                <StackPanel Orientation="Horizontal">
-                    <iconPacks:PackIconLucide Kind="X"
-                                              Width="14"
-                                              Height="14"
-                                              VerticalAlignment="Center"
-                                              Margin="0,0,6,0" />
-                    <TextBlock Text="Очистить"
-                               VerticalAlignment="Center" />
-                </StackPanel>
-            </Button>
-        </WrapPanel>
+        </Button>
+        <Button Style="{StaticResource Button.Ghost}"
+                Command="{Binding ClearMediaCommand, ElementName=Root}"
+                IsEnabled="{Binding HasMedias, ElementName=Root}"
+                MinHeight="{DynamicResource Control.Height.Compact}"
+                Padding="{DynamicResource Padding.Control.Compact}"
+                Margin="{DynamicResource Margin.InlineGap}"
+                ToolTip="Очистить набор"
+                AutomationProperties.Name="Очистить набор">
+            <StackPanel Orientation="Horizontal">
+                <iconPacks:PackIconLucide Kind="X"
+                                          Width="14"
+                                          Height="14"
+                                          VerticalAlignment="Center"
+                                          Margin="0,0,6,0" />
+                <TextBlock Text="Очистить"
+                           VerticalAlignment="Center" />
+            </StackPanel>
+        </Button>
+
+        <Border keepshell:StretchWrapPanel.Stretch="True"
+                keepshell:StretchWrapPanel.StretchWidth="0" />
 
         <CheckBox IsChecked="{Binding StopOnError, ElementName=Root}"
                   IsEnabled="{Binding CanEditParameters, ElementName=Root}"
                   VerticalAlignment="Center"
-                  Margin="0,2,0,2"
+                  Margin="0"
                   Content="Прервать при ошибке" />
     </keepshell:StretchWrapPanel>
 </UserControl>

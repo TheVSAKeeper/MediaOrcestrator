@@ -114,7 +114,7 @@ public sealed class TransfersSkipTests
         await _vm.RebuildPlanCommand.ExecuteAsync(null);
         var root = _vm.Groups[0].Children[0];
 
-        await _vm.RunSingleStepAsync(root);
+        await _vm.RunSingleStepCommand.ExecuteAsync(root);
 
         using (Assert.EnterMultipleScope())
         {
@@ -124,6 +124,63 @@ public sealed class TransfersSkipTests
             Assert.That(_vm.RunStepsCompleted, Is.EqualTo(1));
             Assert.That(_vm.RunStepsFailed, Is.EqualTo(0));
         }
+    }
+
+    [Test]
+    public async Task EnsureLoadedAsync_ПриПовторномОткрытииБезИзменений_ОставляетПланАктуальным()
+    {
+        await _vm.EnsureLoadedAsync();
+        _vm.SelectAllCommand.Execute(null);
+
+        await _vm.EnsureLoadedAsync();
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(_vm.IsPlanStale, Is.False);
+            Assert.That(_vm.ExecuteSelectedCommand.CanExecute(null), Is.True);
+        }
+    }
+
+    [Test]
+    public async Task ExecuteSelectedCommand_ПослеИзмененияСвязей_ТребуетПересборку()
+    {
+        await _vm.EnsureLoadedAsync();
+        _vm.SelectAllCommand.Execute(null);
+
+        _ctx.Orcestrator.RemoveRelation("s2", "s3");
+        await _vm.EnsureLoadedAsync();
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(_vm.IsPlanStale, Is.True);
+            Assert.That(_vm.ExecuteSelectedCommand.CanExecute(null), Is.False);
+            Assert.That(_vm.RunSingleStepCommand.CanExecute(_vm.Groups[0].Children[0]), Is.False);
+        }
+
+        await _vm.RebuildPlanCommand.ExecuteAsync(null);
+        _vm.SelectAllCommand.Execute(null);
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(_vm.IsPlanStale, Is.False);
+            Assert.That(_vm.ExecuteSelectedCommand.CanExecute(null), Is.True);
+            Assert.That(_vm.PlanSteps, Is.EqualTo(1));
+        }
+    }
+
+    [Test]
+    public async Task RunSingleStepCommand_ПослеОстановкиБезИзменений_УведомляетОДоступности()
+    {
+        await _vm.RebuildPlanCommand.ExecuteAsync(null);
+        var node = _vm.Groups[0].Children[0];
+        var availability = new List<bool>();
+        _vm.RunSingleStepCommand.CanExecuteChanged += (_, _) =>
+            availability.Add(_vm.RunSingleStepCommand.CanExecute(node));
+
+        _vm.IsRunning = true;
+        _vm.IsRunning = false;
+
+        Assert.That(availability, Is.EqualTo(new[] { false, true }));
     }
 
     private static Source CreateSource(string id, string name, string typeId) =>

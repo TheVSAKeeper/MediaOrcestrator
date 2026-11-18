@@ -34,9 +34,13 @@ public sealed partial class TransfersViewModel
         }
     }
 
-    internal async Task RunSingleStepAsync(TransferIntentNodeViewModel node)
+    private bool CanRunSingleStep(TransferIntentNodeViewModel? node) => node is not null && CanRunPlan;
+
+    [RelayCommand(CanExecute = nameof(CanRunSingleStep))]
+    private async Task RunSingleStepAsync(TransferIntentNodeViewModel? node)
     {
-        if (IsRunning)
+        RefreshPlanState();
+        if (node is null || !CanRunPlan)
         {
             return;
         }
@@ -113,7 +117,7 @@ public sealed partial class TransfersViewModel
             }
 
             IsRunning = false;
-            IsPlanStale = true;
+            RefreshPlanState();
             _runCts = null;
         }
     }
@@ -121,6 +125,12 @@ public sealed partial class TransfersViewModel
     [RelayCommand(CanExecute = nameof(CanExecute))]
     private async Task ExecuteSelectedAsync(CancellationToken externalToken)
     {
+        RefreshPlanState();
+        if (!CanExecute())
+        {
+            return;
+        }
+
         ResyncIntentSelectionFromTree();
 
         var selectedRoots = CollectSelectedRoots();
@@ -253,12 +263,12 @@ public sealed partial class TransfersViewModel
             }
 
             IsRunning = false;
-            IsPlanStale = true;
+            RefreshPlanState();
             _runCts = null;
         }
     }
 
-    private bool CanExecute() => !IsRunning && !IsRebuilding && HasAnySelected && HasPlan && IsUploadIntervalValid;
+    private bool CanExecute() => CanRunPlan && HasAnySelected && HasPlan && IsUploadIntervalValid;
 
     [RelayCommand(CanExecute = nameof(CanStop))]
     private void Stop()

@@ -10,6 +10,9 @@ public sealed partial class MaintenanceHubViewModel : ObservableObject, IPageHea
 {
     private const string TabSettingKey = "wpf.maintenance.tab";
 
+    private static readonly MaintenanceSection[] TabOrder =
+        [MaintenanceSection.Tasks, MaintenanceSection.Tools, MaintenanceSection.Cleanup];
+
     private readonly ToolsViewModel _tools;
     private readonly CleanupAndBackupsViewModel _cleanup;
     private readonly TasksViewModel _tasks;
@@ -33,9 +36,9 @@ public sealed partial class MaintenanceHubViewModel : ObservableObject, IPageHea
 
         Tabs =
         [
+            new(PackIconLucideKind.History, "История задач", "Активные и завершённые фоновые задачи"),
             new(PackIconLucideKind.Wrench, "Инструменты", "Установка и обновление ffmpeg, yt-dlp и deno"),
             new(PackIconLucideKind.Database, "Очистка и бэкапы", "Очистка файлов, бэкапы и коллекции БД"),
-            new(PackIconLucideKind.History, "История задач", "Активные и завершённые фоновые задачи"),
         ];
 
         _suppressPersist = true;
@@ -45,7 +48,7 @@ public sealed partial class MaintenanceHubViewModel : ObservableObject, IPageHea
                 && saved >= 0
                 && saved < Tabs.Count)
             {
-                SelectedIndex = saved;
+                SelectSection((MaintenanceSection)(saved + 1));
             }
         }
         finally
@@ -62,28 +65,23 @@ public sealed partial class MaintenanceHubViewModel : ObservableObject, IPageHea
 
     public object Current => SelectedIndex switch
     {
-        1 => _cleanup,
-        2 => _tasks,
-        _ => _tools,
+        1 => _tools,
+        2 => _cleanup,
+        _ => _tasks,
     };
 
     public void SelectSection(MaintenanceSection section)
     {
-        SelectedIndex = section switch
-        {
-            MaintenanceSection.Cleanup => 1,
-            MaintenanceSection.Tasks => 2,
-            _ => 0,
-        };
+        SelectedIndex = Math.Max(0, Array.IndexOf(TabOrder, section));
     }
 
     partial void OnSelectedIndexChanged(int value)
     {
-        if (_suppressPersist)
+        if (_suppressPersist || value < 0 || value >= TabOrder.Length)
         {
             return;
         }
 
-        _settings.SetValue(TabSettingKey, value.ToString());
+        _settings.SetValue(TabSettingKey, ((int)TabOrder[value] - 1).ToString());
     }
 }

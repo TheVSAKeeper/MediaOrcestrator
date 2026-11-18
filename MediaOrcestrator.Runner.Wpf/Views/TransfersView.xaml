@@ -182,11 +182,13 @@
                             <HierarchicalDataTemplate DataType="{x:Type vm:TransferIntentNodeViewModel}"
                                                       ItemsSource="{Binding Children}">
                                 <StackPanel Orientation="Horizontal"
-                                            Margin="0,2">
+                                            Margin="0,2"
+                                            Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=TreeView}}">
                                     <StackPanel.ContextMenu>
                                         <ContextMenu>
                                             <MenuItem Header="Выполнить только этот шаг"
-                                                      Command="{Binding RunSingleStepCommand}" />
+                                                      Command="{Binding PlacementTarget.Tag.RunSingleStepCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                      CommandParameter="{Binding}" />
                                             <Separator />
                                             <MenuItem Header="Открыть медиа в разделе «Медиа»"
                                                       Command="{Binding OpenInMediaCommand}" />
@@ -404,62 +406,8 @@
             </Border>
         </Grid>
 
-        <StackPanel Grid.Row="3"
-                    Margin="0,8,0,0">
-
-            <Grid Margin="{DynamicResource Margin.StackItem}"
-                  Visibility="{Binding HasRunProgress, Converter={StaticResource BoolToVisibility}}">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <ProgressBar Grid.Column="0"
-                             Height="8"
-                             Minimum="0"
-                             Maximum="100"
-                             Value="{Binding RunProgressPercent, Mode=OneWay}"
-                             Background="{DynamicResource Bg.SurfaceAlt}"
-                             BorderBrush="{DynamicResource Border.Subtle}"
-                             Foreground="{DynamicResource Accent.Primary}"
-                             VerticalAlignment="Center" />
-                <TextBlock Grid.Column="1"
-                           Text="{Binding RunProgressText}"
-                           Style="{StaticResource TextBlock.Subtle}"
-                           VerticalAlignment="Center"
-                           Margin="12,0,0,0" />
-            </Grid>
-
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-
-                <Button Grid.Column="0"
-                        Style="{StaticResource ActionBar.Primary}"
-                        Command="{Binding ExecuteSelectedCommand}"
-                        Content="{Binding ExecuteButtonText}"
-                        HorizontalAlignment="Stretch"
-                        Margin="0,0,8,0" />
-
-                <Button Grid.Column="1"
-                        Style="{StaticResource ActionBar.Danger}"
-                        Command="{Binding StopCommand}"
-                        MinWidth="120">
-                    <StackPanel Orientation="Horizontal">
-                        <Path Width="12"
-                              Height="12"
-                              Stretch="None"
-                              Stroke="{DynamicResource State.Error}"
-                              StrokeThickness="1.6"
-                              Fill="{DynamicResource State.ErrorSoft}"
-                              VerticalAlignment="Center"
-                              Margin="0,0,6,0"
-                              Data="M 2 2 L 10 2 L 10 10 L 2 10 Z" />
-                        <TextBlock Text="Остановить" />
-                    </StackPanel>
-                </Button>
-            </Grid>
-        </StackPanel>
+        <ContentControl Grid.Row="3"
+                        Content="{Binding}"
+                        ContentTemplate="{StaticResource TransferActions}" />
     </Grid>
 </UserControl>

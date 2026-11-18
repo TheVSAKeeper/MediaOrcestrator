@@ -9,66 +9,73 @@
              mc:Ignorable="d"
              d:DesignWidth="800">
     
-    <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
+    <Border Style="{StaticResource Card.Inset}"
+            Margin="0,6,0,0"
+            Padding="{DynamicResource Padding.Control.Compact}">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
 
-        <ProgressBar Grid.Row="0"
-                     Height="6"
-                     Minimum="0"
-                     Maximum="{Binding ProgressMax, ElementName=Root}"
-                     Value="{Binding ProgressValue, ElementName=Root, Mode=OneWay}"
-                     Margin="{DynamicResource Margin.RowGap}"
-                     Visibility="{Binding IsBusy, ElementName=Root, Converter={StaticResource BoolToVisibility}}" />
+            <ProgressBar Grid.Row="0"
+                         Height="6"
+                         Minimum="0"
+                         Maximum="{Binding ProgressMax, ElementName=Root}"
+                         Value="{Binding ProgressValue, ElementName=Root, Mode=OneWay}"
+                         Margin="{DynamicResource Margin.RowGap}"
+                         Visibility="{Binding IsBusy, ElementName=Root, Converter={StaticResource BoolToVisibility}}" />
 
-        <keepshell:StretchWrapPanel Grid.Row="1">
-            <ContentPresenter keepshell:StretchWrapPanel.Stretch="True"
-                              keepshell:StretchWrapPanel.StretchWidth="180"
-                              Content="{Binding LeftContent, ElementName=Root}"
-                              Margin="0,2,12,2"
-                              VerticalAlignment="Center" />
+            <keepshell:StretchWrapPanel Grid.Row="1">
+                <ContentPresenter Content="{Binding LeftContent, ElementName=Root}"
+                                  Margin="{DynamicResource Margin.InlineGap}"
+                                  VerticalAlignment="Center" />
 
-            <WrapPanel Orientation="Horizontal"
-                       VerticalAlignment="Center">
-                <Button Style="{StaticResource Button.Ghost}"
-                        Command="{Binding ToggleJournalCommand, ElementName=Root}"
-                        Padding="{DynamicResource Padding.Control}"
-                        Margin="0,2,8,2">
-                    <StackPanel Orientation="Horizontal">
-                        <iconPacks:PackIconLucide Kind="ScrollText"
-                                                  Width="16"
-                                                  Height="16"
-                                                  VerticalAlignment="Center"
-                                                  Margin="0,0,6,0" />
-                        <TextBlock Text="Журнал"
-                                   VerticalAlignment="Center" />
-                    </StackPanel>
-                </Button>
-                <Button Style="{StaticResource Button.Secondary}"
-                        Command="{Binding CancelCommand, ElementName=Root}"
-                        Padding="{DynamicResource Padding.Control.Large}"
-                        Margin="0,2,0,2"
-                        AutomationProperties.Name="Отменить прогон"
-                        Visibility="{Binding IsBusy, ElementName=Root, Converter={StaticResource BoolToVisibility}}">
-                    <StackPanel Orientation="Horizontal">
-                        <iconPacks:PackIconLucide Kind="X"
-                                                  Width="14"
-                                                  Height="14"
-                                                  VerticalAlignment="Center"
-                                                  Margin="0,0,6,0" />
-                        <TextBlock Text="Отмена"
-                                   VerticalAlignment="Center" />
-                    </StackPanel>
-                </Button>
-                <Button Style="{StaticResource Button.Primary}"
-                        Content="{Binding ApplyText, ElementName=Root}"
-                        Command="{Binding ApplyCommand, ElementName=Root}"
-                        Padding="{DynamicResource Padding.Control.Large}"
-                        Margin="0,2,0,2"
-                        Visibility="{Binding IsBusy, ElementName=Root, Converter={StaticResource InverseBoolToVisibility}}" />
-            </WrapPanel>
-        </keepshell:StretchWrapPanel>
-    </Grid>
+                <Border keepshell:StretchWrapPanel.Stretch="True"
+                        keepshell:StretchWrapPanel.StretchWidth="0" />
+
+                <WrapPanel Orientation="Horizontal"
+                           VerticalAlignment="Center">
+                    <Button Style="{StaticResource Button.Ghost}"
+                            Command="{Binding ToggleJournalCommand, ElementName=Root}"
+                            AutomationProperties.Name="Журнал операции"
+                            MinHeight="{DynamicResource Control.Height.Compact}"
+                            Padding="{DynamicResource Padding.Control.Compact}"
+                            Margin="0,0,4,0">
+                        <StackPanel Orientation="Horizontal">
+                            <iconPacks:PackIconLucide Kind="ScrollText"
+                                                      Width="16"
+                                                      Height="16"
+                                                      VerticalAlignment="Center"
+                                                      Margin="0,0,6,0" />
+                            <TextBlock Text="Журнал"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource Button.Secondary}"
+                            Command="{Binding CancelCommand, ElementName=Root}"
+                            MinHeight="{DynamicResource Control.Height.Compact}"
+                            Padding="{DynamicResource Padding.Control.Compact}"
+                            AutomationProperties.Name="Отменить прогон"
+                            Visibility="{Binding IsBusy, ElementName=Root, Converter={StaticResource BoolToVisibility}}">
+                        <StackPanel Orientation="Horizontal">
+                            <iconPacks:PackIconLucide Kind="X"
+                                                      Width="14"
+                                                      Height="14"
+                                                      VerticalAlignment="Center"
+                                                      Margin="0,0,6,0" />
+                            <TextBlock Text="Отмена"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource Button.Primary}"
+                            Content="{Binding ApplyText, ElementName=Root}"
+                            Command="{Binding ApplyCommand, ElementName=Root}"
+                            MinHeight="{DynamicResource Control.Height.Compact}"
+                            Padding="{DynamicResource Padding.Control.Compact}"
+                            Visibility="{Binding IsBusy, ElementName=Root, Converter={StaticResource InverseBoolToVisibility}}" />
+                </WrapPanel>
+            </keepshell:StretchWrapPanel>
+        </Grid>
+    </Border>
 </UserControl>

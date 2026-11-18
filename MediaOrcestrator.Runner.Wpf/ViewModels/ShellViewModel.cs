@@ -7,6 +7,7 @@ using MediaOrcestrator.Runner.Wpf.Services;
 using MediaOrcestrator.Runner.Wpf.ViewModels.Comments;
 using Microsoft.Extensions.Logging;
 using System.ComponentModel;
+using System.Windows;
 using System.Windows.Input;
 
 namespace MediaOrcestrator.Runner.Wpf.ViewModels;
@@ -206,6 +207,8 @@ public sealed partial class ShellViewModel : ShellViewModelBase
     public ShellPreferences Preferences => _preferences;
 
     public override IPageHeader? EffectivePageHeader => _preferences.ShowPageHeader ? CurrentPageHeader : null;
+
+    public new Thickness ContentMargin => new(20, EffectivePageHeader is null ? 14 : 0, 20, 10);
 
     public TasksViewModel Tasks { get; }
 

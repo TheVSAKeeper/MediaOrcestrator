@@ -135,6 +135,7 @@ internal static class ServiceRegistration
             var backupsPath = Path.Combine(Path.GetDirectoryName(fullDbPath)!, "backups");
 
             return new(sp.GetRequiredService<LiteDatabase>(),
+                sp.GetRequiredService<Orcestrator>(),
                 sp.GetRequiredService<DatabaseBackupService>(),
                 paths.DatabasePath,
                 paths.TempPath,

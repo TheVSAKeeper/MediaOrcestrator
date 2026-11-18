@@ -61,6 +61,7 @@ public sealed class TestDomainContext : IDisposable
         DatabaseBackupService = new(Database, dbPath, NullLogger<DatabaseBackupService>.Instance);
         DatabaseMaintenanceService = new(
             Database,
+            Orcestrator,
             DatabaseBackupService,
             dbPath,
             tempPath,

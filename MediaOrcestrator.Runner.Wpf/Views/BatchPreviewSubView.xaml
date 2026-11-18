@@ -134,12 +134,12 @@
         <ScrollViewer Grid.Row="0"
                       VerticalScrollBarVisibility="Auto"
                       HorizontalScrollBarVisibility="Disabled"
-                      MaxHeight="260"
-                      Margin="0,0,0,6">
+                      MaxHeight="190"
+                      Margin="{DynamicResource Margin.RowGap}">
             <Border Style="{StaticResource Card.Inset}"
                     Padding="{DynamicResource Padding.Panel.Dense}">
             <StackPanel>
-                <controls:BatchMediaToolbar Margin="0,0,0,4"
+                <controls:BatchMediaToolbar Margin="{DynamicResource Margin.RowGap}"
                                             MediasSummary="{Binding MediasSummary}"
                                             LoadAllMediaCommand="{Binding LoadAllMediaCommand}"
                                             ClearMediaCommand="{Binding ClearMediaCommand}"
@@ -147,26 +147,22 @@
                                             CanEditParameters="{Binding CanEditParameters}"
                                             StopOnError="{Binding StopOnError}" />
 
-                <Grid Margin="0,2,0,0">
+                <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
 
                     <StackPanel Grid.Column="0"
-                                Margin="0,0,12,0">
-                        <TextBlock Text="Источник превью"
-                                   Style="{StaticResource TextBlock.Subtle}"
-                                   Margin="0,0,0,2" />
-
+                                Margin="0,0,6,0">
                         <Border HorizontalAlignment="Left"
                                 Background="{DynamicResource Bg.SurfaceAlt}"
                                 BorderBrush="{DynamicResource Border.Subtle}"
                                 BorderThickness="1"
                                 CornerRadius="{DynamicResource Radius.M}"
                                 Padding="2"
-                                Margin="0,0,0,6">
-                            
+                                Margin="{DynamicResource Margin.StackItem.Dense}">
+
                             <WrapPanel Orientation="Horizontal">
                                 <RadioButton Style="{StaticResource RadioButton.Segment}"
                                              GroupName="PreviewSource"
@@ -195,62 +191,20 @@
                             </WrapPanel>
                         </Border>
 
-                        <Grid>
-                            <Grid Visibility="{Binding IsDonorMode, Converter={StaticResource BoolToVisibility}}">
-                                <ComboBox x:Name="DonorComboBox"
-                                          Style="{StaticResource ComboBox.Toolbar}"
-                                          ItemsSource="{Binding Donors}"
-                                          SelectedItem="{Binding SelectedDonor}"
-                                          DisplayMemberPath="TitleFull"
-                                          IsEnabled="{Binding IsDonorMode}"
-                                          ToolTip="Площадка-донор: с неё берётся текущее превью каждого видео"
-                                          AutomationProperties.Name="Площадка-донор" />
-                                <TextBlock Text="Выберите площадку-донора…"
-                                           Foreground="{DynamicResource Fg.Muted}"
-                                           VerticalAlignment="Center"
-                                           Margin="10,0,28,0"
-                                           IsHitTestVisible="False">
-                                    <TextBlock.Style>
-                                        <Style TargetType="TextBlock">
-                                            <Setter Property="Visibility" Value="Collapsed" />
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding SelectedItem, ElementName=DonorComboBox}" Value="{x:Null}">
-                                                    <Setter Property="Visibility" Value="Visible" />
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </TextBlock.Style>
-                                </TextBlock>
-                            </Grid>
-
-                            <controls:FilePickerField Path="{Binding FilePath, Mode=TwoWay}"
-                                                      IsPathEditable="True"
-                                                      Placeholder="Путь к файлу или перетащите картинку"
-                                                      Icon="Image"
-                                                      AllowedExtensions=".jpg;.jpeg;.png;.webp;.bmp"
-                                                      BrowseCommand="{Binding BrowseFileCommand}"
-                                                      ClearCommand="{Binding ClearFileCommand}"
-                                                      IsEnabled="{Binding IsFileMode}"
-                                                      BrowseToolTip="Выбрать файл превью"
-                                                      BrowseAutomationName="Выбрать файл превью"
-                                                      ClearAutomationName="Очистить путь к файлу превью"
-                                                      Visibility="{Binding IsFileMode, Converter={StaticResource BoolToVisibility}}" />
-
-                            <Grid Visibility="{Binding IsTemplateMode, Converter={StaticResource BoolToVisibility}}">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <Grid Grid.Column="0">
-                                    <ComboBox x:Name="TemplateProfileComboBox"
+                        <keepshell:StretchWrapPanel>
+                            <Grid keepshell:StretchWrapPanel.Stretch="True"
+                                  keepshell:StretchWrapPanel.StretchWidth="248"
+                                  Margin="0,0,6,0">
+                                <Grid Visibility="{Binding IsDonorMode, Converter={StaticResource BoolToVisibility}}">
+                                    <ComboBox x:Name="DonorComboBox"
                                               Style="{StaticResource ComboBox.Toolbar}"
-                                              ItemsSource="{Binding TemplatePicker.Profiles}"
-                                              SelectedItem="{Binding TemplatePicker.SelectedProfileName, Mode=TwoWay}"
-                                              IsEnabled="{Binding IsTemplateMode}"
-                                              ToolTip="Профиль шаблона обложки"
-                                              AutomationProperties.Name="Профиль шаблона обложки" />
-                                    <TextBlock Text="Выберите профиль шаблона…"
+                                              ItemsSource="{Binding Donors}"
+                                              SelectedItem="{Binding SelectedDonor}"
+                                              DisplayMemberPath="TitleFull"
+                                              IsEnabled="{Binding IsDonorMode}"
+                                              ToolTip="Площадка-донор: с неё берётся текущее превью каждого видео"
+                                              AutomationProperties.Name="Площадка-донор" />
+                                    <TextBlock Text="Выберите площадку-донора…"
                                                Foreground="{DynamicResource Fg.Muted}"
                                                VerticalAlignment="Center"
                                                Margin="10,0,28,0"
@@ -259,7 +213,7 @@
                                             <Style TargetType="TextBlock">
                                                 <Setter Property="Visibility" Value="Collapsed" />
                                                 <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding SelectedItem, ElementName=TemplateProfileComboBox}" Value="{x:Null}">
+                                                    <DataTrigger Binding="{Binding SelectedItem, ElementName=DonorComboBox}" Value="{x:Null}">
                                                         <Setter Property="Visibility" Value="Visible" />
                                                     </DataTrigger>
                                                 </Style.Triggers>
@@ -267,41 +221,86 @@
                                         </TextBlock.Style>
                                     </TextBlock>
                                 </Grid>
-                                <Button Grid.Column="1"
-                                        Style="{StaticResource Button.Icon}"
-                                        Command="{Binding TemplatePicker.DeleteProfileCommand}"
-                                        IsEnabled="{Binding IsTemplateMode}"
-                                        Margin="6,0,0,0"
-                                        ToolTipService.ShowOnDisabled="True"
-                                        ToolTip="Удалить выбранный профиль"
-                                        AutomationProperties.Name="Удалить профиль обложки">
-                                    <iconPacks:PackIconLucide Kind="Trash2"
-                                                              Width="14"
-                                                              Height="14" />
-                                </Button>
-                                <Button Grid.Column="2"
-                                        Style="{StaticResource Button.Ghost}"
-                                        Content="Настроить…"
-                                        Command="{Binding TemplatePicker.OpenEditorCommand}"
-                                        IsEnabled="{Binding IsTemplateMode}"
-                                        Padding="{DynamicResource Padding.Control.Compact}"
-                                        Margin="6,0,0,0"
-                                        AutomationProperties.Name="Настроить шаблон обложки" />
-                            </Grid>
-                        </Grid>
 
-                        <controls:SourceFilterDropDown Label="Куда применить"
-                                                       ItemsSource="{Binding Targets}"
-                                                       CanEdit="{Binding CanEditParameters}"
-                                                       SelectAllCommand="{Binding SelectAllTargetsCommand}"
-                                                       SelectNoneCommand="{Binding SelectNoTargetsCommand}"
-                                                       HorizontalAlignment="Left"
-                                                       Margin="0,6,0,0" />
+                                <controls:FilePickerField Path="{Binding FilePath, Mode=TwoWay}"
+                                                          IsPathEditable="True"
+                                                          Placeholder="Путь к файлу или перетащите картинку"
+                                                          Icon="Image"
+                                                          AllowedExtensions=".jpg;.jpeg;.png;.webp;.bmp"
+                                                          BrowseCommand="{Binding BrowseFileCommand}"
+                                                          ClearCommand="{Binding ClearFileCommand}"
+                                                          IsEnabled="{Binding IsFileMode}"
+                                                          BrowseToolTip="Выбрать файл превью"
+                                                          BrowseAutomationName="Выбрать файл превью"
+                                                          ClearAutomationName="Очистить путь к файлу превью"
+                                                          Visibility="{Binding IsFileMode, Converter={StaticResource BoolToVisibility}}" />
+
+                                <Grid Visibility="{Binding IsTemplateMode, Converter={StaticResource BoolToVisibility}}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid Grid.Column="0">
+                                        <ComboBox x:Name="TemplateProfileComboBox"
+                                                  Style="{StaticResource ComboBox.Toolbar}"
+                                                  ItemsSource="{Binding TemplatePicker.Profiles}"
+                                                  SelectedItem="{Binding TemplatePicker.SelectedProfileName, Mode=TwoWay}"
+                                                  IsEnabled="{Binding IsTemplateMode}"
+                                                  ToolTip="Профиль шаблона обложки"
+                                                  AutomationProperties.Name="Профиль шаблона обложки" />
+                                        <TextBlock Text="Выберите профиль шаблона…"
+                                                   Foreground="{DynamicResource Fg.Muted}"
+                                                   VerticalAlignment="Center"
+                                                   Margin="10,0,28,0"
+                                                   IsHitTestVisible="False">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding SelectedItem, ElementName=TemplateProfileComboBox}" Value="{x:Null}">
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Grid>
+                                    <Button Grid.Column="1"
+                                            Style="{StaticResource Button.Icon}"
+                                            Command="{Binding TemplatePicker.DeleteProfileCommand}"
+                                            IsEnabled="{Binding IsTemplateMode}"
+                                            Margin="6,0,0,0"
+                                            ToolTipService.ShowOnDisabled="True"
+                                            ToolTip="Удалить выбранный профиль"
+                                            AutomationProperties.Name="Удалить профиль обложки">
+                                        <iconPacks:PackIconLucide Kind="Trash2"
+                                                                  Width="14"
+                                                                  Height="14" />
+                                    </Button>
+                                    <Button Grid.Column="2"
+                                            Style="{StaticResource Button.Ghost}"
+                                            Content="Настроить…"
+                                            Command="{Binding TemplatePicker.OpenEditorCommand}"
+                                            IsEnabled="{Binding IsTemplateMode}"
+                                            Padding="{DynamicResource Padding.Control.Compact}"
+                                            Margin="6,0,0,0"
+                                            AutomationProperties.Name="Настроить шаблон обложки" />
+                                </Grid>
+                            </Grid>
+                            <controls:SourceFilterDropDown Label="Куда применить"
+                                                           ItemsSource="{Binding Targets}"
+                                                           CanEdit="{Binding CanEditParameters}"
+                                                           SelectAllCommand="{Binding SelectAllTargetsCommand}"
+                                                           SelectNoneCommand="{Binding SelectNoTargetsCommand}"
+                                                           HorizontalAlignment="Left"
+                                                           VerticalAlignment="Center" />
+                        </keepshell:StretchWrapPanel>
                     </StackPanel>
 
                     <Border Grid.Column="1"
-                            Width="160"
-                            Height="90"
+                            Width="120"
+                            MinHeight="68"
                             VerticalAlignment="Top"
                             Background="{DynamicResource Bg.SurfaceAlt}"
                             BorderBrush="{DynamicResource Border.Subtle}"
@@ -310,17 +309,18 @@
                             ClipToBounds="True"
                             ToolTip="{Binding PreviewHint}">
                         <Grid>
-                            <Image Source="{Binding PreviewImage}"
+                            <Image Height="68"
+                                   Source="{Binding PreviewImage}"
                                    Stretch="Uniform"
                                    Visibility="{Binding PreviewImage, Converter={StaticResource NullToVisibility}}" />
                             
                             <StackPanel HorizontalAlignment="Center"
                                         VerticalAlignment="Center"
-                                        Margin="8"
+                                        Margin="4"
                                         Visibility="{Binding PreviewHint, Converter={StaticResource NullToVisibility}}">
                                 <iconPacks:PackIconLucide Kind="Image"
-                                                          Width="20"
-                                                          Height="20"
+                                                          Width="16"
+                                                          Height="16"
                                                           HorizontalAlignment="Center"
                                                           Foreground="{DynamicResource Fg.Muted}"
                                                           Margin="0,0,0,4" />
@@ -398,25 +398,21 @@
                      VirtualizingStackPanel.VirtualizationMode="Recycling" />
         </controls:OperationResultPanel>
 
-        <Border Grid.Row="2"
-                Style="{StaticResource Card.Inset}"
-                Margin="0,8,0,0">
-            
-            <controls:OperationActionBar ApplyText="{Binding ApplyButtonText}"
-                                         ApplyCommand="{Binding ApplyCommand}"
-                                         CancelCommand="{Binding CancelCommand}"
-                                         IsBusy="{Binding IsApplying}"
-                                         ProgressValue="{Binding ProgressValue}"
-                                         ProgressMax="{Binding ProgressMax}"
-                                         ToggleJournalCommand="{Binding ToggleJournalCommand}">
-                <TextBlock Style="{StaticResource TextBlock.Subtle}"
-                           VerticalAlignment="Center">
-                    <Run Text="К применению: " />
-                    <Run Text="{Binding ActionableCount, Mode=OneWay}" />
-                    <Run Text=" из " />
-                    <Run Text="{Binding Rows.Count, Mode=OneWay}" />
-                </TextBlock>
-            </controls:OperationActionBar>
-        </Border>
+        <controls:OperationActionBar Grid.Row="2"
+                                     ApplyText="{Binding ApplyButtonText}"
+                                     ApplyCommand="{Binding ApplyCommand}"
+                                     CancelCommand="{Binding CancelCommand}"
+                                     IsBusy="{Binding IsApplying}"
+                                     ProgressValue="{Binding ProgressValue}"
+                                     ProgressMax="{Binding ProgressMax}"
+                                     ToggleJournalCommand="{Binding ToggleJournalCommand}">
+            <TextBlock Style="{StaticResource TextBlock.Subtle}"
+                       VerticalAlignment="Center">
+                <Run Text="К применению: " />
+                <Run Text="{Binding ActionableCount, Mode=OneWay}" />
+                <Run Text=" из " />
+                <Run Text="{Binding Rows.Count, Mode=OneWay}" />
+            </TextBlock>
+        </controls:OperationActionBar>
     </Grid>
 </UserControl>

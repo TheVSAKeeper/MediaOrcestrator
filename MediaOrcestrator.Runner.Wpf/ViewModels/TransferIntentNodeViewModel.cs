@@ -73,9 +73,6 @@ public sealed partial class TransferIntentNodeViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private Task RunSingleStep() => _owner.RunSingleStepAsync(this);
-
-    [RelayCommand]
     private void OpenInMedia() => _owner.OpenInMedia(Intent.Media);
 
     [RelayCommand]

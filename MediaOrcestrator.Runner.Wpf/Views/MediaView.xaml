@@ -93,28 +93,22 @@
                 Background="{DynamicResource Bg.Surface}"
                 BorderBrush="{DynamicResource Border.Subtle}"
                 BorderThickness="0,1,0,0"
-                Padding="{DynamicResource Padding.Section}">
+                Padding="8,2">
             <Grid>
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"
-                                      MinWidth="60" />
-                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
-                <TextBlock Grid.Column="0"
-                           Text="{Binding Grid.SelectedSummaryText}"
-                           Style="{StaticResource TextBlock.Subtle}"
-                           VerticalAlignment="Center"
-                           TextTrimming="CharacterEllipsis" />
-
-                <WrapPanel Grid.Column="1"
+                <WrapPanel Grid.Column="0"
                            Orientation="Horizontal"
-                           VerticalAlignment="Center"
-                           Margin="16,0,0,0">
-                    <Grid Margin="0,2,8,2">
+                           VerticalAlignment="Center">
+                    <Grid Margin="0,0,4,0">
                         <ToggleButton x:Name="TransferButton"
                                       Style="{StaticResource ToggleButton.Toolbar}"
+                                      Height="Auto"
+                                      MinHeight="{DynamicResource Control.Height.Compact}"
+                                      Padding="8,2"
                                       ToolTip="Передать через связь источников"
                                       AutomationProperties.Name="Передать через связь источников">
                             <StackPanel Orientation="Horizontal">
@@ -160,8 +154,9 @@
                     <Button Style="{StaticResource Button.Ghost}"
                             Command="{Binding Grid.OpenRenameOperationCommand}"
                             IsEnabled="{Binding Grid.HasSelection}"
+                            MinHeight="{DynamicResource Control.Height.Compact}"
                             Padding="{DynamicResource Padding.Control.Compact}"
-                            Margin="0,2,8,2"
+                            Margin="0,0,4,0"
                             ToolTip="Открыть пакетное переименование для выделенного"
                             AutomationProperties.Name="Переименовать выделенное">
                         <StackPanel Orientation="Horizontal">
@@ -178,8 +173,9 @@
                     <Button Style="{StaticResource Button.Ghost}"
                             Command="{Binding Grid.OpenPreviewOperationCommand}"
                             IsEnabled="{Binding Grid.HasSelection}"
+                            MinHeight="{DynamicResource Control.Height.Compact}"
                             Padding="{DynamicResource Padding.Control.Compact}"
-                            Margin="0,2,8,2"
+                            Margin="0,0,4,0"
                             ToolTip="Открыть обновление обложек для выделенного"
                             AutomationProperties.Name="Обложки выделенного">
                         <StackPanel Orientation="Horizontal">
@@ -196,8 +192,9 @@
                     <Button Style="{StaticResource Button.Ghost}"
                             Command="{Binding Grid.OpenMergeOperationCommand}"
                             IsEnabled="{Binding Grid.HasSelection}"
+                            MinHeight="{DynamicResource Control.Height.Compact}"
                             Padding="{DynamicResource Padding.Control.Compact}"
-                            Margin="0,2,0,2"
+                            Margin="0"
                             ToolTip="Открыть слияние дублей для выделенного"
                             AutomationProperties.Name="Слить дубли выделенного">
                         <StackPanel Orientation="Horizontal">
@@ -212,10 +209,13 @@
                     </Button>
                 </WrapPanel>
 
-                <Grid Grid.Column="2"
-                      Margin="16,0,0,0">
+                <Grid Grid.Column="1"
+                      Margin="6,0,0,0">
                     <ToggleButton x:Name="MoreActionsButton"
                                   Style="{StaticResource ToggleButton.Toolbar}"
+                                      Height="Auto"
+                                      MinHeight="{DynamicResource Control.Height.Compact}"
+                                      Padding="8,2"
                                   ToolTip="Все действия над выделением"
                                   AutomationProperties.Name="Все действия над выделением">
                         <iconPacks:PackIconLucide Kind="Ellipsis"

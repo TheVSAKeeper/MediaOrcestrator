@@ -99,27 +99,22 @@ public sealed partial class MaintenanceViewModel : ObservableObject
         {
             item.PropertyChanged += OnItemPropertyChanged;
         }
-
-        _ = RefreshAllAsync();
     }
+
+    internal event EventHandler? CleanupFinished;
 
     public ObservableCollection<MaintenanceItemViewModel> SafeItems { get; }
 
     [RelayCommand(CanExecute = nameof(CanRefresh))]
-    private async Task RefreshAllAsync()
-    {
-        if (IsBusy)
-        {
-            return;
-        }
+    private Task RefreshAllAsync() => IsBusy ? Task.CompletedTask : LoadSizesAsync();
 
-        await Task.Run(() =>
+    internal async Task LoadSizesAsync()
+    {
+        var sizes = await Task.Run(() => SafeItems.Select(MeasureItem).ToArray());
+        for (var i = 0; i < sizes.Length; i++)
         {
-            foreach (var item in SafeItems)
-            {
-                item.SizeText = MeasureItem(item);
-            }
-        });
+            SafeItems[i].SizeText = sizes[i];
+        }
     }
 
     [RelayCommand(CanExecute = nameof(CanRunSafe))]
@@ -222,6 +217,7 @@ public sealed partial class MaintenanceViewModel : ObservableObject
         {
             IsBusy = false;
             ProgressValue = ProgressMax;
+            CleanupFinished?.Invoke(this, EventArgs.Empty);
         }
     }
 

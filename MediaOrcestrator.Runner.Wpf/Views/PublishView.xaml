@@ -49,16 +49,19 @@
                 <Border x:Name="FormCard"
                         Grid.Column="0"
                         Grid.Row="0"
-                        Style="{StaticResource Card}">
+                        Style="{StaticResource Card}"
+                        Padding="{DynamicResource Padding.Panel.Dense}">
                     <ScrollViewer x:Name="FormScrollViewer"
                                   VerticalScrollBarVisibility="Auto">
                     <StackPanel>
                         <TextBlock Text="Источник"
                                    Style="{StaticResource FieldLabel}" />
-                        <ComboBox ItemsSource="{Binding Sources}"
+                        <ComboBox Style="{StaticResource ComboBox.Toolbar}"
+                                  AutomationProperties.Name="Источник публикации"
+                                  ItemsSource="{Binding Sources}"
                                   SelectedItem="{Binding SelectedSource, Mode=TwoWay}"
                                   IsEnabled="{Binding CanEditFields}"
-                                  Margin="0,0,0,16">
+                                  Margin="{DynamicResource Margin.RowGap}">
                             <ComboBox.ItemTemplate>
                                 <DataTemplate>
                                     <TextBlock Text="{Binding TitleFull}"
@@ -67,7 +70,7 @@
                             </ComboBox.ItemTemplate>
                         </ComboBox>
 
-                        <Grid Margin="0,0,0,16">
+                        <Grid Margin="{DynamicResource Margin.RowGap}">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
@@ -85,6 +88,8 @@
 
                             <ComboBox Grid.Row="1"
                                       Grid.Column="0"
+                                      Style="{StaticResource ComboBox.Toolbar}"
+                                      AutomationProperties.Name="Название публикации"
                                       IsEditable="True"
                                       StaysOpenOnEdit="True"
                                       IsTextSearchEnabled="True"
@@ -97,7 +102,8 @@
                                     Grid.Column="1"
                                     Style="{StaticResource Button.Ghost}"
                                     Margin="6,0,0,0"
-                                    Padding="10,4"
+                                    MinHeight="{DynamicResource Control.Height.Compact}"
+                                    Padding="{DynamicResource Padding.Control.Compact}"
                                     Command="{Binding ApplyTitleSuggestionCommand}"
                                     CommandParameter="{Binding FirstTitleSuggestion}"
                                     ToolTip="Подставить последнее опубликованное название"
@@ -109,7 +115,7 @@
                             </Button>
                         </Grid>
 
-                        <Grid Margin="0,0,0,8">
+                        <Grid Margin="{DynamicResource Margin.StackItem.Dense}">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
@@ -117,6 +123,7 @@
 
                             <TextBlock Grid.Column="0"
                                        Text="Описание"
+                                       VerticalAlignment="Center"
                                        Style="{StaticResource FieldLabel}" />
 
                             <Grid Grid.Column="1"
@@ -125,7 +132,8 @@
                                 <ComboBox x:Name="DescriptionTemplateComboBox"
                                           ItemsSource="{Binding DescriptionTemplates}"
                                           DisplayMemberPath="Preview"
-                                          MinWidth="160"
+                                          Style="{StaticResource ComboBox.Toolbar}"
+                                          MinWidth="180"
                                           MaxWidth="320"
                                           IsEnabled="{Binding CanEditFields}"
                                           ToolTip="Шаблоны описания: сайдкар-файлы видео и история источника"
@@ -155,12 +163,14 @@
                                  AcceptsReturn="True"
                                  TextWrapping="Wrap"
                                  VerticalScrollBarVisibility="Auto"
-                                 MinHeight="140"
-                                 MaxHeight="240" />
+                                 MinLines="2"
+                                 MaxLines="6"
+                                 Padding="8,4"
+                                 AutomationProperties.Name="Описание" />
 
                         <TextBlock Style="{StaticResource TextBlock.Subtle}"
                                    HorizontalAlignment="Right"
-                                   Margin="0,4,0,16">
+                                   Margin="0,2,0,6">
                             <Run Text="Символов:" />
                             <Run Text="{Binding DescriptionLength, Mode=OneWay}" />
                         </TextBlock>
@@ -178,7 +188,7 @@
                                                   BrowseToolTip="Выбрать другой файл"
                                                   BrowseAutomationName="Выбрать другой файл видео"
                                                   ClearAutomationName="Очистить видео"
-                                                  Margin="0,0,0,16" />
+                                                  Margin="{DynamicResource Margin.RowGap}" />
 
                         <TextBlock Text="Обложка"
                                    Style="{StaticResource FieldLabel}" />
@@ -201,8 +211,9 @@
                         Grid.Column="1"
                         Grid.Row="0"
                         Width="340"
-                        Margin="16,0,0,0"
-                        Style="{StaticResource Card}">
+                        Margin="6,0,0,0"
+                        Style="{StaticResource Card}"
+                        Padding="{DynamicResource Padding.Panel.Dense}">
                     <ScrollViewer VerticalScrollBarVisibility="Auto"
                                   HorizontalScrollBarVisibility="Disabled">
                         <Grid>
@@ -219,7 +230,7 @@
                     <Border Grid.Row="1"
                             Style="{StaticResource Card.Inset}"
                             Padding="0"
-                            MinHeight="200">
+                            MinHeight="140">
                         <Grid>
                             <Image x:Name="CoverPreviewImage"
                                    Source="{Binding CoverPath, Converter={StaticResource StringToImageSource}}"
@@ -243,7 +254,7 @@
                     </Border>
 
                     <StackPanel Grid.Row="2"
-                                Margin="0,12,0,0">
+                                Margin="0,6,0,0">
                         <TextBlock Text="По шаблону"
                                    Style="{StaticResource FieldLabel}" />
                         <ComboBox ItemsSource="{Binding TemplatePicker.Profiles}"
@@ -293,9 +304,8 @@
 
         <Border Grid.Row="1"
                 Style="{StaticResource Card.Inset}"
-                Margin="0,16,0,0"
-                Padding="16,12"
-                CornerRadius="{DynamicResource Radius.L}">
+                Margin="0,4,0,0"
+                Padding="6,2">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
@@ -304,11 +314,12 @@
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Grid.Column="0"
+                            Margin="0,0,6,0"
                             VerticalAlignment="Center">
                     <TextBlock Text="{Binding StatusMessage}"
                                TextWrapping="Wrap">
                         <TextBlock.Style>
-                            <Style TargetType="TextBlock">
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource TextBlock.Subtle}">
                                 <Setter Property="Foreground"
                                         Value="{DynamicResource Fg.Secondary}" />
                                 <Style.Triggers>
@@ -336,7 +347,10 @@
 
                 <ToggleButton Grid.Column="1"
                               Style="{StaticResource ToggleButton.Toolbar}"
-                              Margin="16,0,0,0"
+                              Height="Auto"
+                              MinHeight="{DynamicResource Control.Height.Compact}"
+                              Padding="8,2"
+                              VerticalAlignment="Center"
                               IsChecked="{Binding RunChainAfterPublish}"
                               IsEnabled="{Binding CanEditFields}"
                               ToolTip="После успешной публикации прогнать запланированные передачи по связям источника"
@@ -353,8 +367,10 @@
                 </ToggleButton>
 
                 <Button Grid.Column="2"
-                        MinWidth="160"
-                        Margin="8,0,0,0"
+                        MinHeight="{DynamicResource Control.Height.Compact}"
+                        Padding="{DynamicResource Padding.Control.Compact}"
+                        VerticalAlignment="Center"
+                        Margin="4,0,0,0"
                         Command="{Binding PublishCommand}">
                     <Button.Style>
                         <Style TargetType="Button"

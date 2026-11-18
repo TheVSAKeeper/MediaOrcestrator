@@ -125,36 +125,35 @@
 
         <Border Grid.Row="0"
                 Style="{StaticResource Card.Inset}"
-                Margin="{DynamicResource Margin.StackItem}">
+                Margin="{DynamicResource Margin.RowGap}"
+                Padding="{DynamicResource Padding.Panel.Dense}">
             <keepshell:StretchWrapPanel>
-                <WrapPanel keepshell:StretchWrapPanel.Stretch="True"
-                           keepshell:StretchWrapPanel.StretchWidth="200"
-                           Orientation="Horizontal"
-                           VerticalAlignment="Center">
-                    <controls:SourceFilterDropDown Label="Источники"
-                                                   ItemsSource="{Binding Scope}"
-                                                   CanEdit="{Binding CanEditParameters}"
-                                                   SelectAllCommand="{Binding SelectAllScopeCommand}"
-                                                   SelectNoneCommand="{Binding SelectNoScopeCommand}"
-                                                   VerticalAlignment="Center"
-                                                   Margin="0,2,10,2" />
+                <controls:SourceFilterDropDown Label="Источники"
+                                               ItemsSource="{Binding Scope}"
+                                               CanEdit="{Binding CanEditParameters}"
+                                               SelectAllCommand="{Binding SelectAllScopeCommand}"
+                                               SelectNoneCommand="{Binding SelectNoScopeCommand}"
+                                               VerticalAlignment="Center"
+                                               Margin="{DynamicResource Margin.InlineGap}" />
 
-                    <Button Style="{StaticResource Button.Primary}"
-                            Command="{Binding FindCandidatesCommand}"
-                            Padding="{DynamicResource Padding.Control}"
-                            Margin="0,2,12,2"
-                            VerticalAlignment="Center">
-                        <StackPanel Orientation="Horizontal">
-                            <iconPacks:PackIconLucide Kind="RotateCw"
-                                              Width="14"
-                                              Height="14"
-                                              VerticalAlignment="Center"
-                                              Margin="0,0,6,0" />
-                            <TextBlock Text="Найти кандидатов"
-                                       VerticalAlignment="Center" />
-                        </StackPanel>
-                    </Button>
-                </WrapPanel>
+                <Button Style="{StaticResource Button.Primary}"
+                        Command="{Binding FindCandidatesCommand}"
+                        Padding="{DynamicResource Padding.Control}"
+                        Margin="{DynamicResource Margin.InlineGap}"
+                        VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal">
+                        <iconPacks:PackIconLucide Kind="RotateCw"
+                                          Width="14"
+                                          Height="14"
+                                          VerticalAlignment="Center"
+                                          Margin="0,0,6,0" />
+                        <TextBlock Text="Найти кандидатов"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+
+                <Border keepshell:StretchWrapPanel.Stretch="True"
+                        keepshell:StretchWrapPanel.StretchWidth="0" />
 
                 <CheckBox IsChecked="{Binding StopOnError}"
                           IsEnabled="{Binding CanEditParameters}"
@@ -219,27 +218,23 @@
             </ItemsControl>
         </controls:OperationResultPanel>
 
-        <Border Grid.Row="2"
-                Style="{StaticResource Card.Inset}"
-                Margin="0,8,0,0">
-            
-            <controls:OperationActionBar ApplyText="{Binding ApplyButtonText}"
-                                         ApplyCommand="{Binding ApplyCommand}"
-                                         CancelCommand="{Binding CancelCommand}"
-                                         IsBusy="{Binding IsApplying}"
-                                         ProgressValue="{Binding ProgressValue}"
-                                         ProgressMax="{Binding ProgressMax}"
-                                         ToggleJournalCommand="{Binding ToggleJournalCommand}">
-                <TextBlock Style="{StaticResource TextBlock.Subtle}"
-                           TextWrapping="NoWrap"
-                           TextTrimming="CharacterEllipsis"
-                           VerticalAlignment="Center">
-                    <Run Text="Отмечено групп: " />
-                    <Run Text="{Binding CheckedGroups, Mode=OneWay}" />
-                    <Run Text=" · к удалению: " />
-                    <Run Text="{Binding MediasToRemove, Mode=OneWay}" />
-                </TextBlock>
-            </controls:OperationActionBar>
-        </Border>
+        <controls:OperationActionBar Grid.Row="2"
+                                     ApplyText="{Binding ApplyButtonText}"
+                                     ApplyCommand="{Binding ApplyCommand}"
+                                     CancelCommand="{Binding CancelCommand}"
+                                     IsBusy="{Binding IsApplying}"
+                                     ProgressValue="{Binding ProgressValue}"
+                                     ProgressMax="{Binding ProgressMax}"
+                                     ToggleJournalCommand="{Binding ToggleJournalCommand}">
+            <TextBlock Style="{StaticResource TextBlock.Subtle}"
+                       TextWrapping="NoWrap"
+                       TextTrimming="CharacterEllipsis"
+                       VerticalAlignment="Center">
+                <Run Text="Отмечено групп: " />
+                <Run Text="{Binding CheckedGroups, Mode=OneWay}" />
+                <Run Text=" · к удалению: " />
+                <Run Text="{Binding MediasToRemove, Mode=OneWay}" />
+            </TextBlock>
+        </controls:OperationActionBar>
     </Grid>
 </UserControl>

@@ -81,11 +81,10 @@
 
                 <controls:DatabaseBackupsCard />
 
-                <Border Background="{DynamicResource State.ErrorSoft}"
+                <Border Style="{StaticResource Card.Inset}"
                         BorderBrush="{DynamicResource State.Error}"
-                        BorderThickness="1"
-                        CornerRadius="{DynamicResource Radius.L}"
-                        Padding="20"
+                        BorderThickness="2,1,1,1"
+                        Padding="{DynamicResource Padding.Panel.Dense}"
                         Margin="0,0,0,4">
                     <StackPanel>
                         <Grid Margin="0,0,0,4">
@@ -108,7 +107,7 @@
                                        FontFamily="{DynamicResource Font.Sans}"
                                        FontSize="{DynamicResource Font.Size.L}"
                                        FontWeight="SemiBold"
-                                       Foreground="{DynamicResource State.Error}"
+                                       Foreground="{DynamicResource Fg.Primary}"
                                        VerticalAlignment="Center" />
 
                             <TextBlock Grid.Column="2"
@@ -151,8 +150,8 @@
                                             BorderBrush="{DynamicResource Border.Subtle}"
                                             BorderThickness="1"
                                             CornerRadius="{DynamicResource Radius.M}"
-                                            Padding="14,12"
-                                            Margin="0,0,0,8">
+                                            Padding="8,6"
+                                            Margin="{DynamicResource Margin.StackItem.Dense}">
                                         <StackPanel>
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
@@ -163,6 +162,7 @@
 
                                                 <CheckBox Grid.Column="0"
                                                           IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                                          AutomationProperties.Name="{Binding Title}"
                                                           VerticalAlignment="Center"
                                                           Margin="0,0,12,0">
                                                     <CheckBox.Style>
@@ -180,7 +180,7 @@
                                                     <TextBlock Text="{Binding Title}"
                                                                FontWeight="SemiBold" />
                                                     <TextBlock Text="{Binding Description}"
-                                                               Style="{StaticResource TextBlock.Subtle}"
+                                                               Foreground="{DynamicResource Fg.Secondary}"
                                                                TextWrapping="Wrap"
                                                                Margin="0,2,0,0" />
                                                 </StackPanel>
@@ -194,9 +194,9 @@
                                                            FontSize="{DynamicResource Font.Size.S}" />
                                             </Grid>
 
-                                            <Grid Margin="32,6,0,0"
-                                                  MinHeight="18">
+                                            <Grid>
                                                 <StackPanel Orientation="Horizontal"
+                                                            Margin="32,4,0,0"
                                                             Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}">
                                                     <controls:SpinningLoader Width="14"
                                                                              Height="14"
@@ -208,6 +208,7 @@
                                                                VerticalAlignment="Center" />
                                                 </StackPanel>
                                                 <TextBlock Text="{Binding ResultText}"
+                                                           Margin="32,4,0,0"
                                                            TextWrapping="Wrap"
                                                            Visibility="{Binding IsResultVisible, Converter={StaticResource BoolToVisibility}}">
                                                     <TextBlock.Style>

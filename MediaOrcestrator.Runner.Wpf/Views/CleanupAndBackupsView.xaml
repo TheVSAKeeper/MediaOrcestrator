@@ -3,19 +3,53 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="clr-namespace:MediaOrcestrator.Runner.Wpf.ViewModels"
              xmlns:views="clr-namespace:MediaOrcestrator.Runner.Wpf.Views"
+             xmlns:keepshell="https://schemas.keepshell.dev/wpf"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance vm:CleanupAndBackupsViewModel}"
              d:DesignHeight="720"
-             d:DesignWidth="900">
-    <ScrollViewer VerticalScrollBarVisibility="Auto"
-                  HorizontalScrollBarVisibility="Disabled"
-                  Padding="0,0,12,0">
-        <StackPanel>
-            <views:MaintenanceView DataContext="{Binding Files}"
-                                   Margin="0,0,0,4" />
-            <views:DatabaseCleanupView DataContext="{Binding Database}" />
-        </StackPanel>
-    </ScrollViewer>
+             d:DesignWidth="900"
+             Loaded="OnLoaded">
+    <Grid>
+        <ScrollViewer VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled"
+                      Padding="0,0,6,0"
+                      Visibility="{Binding HasLoaded, Converter={StaticResource BoolToVisibility}}">
+            <StackPanel>
+                <views:MaintenanceView DataContext="{Binding Files}"
+                                       Margin="0,0,0,4" />
+                <views:DatabaseCleanupView DataContext="{Binding Database}" />
+            </StackPanel>
+        </ScrollViewer>
+
+        <TextBlock Text="Загрузка сведений об очистке и бэкапах…"
+                   HorizontalAlignment="Center"
+                   VerticalAlignment="Center"
+                   AutomationProperties.LiveSetting="Polite">
+            <TextBlock.Style>
+                <Style TargetType="TextBlock" BasedOn="{StaticResource TextBlock.Subtle}">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                    <Style.Triggers>
+                        <MultiDataTrigger>
+                            <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding HasLoaded}" Value="False" />
+                                <Condition Binding="{Binding LoadError}" Value="{x:Null}" />
+                            </MultiDataTrigger.Conditions>
+                            <Setter Property="Visibility" Value="Visible" />
+                        </MultiDataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </TextBlock.Style>
+        </TextBlock>
+
+        <keepshell:EmptyState Heading="Не удалось открыть очистку и бэкапы"
+                              Icon="TriangleAlert"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Center"
+                              Description="{Binding LoadError}"
+                              ActionText="Повторить"
+                              ActionCommand="{Binding LoadCommand}"
+                              Visibility="{Binding LoadError, Converter={StaticResource NullToVisibility}}" />
+    </Grid>
 </UserControl>

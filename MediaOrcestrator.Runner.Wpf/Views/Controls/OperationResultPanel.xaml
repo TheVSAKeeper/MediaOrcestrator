@@ -9,7 +9,10 @@
              mc:Ignorable="d"
              d:DesignHeight="400"
              d:DesignWidth="900">
-    
+    <UserControl.Resources>
+        <Thickness x:Key="Padding.Panel.Empty">16</Thickness>
+    </UserControl.Resources>
+
     <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*" />
@@ -17,7 +20,8 @@
         </Grid.ColumnDefinitions>
 
         <Border Grid.Column="0"
-                Style="{StaticResource Card}">
+                Style="{StaticResource Card}"
+                Padding="{DynamicResource Padding.Panel.Dense}">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
@@ -36,6 +40,9 @@
                     <StackPanel Grid.Column="1"
                                 Orientation="Horizontal">
                         <ToggleButton Style="{StaticResource ToggleButton.Toolbar}"
+                                      Height="Auto"
+                                      MinHeight="{DynamicResource Control.Height.Compact}"
+                                      Padding="8,2"
                                       IsChecked="{Binding IsCompact, ElementName=Root, Mode=TwoWay}"
                                       Margin="{DynamicResource Margin.InlineGap}"
                                       Visibility="{Binding ShowCompactToggle, ElementName=Root, Converter={StaticResource BoolToVisibility}}"
@@ -55,12 +62,14 @@
                                 Content="Все"
                                 Command="{Binding SelectAllCommand, ElementName=Root}"
                                 IsEnabled="{Binding CanSelect, ElementName=Root}"
+                                MinHeight="{DynamicResource Control.Height.Compact}"
                                 Padding="{DynamicResource Padding.Control.Compact}"
                                 Margin="0,0,4,0" />
                         <Button Style="{StaticResource Button.Ghost}"
                                 Content="Никто"
                                 Command="{Binding SelectNoneCommand, ElementName=Root}"
                                 IsEnabled="{Binding CanSelect, ElementName=Root}"
+                                MinHeight="{DynamicResource Control.Height.Compact}"
                                 Padding="{DynamicResource Padding.Control.Compact}" />
                     </StackPanel>
                 </Grid>

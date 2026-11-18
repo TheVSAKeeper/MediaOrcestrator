@@ -12,9 +12,12 @@ using MediaOrcestrator.Runner.Wpf.ViewModels;
 using MediaOrcestrator.Runner.Wpf.Views;
 using MediaOrcestrator.Runner.Wpf.Views.Dialogs;
 using Microsoft.Extensions.DependencyInjection;
+using System.ComponentModel;
 using System.IO;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Data;
 using System.Windows.Media;
 
@@ -286,6 +289,88 @@ public sealed partial class LiveSmokeTests
         finally
         {
             ApplyTheme(AppThemes.LightKey);
+            Settle();
+        }
+    }
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public void Медиа_СтрелкаСортировкиНеПерекрываетУзкийЗаголовок(bool compact)
+    {
+        NavigateToPage("media");
+        var vm = _services.GetRequiredService<MediaViewModel>().Grid;
+        var originalCompact = vm.IsSourceHeaderCompact;
+        var originalLength = vm.SourceHeaderCompactLength;
+        vm.SourceHeaderCompactLength = 1;
+        vm.IsSourceHeaderCompact = compact;
+        Settle();
+
+        var grid = Descendants<DataGrid>(_window).First(item => item.IsVisible && item.Name == "MediaGrid");
+        var column = grid.Columns.First(item => item.Header is Source);
+        var originalWidth = column.Width;
+        var originalDirection = column.SortDirection;
+
+        try
+        {
+            column.Width = new(column.MinWidth);
+            column.SortDirection = ListSortDirection.Ascending;
+            grid.ScrollIntoView(grid.Items[0], column);
+            Settle();
+
+            var header = Descendants<DataGridColumnHeader>(grid).Single(item => item.Column == column);
+            var label = Descendants<ContentPresenter>(header).First();
+            var arrow = Descendants<FrameworkElement>(header).Single(item => item.Name == "SortArrow");
+            var labelBounds = label.TransformToAncestor(header).TransformBounds(new Rect(label.RenderSize));
+            var arrowBounds = arrow.TransformToAncestor(header).TransformBounds(new Rect(arrow.RenderSize));
+
+            using (Assert.EnterMultipleScope())
+            {
+                Assert.That(label.ActualWidth, Is.GreaterThanOrEqualTo(20));
+                Assert.That(arrow.IsVisible, Is.True);
+                Assert.That(arrowBounds.Left, Is.GreaterThanOrEqualTo(labelBounds.Right));
+            }
+        }
+        finally
+        {
+            column.Width = originalWidth;
+            column.SortDirection = originalDirection;
+            vm.SourceHeaderCompactLength = originalLength;
+            vm.IsSourceHeaderCompact = originalCompact;
+            Settle();
+        }
+    }
+
+    [Test]
+    public void Публикация_ПолеОписанияРастётОтДвухСтрокДоПрокрутки()
+    {
+        NavigateToPage("publish");
+        Settle();
+        var vm = _services.GetRequiredService<PublishViewModel>();
+        var field = Descendants<TextBox>(_window).Single(item =>
+            item.IsVisible && AutomationProperties.GetName(item) == "Описание");
+        var originalDescription = vm.Description;
+
+        try
+        {
+            vm.Description = string.Empty;
+            Settle();
+            var emptyHeight = field.ActualHeight;
+
+            vm.Description = "Первый ряд\nВторой ряд";
+            Settle();
+            Assert.That(field.ActualHeight, Is.EqualTo(emptyHeight).Within(1.0));
+
+            vm.Description = "Первый ряд\nВторой ряд\nТретий ряд";
+            Settle();
+            Assert.That(field.ActualHeight, Is.GreaterThan(emptyHeight));
+
+            vm.Description = string.Join('\n', Enumerable.Repeat("Строка описания", 12));
+            Settle();
+            Assert.That(field.ExtentHeight, Is.GreaterThan(field.ViewportHeight));
+        }
+        finally
+        {
+            vm.Description = originalDescription;
             Settle();
         }
     }

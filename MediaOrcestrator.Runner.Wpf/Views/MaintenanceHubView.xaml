@@ -16,7 +16,7 @@
 
         <ListBox x:Name="MaintenanceSegments"
                  Grid.Row="0"
-                 Margin="0,0,0,14"
+                 Margin="{DynamicResource Margin.RowGap}"
                  Style="{StaticResource ListBox.Segmented}"
                  ItemsSource="{Binding Tabs}"
                  SelectedIndex="{Binding SelectedIndex, Mode=TwoWay}"

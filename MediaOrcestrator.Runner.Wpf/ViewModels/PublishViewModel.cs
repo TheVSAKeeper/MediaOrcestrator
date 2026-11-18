@@ -203,10 +203,6 @@ public sealed partial class PublishViewModel : ObservableObject, IPageStatus, IP
 
         InvalidateMediasCache();
         PendingSuggestionsTask = ReloadSourceSuggestionsAsync();
-        if (AuthenticationRecovery.Failures.Count == 0)
-        {
-            SetStatus("Готов к публикации.", false);
-        }
     }
 
     [RelayCommand(CanExecute = nameof(CanEditFields))]
