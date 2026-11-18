@@ -37,6 +37,7 @@ public sealed class SourcesRelationsModeTests
             _ctx.Settings,
             _ctx.Dialogs,
             _ctx.Dispatcher,
+            new(null!, null!, NullLogger<SourcesAuthenticationViewModel>.Instance),
             NullLogger<SourcesRelationsViewModel>.Instance);
     }
 
@@ -102,7 +103,7 @@ public sealed class SourcesRelationsModeTests
 
         using (Assert.EnterMultipleScope())
         {
-            Assert.That(radios, Has.Count.EqualTo(2));
+            Assert.That(radios, Has.Count.EqualTo(3));
             Assert.That(childrenInListMode, Is.EqualTo(0));
             Assert.That(modeAfterSelectGraph, Is.EqualTo(SourcesRelationsViewMode.Graph));
             Assert.That(modeAfterSelectList, Is.EqualTo(SourcesRelationsViewMode.List));

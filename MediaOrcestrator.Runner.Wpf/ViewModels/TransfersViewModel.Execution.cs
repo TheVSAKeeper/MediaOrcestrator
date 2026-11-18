@@ -42,6 +42,7 @@ public sealed partial class TransfersViewModel
         }
 
         IsRunning = true;
+        AuthenticationRecovery.Failures.Clear();
         StatusText = $"Точечный прогон: {node.Intent.Media.Title}";
         node.ResetRunState();
 
@@ -88,6 +89,7 @@ public sealed partial class TransfersViewModel
         catch (Exception ex)
         {
             failed = true;
+            AuthenticationRecovery.Report(ex);
             error = ex;
             RunStepsCompleted = 1;
             RunStepsFailed = 1;
@@ -129,6 +131,7 @@ public sealed partial class TransfersViewModel
         }
 
         IsRunning = true;
+        AuthenticationRecovery.Failures.Clear();
         StatusText = "Старт…";
         ResetRunStatesForRoots(selectedRoots);
 
@@ -201,9 +204,10 @@ public sealed partial class TransfersViewModel
                             AppendJournal(TransferJournalLevel.Error, $"Ошибка: {intent.Media.Title} – {ex.Message}");
                             RunStepsCompleted++;
                             RunStepsFailed++;
+                            AuthenticationRecovery.Report(ex);
+                            syncErrors.Add(ex);
                         });
 
-                        syncErrors.Add(ex);
                         _logger.LogError(ex, "Ошибка передачи {Intent}", intent);
 
                         if (!StopOnError)

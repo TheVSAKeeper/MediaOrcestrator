@@ -129,6 +129,87 @@ public sealed partial class LiveSmokeTests
     }
 
     [Test]
+    public void Авторизация_ОткрываетСтрокиВоВсехТемахБезОшибокПривязки()
+    {
+        using var suppressed = ThemeTransitionOverlay.Suppress();
+        var sources = _services.GetRequiredService<SourcesRelationsViewModel>();
+        var previousMode = sources.ViewMode;
+
+        try
+        {
+            NavigateToPage("sources");
+            sources.IsAuthenticationMode = true;
+            foreach (var theme in Themes)
+            {
+                ApplyTheme(theme);
+                Settle();
+                Assert.That(ViewCapture.Find(_window, "SessionList"), Is.TypeOf<ListBox>());
+                var list = (ListBox)ViewCapture.Find(_window, "SessionList")!;
+                Assert.That(list.Items, Is.Not.Empty);
+                var firstRow = (ListBoxItem)list.ItemContainerGenerator.ContainerFromIndex(0);
+                Assert.That(firstRow.Foreground, Is.SameAs(_window.FindResource("Fg.Primary")));
+            }
+
+            Assert.That(_sink.Errors, Is.Empty, () => string.Join(Environment.NewLine, _sink.Errors));
+        }
+        finally
+        {
+            sources.ViewMode = previousMode;
+            ApplyTheme(AppThemes.LightKey);
+            Settle();
+        }
+    }
+
+    [Test]
+    public void Авторизация_ДиалогКодаИПароля_ОткрываетсяИОтменяется()
+    {
+        foreach (var password in new[] { false, true })
+        {
+            var prompt = new AuthenticationPromptViewModel("Введите данные для входа", "Продолжить", hasInput: true, password);
+            var completion = _shell.Modal.ShowAsync(prompt);
+            Settle();
+            Assert.That(_shell.Modal.HasActive, Is.True);
+            Assert.That(prompt.ConfirmCommand.CanExecute(null), Is.False);
+            prompt.Value = "Тест";
+            Assert.That(prompt.ConfirmCommand.CanExecute(null), Is.True);
+
+            prompt.CancelCommand.Execute(null);
+            Settle();
+            Assert.That(completion.GetAwaiter().GetResult(), Is.False);
+        }
+
+        Assert.That(_sink.Errors, Is.Empty, () => string.Join(Environment.NewLine, _sink.Errors));
+    }
+
+    [Test]
+    public void Авторизация_СохранениеВБраузере_НеНазначаетсяКнопкойEnter()
+    {
+        var prompt = new AuthenticationPromptViewModel("Завершите вход в браузере.", "Проверить и сохранить",
+            sourceTitle: "Учебный канал", accountHint: "Войдите в аккаунт Учебный канал.", waitsForBrowser: true);
+        var completion = _shell.Modal.ShowAsync(prompt);
+        try
+        {
+            Settle();
+            var confirm = ViewCapture.Find(_window, "ConfirmButton") as Button;
+            Assert.That(confirm, Is.Not.Null);
+            Assert.That(confirm!.IsDefault, Is.False);
+            Assert.That(confirm.IsEnabled, Is.False);
+            prompt.IsReady = true;
+            Settle();
+            Assert.That(confirm.IsDefault, Is.False);
+            Assert.That(confirm.IsEnabled, Is.True);
+        }
+        finally
+        {
+            prompt.CancelCommand.Execute(null);
+            Settle();
+        }
+
+        Assert.That(completion.GetAwaiter().GetResult(), Is.False);
+        Assert.That(_sink.Errors, Is.Empty, () => string.Join(Environment.NewLine, _sink.Errors));
+    }
+
+    [Test]
     public void Диалог_открывается_во_всех_темах_без_ошибок_привязки()
     {
         using var suppressed = ThemeTransitionOverlay.Suppress();

@@ -174,6 +174,7 @@ public sealed partial class TransfersViewModel : ObservableObject, IPageHeader, 
         _actionHolder = actionHolder;
         _settings = settings;
         _navigation = navigation;
+        AuthenticationRecovery = new(navigation);
         _logger = logger;
         _dispatcher = dispatcher;
         _renderProbe = renderProbe;
@@ -195,6 +196,8 @@ public sealed partial class TransfersViewModel : ObservableObject, IPageHeader, 
     }
 
     public event EventHandler? SearchFocusRequested;
+
+    public SourceAuthenticationRecoveryViewModel AuthenticationRecovery { get; }
 
     public string PageTitle => "Передачи";
 

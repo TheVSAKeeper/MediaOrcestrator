@@ -15,7 +15,7 @@ public sealed class TelegramChannel(
     ILogger<TelegramChannel> logger,
     ITelegramServiceFactory telegramServiceFactory,
     IToolPathProvider toolPathProvider)
-    : ISourceType, IAuthenticatable, IToolConsumer
+    : ISourceType, IAuthenticatable, ISourceAuthenticationProbe, IToolConsumer
 {
     private readonly ConcurrentDictionary<string, CachedService> _serviceCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly SemaphoreSlim _cacheLock = new(1, 1);
@@ -120,6 +120,19 @@ public sealed class TelegramChannel(
         IProgress<DownloadProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
+        try
+        {
+            return await DownloadVideoAsync(videoId, settings, progress, cancellationToken);
+        }
+        catch (RpcException ex) when (ex.Code == 401)
+        {
+            throw new SourceSessionRejectedException("Telegram отклонил сохранённую сессию.", ex);
+        }
+    }
+
+    private async Task<MediaDto> DownloadVideoAsync(string videoId, Dictionary<string, string> settings,
+        IProgress<DownloadProgress>? progress, CancellationToken cancellationToken)
+    {
         logger.StartingDownload(videoId);
         var service = await CreateServiceAsync(settings, cancellationToken);
         var peer = await service.ResolveChannelAsync(settings["channel"], cancellationToken);
@@ -193,15 +206,14 @@ public sealed class TelegramChannel(
             throw new FileNotFoundException("Файл видео не найден", filePath);
         }
 
-        var service = await CreateServiceAsync(settings, cancellationToken);
-        var peer = await service.ResolveChannelAsync(settings["channel"], cancellationToken);
-
         var caption = string.IsNullOrWhiteSpace(media.Description)
             ? media.Title
             : $"{media.Title}\n{media.Description}";
 
         try
         {
+            var service = await CreateServiceAsync(settings, cancellationToken);
+            var peer = await service.ResolveChannelAsync(settings["channel"], cancellationToken);
             var videoInfo = await ProbeVideoInfoAsync(filePath, cancellationToken);
             var uploadBytesPerSecond = SpeedLimitHelper.ParseUploadBytesPerSecond(settings);
             var uploadProgress = UploadProgressLogger.CreateBucketed(logger, media.Id, external: progress);
@@ -216,7 +228,11 @@ public sealed class TelegramChannel(
                 Id = externalId,
             };
         }
-        catch (OperationCanceledException)
+        catch (RpcException ex) when (ex.Code == 401)
+        {
+            throw new SourceSessionRejectedException("Telegram отклонил сохранённую сессию.", ex);
+        }
+        catch (Exception ex) when (ex is OperationCanceledException or SourceSessionRejectedException)
         {
             throw;
         }
@@ -308,6 +324,58 @@ public sealed class TelegramChannel(
         return File.Exists(GetSessionPath(settings));
     }
 
+    public SourceAuthenticationLocalState InspectAuthentication(Dictionary<string, string> settings)
+    {
+        var path = GetSessionPath(settings);
+        if (!int.TryParse(settings.GetValueOrDefault("api_id"), out var apiId) || apiId <= 0
+            || string.IsNullOrWhiteSpace(settings.GetValueOrDefault("api_hash"))
+            || string.IsNullOrWhiteSpace(settings.GetValueOrDefault("phone_number")))
+        {
+            return new(new(SourceAuthenticationStatus.SettingsRequired, Detail: "Заполните API ID, API Hash и номер телефона."), [path]);
+        }
+
+        return new(new(File.Exists(path) ? SourceAuthenticationStatus.Saved : SourceAuthenticationStatus.Missing), [path]);
+    }
+
+    public async Task<SourceAuthenticationCheck> CheckAuthenticationAsync(
+        Dictionary<string, string> settings, CancellationToken cancellationToken)
+    {
+        var local = InspectAuthentication(settings);
+        if (local.Check.Status != SourceAuthenticationStatus.Saved)
+        {
+            return local.Check;
+        }
+
+        var apiId = int.Parse(settings["api_id"]);
+        var apiHash = settings["api_hash"];
+        var phoneNumber = settings["phone_number"];
+        var sessionPath = GetSessionPath(settings);
+        var checkPath = sessionPath + "." + Guid.NewGuid().ToString("N") + ".check";
+
+        try
+        {
+            await using (var input = new FileStream(sessionPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+            await using (var output = File.Create(checkPath))
+            {
+                await input.CopyToAsync(output, cancellationToken);
+            }
+
+            using var service = telegramServiceFactory.Create(apiId, apiHash, phoneNumber, checkPath);
+            var user = await service.CheckCurrentUserAsync(cancellationToken);
+            return user is null
+                ? new(SourceAuthenticationStatus.CheckFailed, Detail: "Telegram не вернул текущего пользователя.")
+                : new(SourceAuthenticationStatus.Valid, $"{user.first_name} {user.last_name}".Trim(), "Telegram подтвердил вход.");
+        }
+        catch (RpcException ex) when (ex.Code == 401)
+        {
+            return new(SourceAuthenticationStatus.Rejected, Detail: "Telegram отклонил сохранённую сессию.");
+        }
+        finally
+        {
+            TryDeleteFile(checkPath);
+        }
+    }
+
     public async Task AuthenticateAsync(
         Dictionary<string, string> settings,
         IAuthUI ui,
@@ -318,39 +386,56 @@ public sealed class TelegramChannel(
         var phoneNumber = settings["phone_number"];
         var sessionPath = GetSessionPath(settings);
 
-        await using (var client = new Client(apiId, apiHash, sessionPath))
+        Directory.CreateDirectory(Path.GetDirectoryName(sessionPath)!);
+        var pendingPath = sessionPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        try
         {
-            while (client.User == null)
+            await using (var client = new Client(apiId, apiHash, pendingPath))
             {
-                ct.ThrowIfCancellationRequested();
-
-                var what = await client.Login(phoneNumber);
-                if (what == null)
+                var input = phoneNumber;
+                while (client.User is null)
                 {
-                    break;
+                    var what = await client.Login(input).WaitAsync(ct);
+                    if (what is null)
+                    {
+                        break;
+                    }
+
+                    var prompt = what switch
+                    {
+                        "verification_code" => "Введите код подтверждения из Telegram",
+                        "password" => "Введите пароль двухфакторной аутентификации",
+                        _ => "Telegram запрашивает " + what,
+                    };
+
+                    input = await ui.PromptInputAsync(prompt, what == "password")
+                        ?? throw new OperationCanceledException(ct);
                 }
 
-                var prompt = what switch
+                if (client.User is not { } user)
                 {
-                    "verification_code" => "Введите код подтверждения из Telegram:",
-                    "password" => "Введите пароль двухфакторной аутентификации:",
-                    _ => $"Telegram запрашивает: {what}",
-                };
-
-                var value = await ui.PromptInputAsync(prompt, what == "password");
-                if (value == null)
-                {
-                    throw new OperationCanceledException();
+                    throw new NonRetriableException("Telegram не подтвердил вход.");
                 }
 
-                await client.Login(value);
+                logger.AuthSucceeded(user.first_name, user.id);
             }
 
-            logger.AuthSucceeded(client.User!.first_name, client.User.id);
-            await ui.ShowMessageAsync($"Авторизация успешна!\nПользователь: {client.User.first_name} (ID: {client.User.id})");
+            await _cacheLock.WaitAsync(ct);
+            try
+            {
+                ct.ThrowIfCancellationRequested();
+                InvalidateCachedService(sessionPath);
+                File.Move(pendingPath, sessionPath, overwrite: true);
+            }
+            finally
+            {
+                _cacheLock.Release();
+            }
         }
-
-        InvalidateCachedService(sessionPath);
+        finally
+        {
+            File.Delete(pendingPath);
+        }
     }
 
     public ConvertType[] GetAvailableConvertTypes()
@@ -484,6 +569,10 @@ public sealed class TelegramChannel(
         CancellationToken cancellationToken)
     {
         var sessionPath = GetSessionPath(settings);
+        if (!File.Exists(sessionPath))
+        {
+            throw new SourceSessionRejectedException("Для Telegram нужно войти.");
+        }
         var apiId = int.Parse(settings["api_id"]);
         var apiHash = settings["api_hash"];
         var phoneNumber = settings["phone_number"];

@@ -10,6 +10,7 @@ public sealed class NavigationService : INavigationService
     private readonly Lazy<MediaViewModel> _media;
     private readonly Lazy<OperationsViewModel> _operations;
     private readonly Lazy<MaintenanceHubViewModel> _maintenance;
+    private readonly Lazy<SourcesRelationsViewModel> _sources;
     private readonly IDialogService _dialogs;
 
     public NavigationService(IServiceProvider sp, IDialogService dialogs)
@@ -18,6 +19,7 @@ public sealed class NavigationService : INavigationService
         _media = new(sp.GetRequiredService<MediaViewModel>);
         _operations = new(sp.GetRequiredService<OperationsViewModel>);
         _maintenance = new(sp.GetRequiredService<MaintenanceHubViewModel>);
+        _sources = new(sp.GetRequiredService<SourcesRelationsViewModel>);
         _dialogs = dialogs;
     }
 
@@ -55,6 +57,21 @@ public sealed class NavigationService : INavigationService
     {
         _shell.Value.NavigateToOperations(tab);
         _operations.Value.ApplyExternalSelection(tab, selection);
+    }
+
+    public Task OpenSourceAuthenticationAsync(SourceOperationAuthenticationException failure)
+    {
+        var shell = _shell.Value;
+        var origin = shell.Selected;
+        var opening = _sources.Value.OpenAuthenticationAsync(failure, origin?.Title, () =>
+        {
+            if (origin is not null)
+            {
+                shell.Selected = origin;
+            }
+        });
+        shell.NavigateByKey("sources");
+        return opening;
     }
 
     public void OpenMaintenance(MaintenanceSection section = MaintenanceSection.Tools)

@@ -15,6 +15,7 @@ public sealed class RutubeChannel(
     VideoTranscoder videoTranscoder)
     : ISourceType,
         IAuthenticatable,
+        ISourceAuthenticationProbe,
         IToolConsumer,
         ISupportsComments,
         ISupportsCommentMutations,
@@ -46,6 +47,8 @@ public sealed class RutubeChannel(
     ];
 
     public string Name => "Rutube";
+    public string DisplayName => "RuTube";
+    public bool CanSwitchAccount => true;
 
     // TODO: Подумать на сортировкой
     public IEnumerable<SourceSettings> SettingsKeys { get; } =
@@ -580,13 +583,50 @@ public sealed class RutubeChannel(
         }
     }
 
+    public SourceAuthenticationLocalState InspectAuthentication(Dictionary<string, string> settings)
+    {
+        var path = GetAuthStatePath(settings);
+        return new(new(File.Exists(path) ? SourceAuthenticationStatus.Saved : SourceAuthenticationStatus.Missing), [path]);
+    }
+
+    public async Task<SourceAuthenticationCheck> CheckAuthenticationAsync(
+        Dictionary<string, string> settings, CancellationToken cancellationToken)
+    {
+        if (!File.Exists(GetAuthStatePath(settings)))
+        {
+            return new(SourceAuthenticationStatus.Missing);
+        }
+
+        try
+        {
+            var service = await CreateRutubeServiceAsync(settings, cancellationToken);
+            return await service.CheckStudioSessionAsync(cancellationToken);
+        }
+        catch (SourceSessionRejectedException ex)
+        {
+            return new(SourceAuthenticationStatus.Rejected, Detail: ex.Message);
+        }
+    }
+
     public async Task AuthenticateAsync(
         Dictionary<string, string> settings,
         IAuthUI ui,
         CancellationToken ct)
     {
         var authStatePath = GetAuthStatePath(settings);
-        var result = await ui.OpenBrowserAsync("https://studio.rutube.ru/", authStatePath);
+        var result = await ui.OpenBrowserAsync(new BrowserAuthenticationRequest(
+            "https://studio.rutube.ru/", authStatePath, authStatePath, async (path, token) =>
+            {
+                try
+                {
+                    var service = await BuildRutubeServiceAsync(path, token);
+                    return await service.CheckStudioSessionAsync(token);
+                }
+                catch (SourceSessionRejectedException ex)
+                {
+                    return new(SourceAuthenticationStatus.Rejected, Detail: ex.Message);
+                }
+            }));
         if (result != null)
         {
             logger.AuthSaved(result);
@@ -813,7 +853,7 @@ public sealed class RutubeChannel(
         var authStatePath = GetAuthStatePath(settings);
         if (!File.Exists(authStatePath))
         {
-            throw new FileNotFoundException($"Файл аутентификации RuTube не найден: {authStatePath}. Выполните авторизацию.", authStatePath);
+            throw new SourceSessionRejectedException("Для RuTube Studio нужно войти.");
         }
 
         var lastWriteUtc = File.GetLastWriteTimeUtc(authStatePath);
@@ -883,7 +923,7 @@ public sealed class RutubeChannel(
         var studioCsrf = studioCsrfToken ?? rutubeCsrfToken;
         if (string.IsNullOrEmpty(studioCsrf))
         {
-            throw new NonRetriableException("CSRF токен не найден в файле аутентификации RuTube. Убедитесь, что вы авторизованы в RuTube Studio.");
+            throw new SourceSessionRejectedException("В сохранённой сессии нет данных для доступа к RuTube Studio.");
         }
 
         var playerCsrf = rutubeCsrfToken ?? studioCsrfToken!;

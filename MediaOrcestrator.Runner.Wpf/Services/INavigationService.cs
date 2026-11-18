@@ -10,6 +10,8 @@ public interface INavigationService
 
     void OpenSourcesGraph(SourceSyncRelation? highlight = null);
 
+    Task OpenSourceAuthenticationAsync(SourceOperationAuthenticationException failure);
+
     void OpenMaintenance(MaintenanceSection section = MaintenanceSection.Tools);
 }
 

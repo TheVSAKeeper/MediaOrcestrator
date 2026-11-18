@@ -697,16 +697,19 @@ public class Orcestrator(
             }
 
             source.Type = sourceType;
-
-            source.Settings["_system_temp_path"] = tempManager.TempPath;
-
-            if (sourceType is IAuthenticatable)
-            {
-                source.Settings["_system_state_path"] = stateManager.GetSourceStatePath(source.Id);
-            }
+            PopulateRuntimeSettings(source);
         }
 
         return sources;
+    }
+
+    private void PopulateRuntimeSettings(Source source)
+    {
+        source.Settings["_system_temp_path"] = tempManager.TempPath;
+        if (source.Type is IAuthenticatable or ISourceAuthenticationProbe)
+        {
+            source.Settings["_system_state_path"] = stateManager.GetSourceStatePath(source.Id);
+        }
     }
 
     public void AddSource(string sourceId, string typeId, Dictionary<string, string> settings)
@@ -722,7 +725,11 @@ public class Orcestrator(
 
     public void RemoveSource(string sourceId)
     {
-        db.GetCollection<Source>("sources").Delete(sourceId);
+        lock (_dbWriteLock)
+        {
+            db.GetCollection<Source>("sources").Delete(sourceId);
+            InvalidateAuthentication(sourceId);
+        }
 
         // TODO: По идее нужно, но для отладки неудобно
         //stateManager.CleanSource(sourceId);
@@ -730,7 +737,85 @@ public class Orcestrator(
 
     public void UpdateSource(Source source)
     {
-        db.GetCollection<Source>("sources").Update(source);
+        lock (_dbWriteLock)
+        {
+            db.GetCollection<Source>("sources").Update(source);
+        }
+    }
+
+    public void InvalidateAuthentication(string sourceId)
+    {
+        lock (_dbWriteLock)
+        {
+            db.GetCollection<SourceAuthenticationStamp>("source_authentication").Delete(sourceId);
+        }
+    }
+
+    internal SourceAuthenticationStamp? ReadAuthenticationStamp(string sourceId) =>
+        db.GetCollection<SourceAuthenticationStamp>("source_authentication").FindById(sourceId);
+
+    internal void ResetAuthenticationConfirmation(string sourceId)
+    {
+        lock (_dbWriteLock)
+        {
+            var stamps = db.GetCollection<SourceAuthenticationStamp>("source_authentication");
+            if (stamps.FindById(sourceId) is { } stamp)
+            {
+                stamp.Revision = string.Empty;
+                stamps.Update(stamp);
+            }
+        }
+    }
+
+    internal void SaveAuthenticationStamp(SourceAuthenticationStamp stamp)
+    {
+        lock (_dbWriteLock)
+        {
+            if (db.GetCollection<Source>("sources").Exists(source => source.Id == stamp.Id))
+            {
+                db.GetCollection<SourceAuthenticationStamp>("source_authentication").Upsert(stamp);
+            }
+        }
+    }
+
+    internal void SaveAuthenticationSettings(Source source, Dictionary<string, string> original, Dictionary<string, string> updated)
+    {
+        var changedKeys = original.Keys.Union(updated.Keys, original.Comparer)
+            .Where(key => !key.StartsWith("_system_", StringComparison.OrdinalIgnoreCase)
+                          && original.GetValueOrDefault(key) != updated.GetValueOrDefault(key))
+            .ToArray();
+
+        lock (_dbWriteLock)
+        {
+            var collection = db.GetCollection<Source>("sources");
+            var current = collection.FindById(source.Id);
+            if (current is null || current.TypeId != source.TypeId
+                || changedKeys.Any(key => current.Settings.GetValueOrDefault(key) != original.GetValueOrDefault(key)))
+            {
+                throw new InvalidOperationException("Настройки источника изменились во время входа.");
+            }
+
+            foreach (var key in changedKeys)
+            {
+                if (updated.TryGetValue(key, out var value))
+                {
+                    current.Settings[key] = value;
+                }
+                else
+                {
+                    current.Settings.Remove(key);
+                }
+            }
+
+            if (changedKeys.Length > 0 && !collection.Update(current))
+            {
+                throw new InvalidOperationException("Не удалось сохранить данные входа.");
+            }
+
+            source.Settings = current.Settings;
+            PopulateRuntimeSettings(source);
+            ResetAuthenticationConfirmation(source.Id);
+        }
     }
 
     public List<SourceSyncRelation> GetRelations()
@@ -1067,14 +1152,18 @@ public class Orcestrator(
                         if (toMediaSource?.Status == MediaStatus.PartialOk)
                         {
                             var externalId = toMediaSource.ExternalId;
-                            uploadResult = await rel.To.Type.UpdateAsync(externalId, tempMedia, rel.To.Settings, token);
+                            uploadResult = await rel.To.Type.UpdateAsync(externalId, tempMedia, CurrentSourceSettings(rel.To), token);
                         }
                         else
                         {
                             uploadResult = await UploadWithActionAsync(rel.To, tempMedia, media.Title, token);
                         }
                     }
-                    catch (OperationCanceledException)
+                    catch (SourceSessionRejectedException exception)
+                    {
+                        throw new SourceOperationAuthenticationException(rel.To, exception);
+                    }
+                    catch (Exception exception) when (exception is OperationCanceledException or SourceOperationAuthenticationException)
                     {
                         throw;
                     }
@@ -1225,7 +1314,7 @@ public class Orcestrator(
                 downloadAction.Status = $"Загрузка {percent}%";
             });
 
-            var result = await source.Type!.DownloadAsync(externalId, source.Settings, downloadProgress, downloadCts.Token);
+            var result = await source.Type!.DownloadAsync(externalId, CurrentSourceSettings(source), downloadProgress, downloadCts.Token);
             downloadAction.Subtitle = string.Empty;
             downloadAction.Finish("Загружено");
             return result;
@@ -1235,6 +1324,13 @@ public class Orcestrator(
             downloadAction.Subtitle = string.Empty;
             downloadAction.Finish("Пропущено: " + exception.Message);
             throw;
+        }
+        catch (SourceSessionRejectedException exception)
+        {
+            var error = new SourceOperationAuthenticationException(source, exception);
+            downloadAction.Subtitle = string.Empty;
+            downloadAction.Fail(error.Message, error);
+            throw error;
         }
         catch (OperationCanceledException)
         {
@@ -1279,7 +1375,7 @@ public class Orcestrator(
                 uploadAction.Status = $"Заливка {percent}%";
             });
 
-            var result = await target.Type!.UploadAsync(dto, target.Settings, uploadProgress, uploadCts.Token);
+            var result = await target.Type!.UploadAsync(dto, CurrentSourceSettings(target), uploadProgress, uploadCts.Token);
             uploadAction.Subtitle = string.Empty;
 
             if (result.Id is null)
@@ -1293,6 +1389,13 @@ public class Orcestrator(
 
             return result;
         }
+        catch (SourceSessionRejectedException exception)
+        {
+            var error = new SourceOperationAuthenticationException(target, exception);
+            uploadAction.Subtitle = string.Empty;
+            uploadAction.Fail(error.Message, error);
+            throw error;
+        }
         catch (OperationCanceledException)
         {
             uploadAction.Subtitle = string.Empty;
@@ -1305,6 +1408,19 @@ public class Orcestrator(
             uploadAction.Fail("Ошибка: " + exception.Message, exception);
             throw;
         }
+    }
+
+    private Dictionary<string, string> CurrentSourceSettings(Source source)
+    {
+        if (source.Type is not IAuthenticatable || db.GetCollection<Source>("sources").FindById(source.Id) is not { } current
+            || current.TypeId != source.TypeId)
+        {
+            return source.Settings;
+        }
+
+        current.Type = source.Type;
+        PopulateRuntimeSettings(current);
+        return current.Settings;
     }
 
     private async Task UpdateSourceMetadataAsync(Media media, string sourceId, CancellationToken ct, bool preferQuotaFree = false)

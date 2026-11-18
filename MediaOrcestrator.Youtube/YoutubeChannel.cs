@@ -12,7 +12,7 @@ using System.Text.Json;
 
 namespace MediaOrcestrator.Youtube;
 
-internal sealed class YoutubeChannel(
+internal sealed partial class YoutubeChannel(
     ILogger<YoutubeChannel> logger,
     IYoutubeServiceFactory youtubeServiceFactory,
     IToolPathProvider toolPathProvider,
@@ -24,7 +24,7 @@ internal sealed class YoutubeChannel(
     YoutubeUploadService uploadService,
     YoutubeQuotaTracker quotaTracker,
     YoutubeDownloadPolicy downloadPolicy)
-    : ISourceType, IAuthenticatable, IToolConsumer, ISupportsComments, ISupportsPlaylists, ISupportsQuotaFreeMetadata, IReportsQuota
+    : ISourceType, IAuthenticatable, ISourceAuthenticationProbe, ISourceAuthenticationMethods, IToolConsumer, ISupportsComments, ISupportsPlaylists, ISupportsQuotaFreeMetadata, IReportsQuota
 {
     internal const string VideoUrlTemplate = "https://www.youtube.com/watch?v={0}";
     internal const string PlaylistUrlTemplate = "https://www.youtube.com/playlist?list={0}";
@@ -49,6 +49,7 @@ internal sealed class YoutubeChannel(
     public SyncDirection ChannelType => SyncDirection.Full;
 
     public string Name => "Youtube";
+    public string DisplayName => "YouTube";
 
     public IEnumerable<SourceSettings> SettingsKeys { get; } =
     [
@@ -540,8 +541,15 @@ internal sealed class YoutubeChannel(
         IProgress<UploadProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
-        using var lease = await AcquireServiceLeaseAsync(settings, cancellationToken);
-        return await uploadService.UploadVideoAsync(lease.Service, media, settings, progress, cancellationToken);
+        try
+        {
+            using var lease = await AcquireServiceLeaseAsync(settings, cancellationToken);
+            return await uploadService.UploadVideoAsync(lease.Service, media, settings, progress, cancellationToken);
+        }
+        catch (Exception ex) when (IsOAuthRejection(ex))
+        {
+            throw new SourceSessionRejectedException("Google отклонил сохранённый OAuth-токен.", ex, OAuthMethod);
+        }
     }
 
     public async Task<UploadResult> UpdateAsync(
@@ -579,22 +587,41 @@ internal sealed class YoutubeChannel(
         CancellationToken ct)
     {
         var authStatePath = GetAuthStatePath(settings);
-        var tempJsonPath = authStatePath + ".tmp.json";
+        var transaction = Guid.NewGuid().ToString("N");
+        var tempJsonPath = authStatePath + "." + transaction + ".tmp.json";
+        var seedPath = authStatePath + "." + transaction + ".seed.json";
+        var tempCookiePath = authStatePath + "." + transaction + ".tmp";
 
         try
         {
-            var result = await ui.OpenBrowserAsync("https://studio.youtube.com/", tempJsonPath);
+            string? existingState = null;
+            if (!ui.ReplaceAccount && File.Exists(authStatePath))
+            {
+                await WriteBrowserSeedAsync(authStatePath, seedPath, ct);
+                existingState = seedPath;
+            }
+
+            var result = await ui.OpenBrowserAsync(new BrowserAuthenticationRequest("https://studio.youtube.com/",
+                tempJsonPath, existingState, async (candidate, token) =>
+                {
+                    await ConvertPlaywrightToNetscapeAsync(candidate, tempCookiePath, token);
+                    return await CheckCookiesAsync(tempCookiePath, token);
+                }));
             if (result == null)
             {
                 return;
             }
 
-            await ConvertPlaywrightToNetscapeAsync(tempJsonPath, authStatePath, ct);
+            await ConvertPlaywrightToNetscapeAsync(tempJsonPath, tempCookiePath, ct);
+            ct.ThrowIfCancellationRequested();
+            File.Move(tempCookiePath, authStatePath, overwrite: true);
             logger.AuthSaved(authStatePath);
             await ui.ShowMessageAsync("Авторизация YouTube сохранена!");
         }
         finally
         {
+            File.Delete(seedPath);
+            File.Delete(tempCookiePath);
             if (File.Exists(tempJsonPath))
             {
                 File.Delete(tempJsonPath);
@@ -701,7 +728,8 @@ internal sealed class YoutubeChannel(
         try
         {
             var lines = File.ReadLines(authStatePath);
-            return lines.Any(line => !string.IsNullOrWhiteSpace(line) && !line.StartsWith('#'));
+            return lines.Any(line => !string.IsNullOrWhiteSpace(line)
+                && (!line.StartsWith('#') || line.StartsWith("#HttpOnly_", StringComparison.Ordinal)));
         }
         catch
         {
@@ -760,19 +788,15 @@ internal sealed class YoutubeChannel(
                 continue;
             }
 
-            if (!domain.StartsWith('.'))
-            {
-                domain = "." + domain;
-            }
-
-            var flag = "TRUE";
+            var flag = domain.StartsWith('.') ? "TRUE" : "FALSE";
+            var prefix = cookie.HttpOnly ? "#HttpOnly_" : "";
             var path = string.IsNullOrEmpty(cookie.Path) ? "/" : cookie.Path;
             var secure = cookie.Secure ? "TRUE" : "FALSE";
             var expiry = cookie.Expires > 0 ? (long)cookie.Expires : 0;
             var name = cookie.Name ?? "";
             var value = cookie.Value ?? "";
 
-            await writer.WriteLineAsync($"{domain}\t{flag}\t{path}\t{secure}\t{expiry}\t{name}\t{value}");
+            await writer.WriteLineAsync($"{prefix}{domain}\t{flag}\t{path}\t{secure}\t{expiry}\t{name}\t{value}");
         }
     }
 
@@ -985,7 +1009,8 @@ internal sealed class YoutubeChannel(
         string clientId,
         string clientSecret,
         string tokenDir,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        ICodeReceiver? codeReceiver = null)
     {
         logger.OAuthAuthorizing(tokenDir);
 
@@ -999,7 +1024,7 @@ internal sealed class YoutubeChannel(
             OAuthScopes,
             "user",
             cancellationToken,
-            new FileDataStore(tokenDir, true));
+            new FileDataStore(tokenDir, true), codeReceiver);
 
         if (credential.Token.IsStale)
         {
@@ -1008,7 +1033,7 @@ internal sealed class YoutubeChannel(
 
             if (!refreshed)
             {
-                throw new NonRetriableException("Не удалось обновить OAuth-токен. Удалите файл токена и авторизуйтесь заново.");
+                throw new SourceSessionRejectedException("Не удалось обновить OAuth-токен. Войдите через Google заново.", methodId: OAuthMethod);
             }
 
             logger.OAuthTokenRefreshed();

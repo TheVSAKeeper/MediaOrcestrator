@@ -14,6 +14,7 @@ public sealed class VkVideoChannel(
     VideoTranscoder videoTranscoder)
     : ISourceType,
         IAuthenticatable,
+        ISourceAuthenticationProbe,
         ISupportsComments,
         ISupportsCommentPermalinks,
         ISupportsCommentMutations,
@@ -32,6 +33,8 @@ public sealed class VkVideoChannel(
     private readonly SemaphoreSlim _cacheLock = new(1, 1);
 
     public string Name => "VkVideo";
+    public string DisplayName => "VK Видео";
+    public bool CanSwitchAccount => true;
 
     public SyncDirection ChannelType => SyncDirection.Full;
 
@@ -465,7 +468,7 @@ public sealed class VkVideoChannel(
                 Id = externalId,
             };
         }
-        catch (OperationCanceledException)
+        catch (Exception ex) when (ex is OperationCanceledException or SourceSessionRejectedException)
         {
             throw;
         }
@@ -603,18 +606,67 @@ public sealed class VkVideoChannel(
         }
     }
 
+    public SourceAuthenticationLocalState InspectAuthentication(Dictionary<string, string> settings)
+    {
+        var path = GetAuthStatePath(settings);
+        return new(new(File.Exists(path) ? SourceAuthenticationStatus.Saved : SourceAuthenticationStatus.Missing), [path]);
+    }
+
+    public async Task<SourceAuthenticationCheck> CheckAuthenticationAsync(
+        Dictionary<string, string> settings, CancellationToken cancellationToken)
+    {
+        if (!File.Exists(GetAuthStatePath(settings)))
+        {
+            return new(SourceAuthenticationStatus.Missing);
+        }
+
+        try
+        {
+            using var lease = await AcquireServiceLeaseAsync(settings, cancellationToken);
+            return await CheckAccountAsync(lease.Service, cancellationToken);
+        }
+        catch (Exception ex) when (ex is SourceSessionRejectedException or VkApiException { ErrorCode: 5 })
+        {
+            return new(SourceAuthenticationStatus.Rejected, Detail: "VK отклонил данные входа.");
+        }
+    }
+
     public async Task AuthenticateAsync(
         Dictionary<string, string> settings,
         IAuthUI ui,
         CancellationToken ct)
     {
         var authStatePath = GetAuthStatePath(settings);
-        var result = await ui.OpenBrowserAsync("https://cabinet.vkvideo.ru/", authStatePath);
+        var result = await ui.OpenBrowserAsync(new BrowserAuthenticationRequest(
+            "https://cabinet.vkvideo.ru/", authStatePath, authStatePath, async (path, token) =>
+            {
+                try
+                {
+                    using var service = await BuildServiceAsync(path, token);
+                    return await CheckAccountAsync(service, token);
+                }
+                catch (SourceSessionRejectedException)
+                {
+                    return new(SourceAuthenticationStatus.Rejected, Detail: "VK отклонил данные входа.");
+                }
+            }));
         if (result != null)
         {
             logger.AuthSaved(result);
             await ui.ShowMessageAsync("Авторизация VK Video сохранена!");
         }
+    }
+
+    private static async Task<SourceAuthenticationCheck> CheckAccountAsync(VkVideoService service, CancellationToken cancellationToken)
+    {
+        var account = await service.GetCurrentUserAsync(cancellationToken);
+        if (account is null)
+        {
+            return new(SourceAuthenticationStatus.CheckFailed, Detail: "VK не вернул текущего пользователя.");
+        }
+
+        var name = $"{account.FirstName} {account.LastName}".Trim();
+        return new(SourceAuthenticationStatus.Valid, string.IsNullOrEmpty(name) ? $"VK ID {account.Id}" : name);
     }
 
     public ConvertType[] GetAvailableConvertTypes()
@@ -1094,7 +1146,7 @@ public sealed class VkVideoChannel(
         var authStatePath = GetAuthStatePath(settings);
         if (!File.Exists(authStatePath))
         {
-            throw new FileNotFoundException($"Файл аутентификации VK Video не найден: {authStatePath}. Выполните авторизацию.", authStatePath);
+            throw new VkSessionRejectedException();
         }
 
         var lastWriteUtc = File.GetLastWriteTimeUtc(authStatePath);

@@ -43,6 +43,7 @@ public sealed partial class PublishViewModel
         }
 
         IsPublishing = true;
+        AuthenticationRecovery.Failures.Clear();
         var pubCts = new CancellationTokenSource();
         _publishCts = pubCts;
         var token = pubCts.Token;
@@ -90,6 +91,7 @@ public sealed partial class PublishViewModel
         }
         catch (Exception exception)
         {
+            AuthenticationRecovery.Report(exception);
             pubAction.Fail("Ошибка: " + exception.Message, exception);
             _logger.LogError(exception, "Ошибка при публикации «{Title}» в {Source}", title, source.TitleFull);
             SetStatus($"Ошибка: {exception.Message}", true);
@@ -181,6 +183,7 @@ public sealed partial class PublishViewModel
         }
         catch (Exception exception) when (failedIntent is not null)
         {
+            AuthenticationRecovery.Report(exception);
             _logger.LogError(exception, "Цепочка: «{Title}» сорвалась на {From} → {To}",
                 media.Title, failedIntent.From.TitleFull, failedIntent.To.TitleFull);
 

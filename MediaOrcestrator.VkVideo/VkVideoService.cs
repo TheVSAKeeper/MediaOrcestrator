@@ -1163,6 +1163,13 @@ public sealed class VkVideoService : IDisposable
                 });
 
                 using var response = await SendApiAsync(Operations.GetAccessToken, request, cancellationToken);
+                if (response.StatusCode == HttpStatusCode.Unauthorized
+                    || IsLoginPage(response.RequestMessage?.RequestUri)
+                    || IsLoginPage(response.Headers.Location))
+                {
+                    throw new VkSessionRejectedException();
+                }
+
                 var bodyBytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
                 var body = Encoding.UTF8.GetString(bodyBytes);
 
@@ -1248,9 +1255,14 @@ public sealed class VkVideoService : IDisposable
         }
 
         var tokens = JsonSerializer.Deserialize(bodyBytes, VkVideoJsonContext.Default.ListWebTokenResponse);
-        if (tokens == null || tokens.Count == 0 || string.IsNullOrEmpty(tokens[0].AccessToken))
+        if (tokens is null)
         {
-            throw new InvalidOperationException("Не удалось получить access_token. Возможно, cookies устарели — переавторизуйтесь через Playwright.");
+            throw new InvalidOperationException("VK не вернул данные токена.");
+        }
+
+        if (tokens.Count == 0 || string.IsNullOrEmpty(tokens[0].AccessToken))
+        {
+            throw new VkSessionRejectedException();
         }
 
         _accessToken = tokens[0].AccessToken;
@@ -1259,6 +1271,9 @@ public sealed class VkVideoService : IDisposable
 
         return _accessToken;
     }
+
+    private static bool IsLoginPage(Uri? uri) =>
+        uri is { IsAbsoluteUri: true, Host: "id.vk.com" or "login.vk.com" };
 
     private async Task<T> CallApiInternalAsync<T>(
         string baseUrl,
@@ -1325,6 +1340,10 @@ public sealed class VkVideoService : IDisposable
             {
                 EnsureNoVkError(bodyBytes, method);
                 return bodyBytes;
+            }
+            catch (VkApiException ex) when (ex.ErrorCode == 5)
+            {
+                throw new SourceSessionRejectedException("VK отклонил данные входа.", ex);
             }
             catch (VkApiException ex) when (ex.ErrorCode == 6 && rateLimitHits < _options.RateLimitMaxRetries)
             {

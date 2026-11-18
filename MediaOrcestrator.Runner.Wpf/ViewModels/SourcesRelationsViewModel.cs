@@ -11,16 +11,16 @@ using System.Windows.Input;
 
 namespace MediaOrcestrator.Runner.Wpf.ViewModels;
 
-public sealed partial class SourcesRelationsViewModel : ObservableObject, IPageHeader, IPageRefresh
+public sealed partial class SourcesRelationsViewModel : ObservableObject, IPageHeader, IPageRefresh, IPageEscapeHandler
 {
     public string PageTitle => "Источники и связи";
 
     public string? PageDescription =>
         "Площадки и локальные папки, между которыми переносятся медиа. Связь задаёт направление переноса.";
 
-    public ICommand RefreshCommand => ReloadCommand;
+    public ICommand RefreshCommand => IsAuthenticationMode ? RefreshAuthenticationCommand : ReloadCommand;
 
-    public string? RefreshTooltip => "Перезагрузить источники и связи";
+    public string? RefreshTooltip => IsAuthenticationMode ? "Проверить авторизацию" : "Перезагрузить источники и связи";
 
     private const string ViewModeSettingKey = "wpf.sources.viewMode";
 
@@ -39,6 +39,9 @@ public sealed partial class SourcesRelationsViewModel : ObservableObject, IPageH
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsListMode))]
     [NotifyPropertyChangedFor(nameof(IsGraphMode))]
+    [NotifyPropertyChangedFor(nameof(IsAuthenticationMode))]
+    [NotifyPropertyChangedFor(nameof(RefreshCommand))]
+    [NotifyPropertyChangedFor(nameof(RefreshTooltip))]
     private SourcesRelationsViewMode _viewMode = SourcesRelationsViewMode.List;
 
     [ObservableProperty]
@@ -55,6 +58,7 @@ public sealed partial class SourcesRelationsViewModel : ObservableObject, IPageH
         ISettingsStore settings,
         IDialogService dialogs,
         IUiDispatcher dispatcher,
+        SourcesAuthenticationViewModel authentication,
         ILogger<SourcesRelationsViewModel> logger)
     {
         _orcestrator = orcestrator;
@@ -65,6 +69,14 @@ public sealed partial class SourcesRelationsViewModel : ObservableObject, IPageH
         _dialogs = dialogs;
         _dispatcher = dispatcher;
         _logger = logger;
+        Authentication = authentication;
+        Authentication.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName == nameof(Authentication.CanCloseDetails))
+            {
+                OnPropertyChanged(nameof(CanHandleEscape));
+            }
+        };
 
         Sources = [];
         Relations = [];
@@ -83,6 +95,19 @@ public sealed partial class SourcesRelationsViewModel : ObservableObject, IPageH
     public RangeObservableCollection<RelationCardViewModel> Relations { get; }
 
     public RangeObservableCollection<ISourceType> PluginTypes { get; }
+    public SourcesAuthenticationViewModel Authentication { get; }
+
+    public bool IsAuthenticationMode
+    {
+        get => ViewMode == SourcesRelationsViewMode.Authentication;
+        set
+        {
+            if (value)
+            {
+                ViewMode = SourcesRelationsViewMode.Authentication;
+            }
+        }
+    }
 
     public int SourceCount => Sources.Count;
 
@@ -256,29 +281,6 @@ public sealed partial class SourcesRelationsViewModel : ObservableObject, IPageH
             () => _orcestrator.AddRelation(dialogVm.From, dialogVm.To));
     }
 
-    internal async Task EditSource(SourceCardViewModel card)
-    {
-        if (ResolvePluginFor(card.Source) is not { } plugin)
-        {
-            return;
-        }
-
-        var dialogVm = _services.GetRequiredService<SourceSettingsViewModel>();
-        dialogVm.InitializeEdit(card.Source, plugin, _orcestrator.GetSources());
-
-        if (!await _dialogs.ShowAsync(dialogVm) || dialogVm.Settings is null)
-        {
-            return;
-        }
-
-        await TryMutateAsync("Источники", "Не удалось сохранить источник", () =>
-        {
-            card.Source.Settings = dialogVm.Settings;
-            _orcestrator.UpdateSource(card.Source);
-            _logger.LogInformation("Обновлён источник {Title}", card.Title);
-        });
-    }
-
     internal async Task DuplicateSource(SourceCardViewModel card)
     {
         if (ResolvePluginFor(card.Source) is not { } plugin)
@@ -344,12 +346,18 @@ public sealed partial class SourcesRelationsViewModel : ObservableObject, IPageH
     partial void OnViewModeChanged(SourcesRelationsViewMode value)
     {
         _settings.SetValue(ViewModeSettingKey, value.ToString());
+        UpdateAuthenticationActivity();
+        OnPropertyChanged(nameof(CanHandleEscape));
     }
 
     private async Task TryMutateAsync(string dialogTitle, string errorPrefix, Action action)
     {
         if (TryExecuteMutation(dialogTitle, errorPrefix, action))
         {
+            if (IsAuthenticationMode)
+            {
+                await LoadAuthenticationCatalogAsync();
+            }
             await ReloadAsync();
         }
     }
@@ -427,6 +435,10 @@ public sealed partial class SourcesRelationsViewModel : ObservableObject, IPageH
             new RelationCardViewModel(r, this, relationStats.GetValueOrDefault((r.FromId, r.ToId), RelationCardStats.Empty))));
 
         PluginTypes.ReplaceAll(pluginTypes);
+        if (!IsAuthenticationMode)
+        {
+            Authentication.SetSources(sources);
+        }
 
         foreach (var name in SourcesRelationsStatsBuilder.SummaryPropertyNames)
         {

@@ -197,7 +197,11 @@ internal static class ServiceRegistration
             ToolTypes = [typeof(MediaOrcestratorTools)],
             ConfigureTools = static (provider, tools) => tools.AddSingleton(provider.GetRequiredService<MediaOrcestratorAutomation>()),
         });
-        services.AddSingleton<IAuthUI, WpfAuthUI>();
+        services.AddSingleton<WpfAuthUI>();
+        services.AddSingleton<IAuthUI>(provider => provider.GetRequiredService<WpfAuthUI>());
+        services.AddSingleton<Func<SourceAuthenticationPromptContext, CancellationToken, Action<string>, IAuthUI>>(
+            provider => provider.GetRequiredService<WpfAuthUI>().CreateSession);
+        services.AddSingleton<SourceAuthenticationService>();
         services.AddSingleton<INavigationService, NavigationService>();
         services.AddSingleton<IAppLifetime, AppLifetime>();
         services.AddSingleton<IPageRenderProbe, WpfPageRenderProbe>();
@@ -228,6 +232,7 @@ internal static class ServiceRegistration
         services.AddSingleton<CleanupAndBackupsViewModel>();
         services.AddSingleton<MaintenanceHubViewModel>();
         services.AddSingleton<SourcesRelationsViewModel>();
+        services.AddSingleton<SourcesAuthenticationViewModel>();
         services.AddSingleton<CommentsViewModel>();
         services.AddSingleton<BatchRenameSubViewModel>();
         services.AddSingleton<BatchPreviewSubViewModel>();

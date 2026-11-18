@@ -13,6 +13,8 @@ public interface ISourceType
     /// </remarks>
     string Name { get; }
 
+    string DisplayName => Name;
+
     /// <summary>
     /// Направление синхронизации, которое поддерживает источник.
     /// </summary>
@@ -165,6 +167,14 @@ public interface ISourceType
 /// </summary>
 public interface IAuthUI
 {
+    bool ReplaceAccount => false;
+
+    Task<string?> OpenBrowserAsync(BrowserAuthenticationRequest request) =>
+        OpenBrowserAsync(request.Url, request.OutputStatePath);
+
+    Task RunExternalSignInAsync(Func<CancellationToken, Task> signIn, CancellationToken cancellationToken) =>
+        signIn(cancellationToken);
+
     /// <summary>
     /// Запрашивает текстовый ввод у пользователя.
     /// </summary>

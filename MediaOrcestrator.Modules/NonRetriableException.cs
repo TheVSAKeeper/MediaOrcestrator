@@ -1,4 +1,4 @@
-namespace MediaOrcestrator.Modules;
+﻿namespace MediaOrcestrator.Modules;
 
 /// <summary>
 /// Исключение, сигнализирующее о детерминированной ошибке: повторять операцию бессмысленно.
@@ -13,14 +13,14 @@ namespace MediaOrcestrator.Modules;
 /// </list>
 /// Для транзиентных ошибок (5xx, таймауты, сеть) использовать обычные исключения - они ретраятся.
 /// </remarks>
-public sealed class NonRetriableException : Exception
+public class NonRetriableException : Exception
 {
     public NonRetriableException(string message)
         : base(message)
     {
     }
 
-    public NonRetriableException(string message, Exception innerException)
+    public NonRetriableException(string message, Exception? innerException)
         : base(message, innerException)
     {
     }

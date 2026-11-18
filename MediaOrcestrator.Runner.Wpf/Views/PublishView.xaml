@@ -321,6 +321,17 @@
                             </Style>
                         </TextBlock.Style>
                     </TextBlock>
+                    <ItemsControl ItemsSource="{Binding AuthenticationRecovery.Failures}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Button Style="{StaticResource Button.Ghost}" HorizontalAlignment="Left"
+                                        Content="{Binding SourceTitle}"
+                                        ContentStringFormat="Открыть авторизацию · {0}"
+                                        Command="{Binding DataContext.AuthenticationRecovery.OpenCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                        CommandParameter="{Binding}" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
                 </StackPanel>
 
                 <ToggleButton Grid.Column="1"

@@ -35,10 +35,17 @@ public sealed class TelegramService : IDisposable
 
         if (_client.User == null)
         {
-            throw new NonRetriableException("Не удалось подключиться к Telegram. Выполните авторизацию через настройки источника.");
+            throw new SourceSessionRejectedException("Telegram не подтвердил вход. Выполните авторизацию заново.");
         }
 
         _logger.ConnectedAs(_client.User.first_name, _client.User.id);
+    }
+
+    internal async Task<User?> CheckCurrentUserAsync(CancellationToken cancellationToken)
+    {
+        await _client.ConnectAsync().WaitAsync(cancellationToken);
+        var users = await _client.Users_GetUsers([new InputUserSelf()]).WaitAsync(cancellationToken);
+        return users.OfType<User>().FirstOrDefault(user => user.id != 0);
     }
 
     public async Task<InputPeer> ResolveChannelAsync(

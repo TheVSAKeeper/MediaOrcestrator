@@ -110,10 +110,22 @@
                                                       VerticalAlignment="Center"
                                                       Margin="0,0,8,0"
                                                       AutomationProperties.Name="Ошибка" />
-                            <TextBlock Grid.Column="1"
-                                       Text="В последнем прогоне были ошибки – проверьте строки дерева или журнал прогона."
-                                       TextWrapping="Wrap"
-                                       VerticalAlignment="Center" />
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="В последнем прогоне были ошибки – проверьте строки дерева или журнал прогона."
+                                           TextWrapping="Wrap" />
+                                <ItemsControl ItemsSource="{Binding AuthenticationRecovery.Failures}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Button Style="{StaticResource Button.Ghost}"
+                                                    HorizontalAlignment="Left"
+                                                    Content="{Binding SourceTitle}"
+                                                    ContentStringFormat="Открыть авторизацию · {0}"
+                                                    Command="{Binding DataContext.AuthenticationRecovery.OpenCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                    CommandParameter="{Binding}" />
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
                         </Grid>
                     </Border>
 

@@ -54,7 +54,8 @@ public sealed partial class PublishViewModel : ObservableObject, IPageStatus, IP
         CoverGenerator coverGenerator,
         CoverTemplateStore coverTemplateStore,
         ICoverTemplateEditorWindowService editorWindow,
-        TempManager tempManager)
+        TempManager tempManager,
+        INavigationService? navigation = null)
     {
         _orcestrator = orcestrator;
         _retryRunner = retryRunner;
@@ -65,6 +66,7 @@ public sealed partial class PublishViewModel : ObservableObject, IPageStatus, IP
         _filePicker = filePicker;
         _coverGenerator = coverGenerator;
         _tempManager = tempManager;
+        AuthenticationRecovery = new(navigation);
 
         TemplatePicker = new(coverGenerator, coverTemplateStore, dialogs, filePicker, editorWindow);
         TemplatePicker.PropertyChanged += (_, e) =>
@@ -84,6 +86,7 @@ public sealed partial class PublishViewModel : ObservableObject, IPageStatus, IP
     }
 
     public CoverProfilePickerViewModel TemplatePicker { get; }
+    public SourceAuthenticationRecoveryViewModel AuthenticationRecovery { get; }
 
     internal Task? PendingSidecarTask { get; private set; }
 
@@ -200,7 +203,10 @@ public sealed partial class PublishViewModel : ObservableObject, IPageStatus, IP
 
         InvalidateMediasCache();
         PendingSuggestionsTask = ReloadSourceSuggestionsAsync();
-        SetStatus("Готов к публикации.", false);
+        if (AuthenticationRecovery.Failures.Count == 0)
+        {
+            SetStatus("Готов к публикации.", false);
+        }
     }
 
     [RelayCommand(CanExecute = nameof(CanEditFields))]

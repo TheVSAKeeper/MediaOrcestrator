@@ -198,6 +198,11 @@ public sealed partial class RutubeService
         using var request = CreateRequest(HttpMethod.Get, url);
         using var response = await SendApiAsync(Operations.GetVideo, request, cancellationToken);
 
+        if (ownChannel && response.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            throw new SourceSessionRejectedException("RuTube Studio отклонила вход.");
+        }
+
         if (!response.IsSuccessStatusCode)
         {
             var err = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -239,6 +244,11 @@ public sealed partial class RutubeService
         var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
         using var request = CreateRequest(HttpMethod.Patch, url, content);
         using var response = await SendApiAsync(Operations.UpdateMetadata, request, cancellationToken);
+
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            throw new SourceSessionRejectedException("RuTube Studio отклонила вход.");
+        }
 
         if (!response.IsSuccessStatusCode)
         {
@@ -347,6 +357,35 @@ public sealed partial class RutubeService
         var result = await JsonSerializer.DeserializeAsync(body, RutubeJsonContext.Default.ThumbnailResponse, cancellationToken);
 
         return result?.ThumbnailUrl;
+    }
+
+    internal async Task<SourceAuthenticationCheck> CheckStudioSessionAsync(CancellationToken cancellationToken)
+    {
+        const string url = "https://studio.rutube.ru/api/v2/video/person/?ordering=-calculated_date&limit=1&page=1";
+        using var request = CreateRequest(HttpMethod.Get, url);
+        using var response = await SendApiAsync(Operations.ListVideos, request, cancellationToken);
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            return new(SourceAuthenticationStatus.Rejected, Detail: "RuTube Studio отклонила сессию.");
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return new(SourceAuthenticationStatus.CheckFailed, Detail: $"RuTube Studio ответила HTTP {(int)response.StatusCode}.");
+        }
+
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using var body = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+        if (!body.RootElement.TryGetProperty("results", out var results) || results.ValueKind != JsonValueKind.Array)
+        {
+            return new(SourceAuthenticationStatus.CheckFailed, Detail: "RuTube Studio вернула неожиданный ответ.");
+        }
+
+        var account = results.GetArrayLength() > 0 && results[0].ValueKind == JsonValueKind.Object
+            && results[0].TryGetProperty("author", out var author) && author.ValueKind == JsonValueKind.Object
+            && author.TryGetProperty("name", out var name) && name.ValueKind == JsonValueKind.String
+                ? name.GetString() : null;
+        return new(SourceAuthenticationStatus.Valid, account, "RuTube Studio открыла список своих видео.");
     }
 
     public async IAsyncEnumerable<GetVideoApiItem> GetVideoAsync(
@@ -713,6 +752,11 @@ public sealed partial class RutubeService
         using var request = CreateRequest(HttpMethod.Post, Url, content);
         using var response = await SendApiAsync(Operations.InitUploadSession, request, cancellationToken);
 
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            throw new SourceSessionRejectedException("RuTube Studio отклонила вход.");
+        }
+
         if (!response.IsSuccessStatusCode)
         {
             var err = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -880,6 +924,11 @@ public sealed partial class RutubeService
         var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
         using var request = CreateRequest(HttpMethod.Post, Url, content);
         using var response = await SendApiAsync(Operations.PublishVideo, request, cancellationToken);
+
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            throw new SourceSessionRejectedException("RuTube Studio отклонила вход.");
+        }
 
         if (!response.IsSuccessStatusCode)
         {

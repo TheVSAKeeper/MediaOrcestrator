@@ -8,6 +8,7 @@ public enum SourcesRelationsViewMode
     None = 0,
     List = 1,
     Graph = 2,
+    Authentication = 3,
 }
 
 internal static class SourcesRelationsStatsBuilder

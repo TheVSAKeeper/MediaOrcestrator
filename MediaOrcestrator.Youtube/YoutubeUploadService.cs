@@ -64,6 +64,11 @@ internal sealed class YoutubeUploadService(ILogger<YoutubeUploadService> logger,
 
         if (response.Status == UploadStatus.Failed)
         {
+            if (YoutubeChannel.IsOAuthRejection(response.Exception))
+            {
+                throw new SourceSessionRejectedException("YouTube отклонил вход через Google.", response.Exception, YoutubeChannel.OAuthMethod);
+            }
+
             var errorMessage = response.Exception?.Message ?? "Неизвестная ошибка";
 
             if (IsUploadLimitError(errorMessage))
