@@ -68,14 +68,21 @@ public sealed class SourceAuthenticationService(Orcestrator orcestrator, ILogger
             .ToDictionary(method => method.Id, method => method.Account!);
         foreach (var method in check.Methods ?? [])
         {
-            if (method.Status == SourceAuthenticationStatus.Valid && !string.IsNullOrWhiteSpace(method.Account))
+            if (method.Status == SourceAuthenticationStatus.Valid)
             {
-                methodAccounts[method.Id] = method.Account;
+                if (!string.IsNullOrWhiteSpace(method.Account))
+                {
+                    methodAccounts[method.Id] = method.Account;
+                }
+                else
+                {
+                    methodAccounts.Remove(method.Id);
+                }
             }
         }
 
-        var account = check.Status == SourceAuthenticationStatus.Valid && !string.IsNullOrWhiteSpace(check.Account)
-            ? check.Account
+        var account = check.Status == SourceAuthenticationStatus.Valid
+            ? (string.IsNullOrWhiteSpace(check.Account) ? null : check.Account)
             : previous.Account;
         var result = WithKnownAccounts(check with { Methods = check.Methods ?? current.Local.Methods }, account, methodAccounts);
         orcestrator.SaveAuthenticationStamp(new()
@@ -163,6 +170,23 @@ public sealed class SourceAuthenticationService(Orcestrator orcestrator, ILogger
 
     private static Dictionary<string, string> CopySettings(Source source) =>
         new(source.Settings, source.Settings.Comparer);
+
+    internal static string ComputeRevision(Source source)
+    {
+        try
+        {
+            var settings = CopySettings(source);
+            var stateFiles = source.Type is ISourceAuthenticationProbe probe
+                && probe.InspectAuthentication(settings) is { } state
+                ? state.StateFiles
+                : [];
+            return GetRevision(source, stateFiles);
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
 
     private static string GetRevision(Source source, IReadOnlyList<string> stateFiles)
     {

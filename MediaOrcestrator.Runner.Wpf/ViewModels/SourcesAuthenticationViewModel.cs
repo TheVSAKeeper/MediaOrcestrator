@@ -168,7 +168,8 @@ public sealed partial class SourcesAuthenticationViewModel(
 
         AttentionOnly = false;
         StatusFilter = null;
-        if (!row.IsAwaiting(failure.MethodId) && !(row.State.CheckedAt > failure.ObservedAt))
+        var sameRevision = !string.IsNullOrEmpty(failure.Revision) && row.State.Revision == failure.Revision;
+        if (sameRevision && !row.IsAwaiting(failure.MethodId) && !(row.State.CheckedAt > failure.ObservedAt))
         {
             var methods = row.Check.Methods?.Select(method => method.Id == failure.MethodId
                 ? method with { Status = SourceAuthenticationStatus.Rejected } : method).ToArray();

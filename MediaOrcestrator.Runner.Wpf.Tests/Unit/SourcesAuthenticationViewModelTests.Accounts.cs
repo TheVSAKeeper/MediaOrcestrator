@@ -104,4 +104,77 @@ public sealed partial class SourcesAuthenticationViewModelTests
 
         Assert.That(restarted.VisibleRows.Single().Check.Account, Is.EqualTo("Образовательный канал"));
     }
+
+    [Test]
+    public async Task RecordCheck_ПодтверждённаяСессияБезИмениАккаунта_СбрасываетПрежнийКанал()
+    {
+        var plugin = (ISourceType)Substitute.For(
+            [typeof(ISourceType), typeof(IAuthenticatable), typeof(ISourceAuthenticationProbe)], []);
+        plugin.Name.Returns("AnotherPlatform");
+        var probe = (ISourceAuthenticationProbe)plugin;
+        probe.InspectAuthentication(Arg.Any<Dictionary<string, string>>())
+            .Returns(new SourceAuthenticationLocalState(new(SourceAuthenticationStatus.Saved,
+                Methods: [new("oauth", "OAuth", "Публикация", SourceAuthenticationStatus.Saved)]), []));
+        probe.CheckAuthenticationAsync(Arg.Any<Dictionary<string, string>>(), Arg.Any<CancellationToken>())
+            .Returns(new SourceAuthenticationCheck(SourceAuthenticationStatus.Valid, "Канал A",
+                Methods: [new("oauth", "OAuth", "Публикация", SourceAuthenticationStatus.Valid, "Канал A")]));
+        using var context = new TestDomainContext([plugin]);
+        context.Orcestrator.AddSource("channel", plugin.Name, []);
+        var vm = CreateViewModel(context);
+        vm.SetSources(context.Orcestrator.GetSources());
+        await vm.CheckAllCommand.ExecuteAsync(null);
+
+        probe.CheckAuthenticationAsync(Arg.Any<Dictionary<string, string>>(), Arg.Any<CancellationToken>())
+            .Returns(new SourceAuthenticationCheck(SourceAuthenticationStatus.Valid,
+                Methods: [new("oauth", "OAuth", "Публикация", SourceAuthenticationStatus.Valid)]));
+        await vm.CheckAllCommand.ExecuteAsync(null);
+        var restarted = CreateViewModel(context);
+        restarted.SetSources(context.Orcestrator.GetSources());
+        var row = restarted.VisibleRows.Single();
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(row.Check.Status, Is.EqualTo(SourceAuthenticationStatus.Valid));
+            Assert.That(row.Check.Account, Is.Null);
+            Assert.That(row.Methods.Single().Method.Account, Is.Null);
+            Assert.That(row.AccountText, Is.Null);
+        }
+    }
+
+    [Test]
+    public async Task FocusSource_СессияОбновленаВНастройкахПослеОтказа_НеЗаписываетЛожныйОтказ()
+    {
+        var plugin = Substitute.For<ISourceType, IAuthenticatable, ISourceAuthenticationProbe>();
+        plugin.Name.Returns("AnotherPlatform");
+        using var context = new TestDomainContext([plugin]);
+        var stateFile = Path.Combine(context.Root, "session.json");
+        await File.WriteAllTextAsync(stateFile, "old");
+        var probe = (ISourceAuthenticationProbe)plugin;
+        probe.InspectAuthentication(Arg.Any<Dictionary<string, string>>())
+            .Returns(_ => new SourceAuthenticationLocalState(new(SourceAuthenticationStatus.Saved), [stateFile]));
+        probe.CheckAuthenticationAsync(Arg.Any<Dictionary<string, string>>(), Arg.Any<CancellationToken>())
+            .Returns(new SourceAuthenticationCheck(SourceAuthenticationStatus.Valid, "Новый вход"));
+        context.Orcestrator.AddSource("source", plugin.Name, []);
+        var source = context.Orcestrator.GetSources().Single();
+        var failure = new SourceOperationAuthenticationException(source, new("Площадка отклонила вход."));
+
+        await File.WriteAllTextAsync(stateFile, "fresh-session-from-settings");
+        File.SetLastWriteTimeUtc(stateFile, DateTime.UtcNow.AddSeconds(2));
+
+        var vm = CreateViewModel(context);
+        vm.SetSources(context.Orcestrator.GetSources());
+        vm.FocusSource(failure);
+
+        var row = vm.VisibleRows.Single();
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(row.Check.Status, Is.EqualTo(SourceAuthenticationStatus.Saved));
+            Assert.That(row.CheckedAt, Is.Null);
+            Assert.That(vm.SelectedRow, Is.SameAs(row));
+        }
+
+        vm.SetActive(true);
+        await vm.CheckAllAsync(CancellationToken.None);
+        Assert.That(row.Check.Status, Is.EqualTo(SourceAuthenticationStatus.Valid));
+    }
 }

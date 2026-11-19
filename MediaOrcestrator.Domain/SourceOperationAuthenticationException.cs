@@ -9,4 +9,5 @@ public sealed class SourceOperationAuthenticationException(Source source, Source
     public string SourceTitle { get; } = source.TitleFull;
     public string? MethodId { get; } = cause.MethodId;
     public DateTime ObservedAt { get; } = DateTime.UtcNow;
+    public string Revision { get; } = SourceAuthenticationService.ComputeRevision(source);
 }
