@@ -111,10 +111,9 @@ public sealed class MediaGridViewModelTests
         var grid = CreateGrid();
         grid.ApplyDomainData([m0, m1, m2]);
 
-        grid.Rows[2].IsSelected = true;
-        grid.Rows[0].IsSelected = true;
-        grid.Rows[1].IsSelected = true;
-        grid.Rows[0].IsSelected = false;
+        grid.ApplySelectionChange([], [grid.Rows[2]]);
+        grid.ApplySelectionChange([], [grid.Rows[0], grid.Rows[1]]);
+        grid.ApplySelectionChange([grid.Rows[0]], []);
 
         _ctx.Dispatcher.FireAllRunningTimers();
 
@@ -129,6 +128,136 @@ public sealed class MediaGridViewModelTests
                 OperationsTab.Merge,
                 Arg.Is<IReadOnlyList<Media>>(list => list.Select(m => m.Id).SequenceEqual(new[] { "m2", "m1" })));
         }
+    }
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public void ФильтрИсточников_ПриПерестроенииСтрок_СохраняетВидимуюЧастьВыделенияВПорядкеВыбора(bool emptyIds)
+    {
+        var firstSource = CreateSource("s1", "YouTube", "Youtube");
+        var secondSource = CreateSource("s2", "RuTube", "Rutube");
+        _sources.AddRange([firstSource, secondSource]);
+        var first = CreateMedia(emptyIds ? "" : "m1", "Первое", firstSource.Id, MediaStatus.Ok);
+        var hidden = CreateMedia("m2", "Второе", secondSource.Id, MediaStatus.Ok);
+        var last = CreateMedia(emptyIds ? "" : "m3", "Третье", firstSource.Id, MediaStatus.Ok);
+        _filter.ApplyDomainData(_sources, [first, hidden, last], []);
+        var grid = CreateGrid();
+        grid.ApplyDomainData([first, hidden, last]);
+        grid.ApplySelectionChange([], [grid.Rows[2], grid.Rows[1], grid.Rows[0]]);
+
+        _filter.SourceFilters.Single(option => option.Id == firstSource.Id).IsChecked = true;
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(grid.SelectedCount, Is.EqualTo(2));
+            Assert.That(grid.SelectedRows, Is.EqualTo(new[] { grid.Rows[2], grid.Rows[0] }));
+        }
+    }
+
+    [Test]
+    public void КолонкиМетаданных_ПриОткрытойИзПередачСтроке_СохраняютВыделениеДоСменыФильтра()
+    {
+        var firstSource = CreateSource("s1", "YouTube", "Youtube");
+        var secondSource = CreateSource("s2", "RuTube", "Rutube");
+        _sources.AddRange([firstSource, secondSource]);
+        var visible = CreateMedia("m1", "Архив", firstSource.Id, MediaStatus.Ok);
+        var target = CreateMedia("m2", "Премьера", secondSource.Id, MediaStatus.Ok, ("Views", "120", "Просмотры"));
+        _filter.ApplyDomainData(_sources, [visible, target], []);
+        var grid = CreateGrid();
+        grid.ApplyDomainData([visible, target]);
+        _filter.SetSearchImmediateForAutomation(visible.Title);
+        grid.OpenInspectorCommand.Execute(grid.Rows[1]);
+
+        _filter.MetadataColumnFilters.Single().IsChecked = true;
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(grid.RowsView.Cast<MediaRowViewModel>(), Does.Contain(grid.Rows[1]));
+            Assert.That(grid.SelectedRows.Single(), Is.SameAs(grid.Rows[1]));
+            Assert.That(grid.Focused?.Media, Is.SameAs(target));
+        }
+
+        _filter.SourceFilters.Single(option => option.Id == firstSource.Id).IsChecked = true;
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(grid.RowsView.Cast<MediaRowViewModel>(), Does.Not.Contain(grid.Rows[1]));
+            Assert.That(grid.SelectedCount, Is.Zero);
+        }
+    }
+
+    [Test]
+    public void Выделение_ПриПовторномДобавленииИСкрытойЦелиМеню_СохраняетТолькоВыбраннуюСтроку()
+    {
+        var source = CreateSource("s1", "YouTube", "Youtube");
+        _sources.Add(source);
+        var visible = CreateMedia("m1", "Архив", source.Id, MediaStatus.Ok);
+        var hidden = CreateMedia("m2", "Премьера", source.Id, MediaStatus.Ok);
+        _filter.ApplyDomainData(_sources, [visible, hidden], []);
+        var grid = CreateGrid();
+        grid.ApplyDomainData([visible, hidden]);
+        _filter.SetSearchImmediateForAutomation(visible.Title);
+        grid.ApplySelectionChange([], [grid.Rows[0]]);
+        _ctx.Dispatcher.FireAllRunningTimers();
+
+        grid.ApplySelectionChange([grid.Rows[1]], [grid.Rows[0], grid.Rows[0]]);
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(grid.SelectedCount, Is.EqualTo(1));
+            Assert.That(grid.IsSelectionCurrent, Is.True);
+        }
+
+        grid.BuildContextMenu(grid.Rows[1], null);
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(grid.SelectedRows, Is.EqualTo(new[] { grid.Rows[0] }));
+            Assert.That(grid.ContextMenuItems, Is.Empty);
+        }
+    }
+
+    [Test]
+    public void ДействиеПередачи_ПриСменеВыделенияДоТаймера_НедоступноДляПрежнейСтроки()
+    {
+        var source = CreateSource("s1", "YouTube", "Youtube");
+        _sources.Add(source);
+        var first = CreateMedia("m1", "Первое", source.Id, MediaStatus.Ok);
+        var second = CreateMedia("m2", "Второе", source.Id, MediaStatus.Ok);
+        var executions = 0;
+        var builder = new MediaContextMenuBuilder(
+            [new StubMenuAction(10, new MenuItemSpec("Передать")
+            {
+                IsTransferAction = true,
+                Execute = () =>
+                {
+                    executions++;
+                    return Task.CompletedTask;
+                },
+            })],
+            NullLogger<MediaContextMenuBuilder>.Instance);
+        _filter.ApplyDomainData(_sources, [first, second], []);
+        var grid = CreateGrid(builder);
+        grid.ApplyDomainData([first, second]);
+        grid.ApplySelectionChange([], [grid.Rows[0]]);
+        _ctx.Dispatcher.FireAllRunningTimers();
+        var previous = grid.TransferMenuItems.Single(item => item.Text == "Передать").Command!;
+        Assert.That(previous.CanExecute(null), Is.True);
+
+        grid.ApplySelectionChange([grid.Rows[0]], [grid.Rows[1]]);
+        previous.Execute(null);
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(grid.SelectedCount, Is.EqualTo(1));
+            Assert.That(previous.CanExecute(null), Is.False);
+            Assert.That(executions, Is.Zero);
+        }
+
+        _ctx.Dispatcher.FireAllRunningTimers();
+        var current = grid.TransferMenuItems.Single(item => item.Text == "Передать").Command!;
+        Assert.That(current.CanExecute(null), Is.True);
+        current.Execute(null);
+        Assert.That(executions, Is.EqualTo(1));
     }
 
     [Test]
@@ -189,7 +318,7 @@ public sealed class MediaGridViewModelTests
 
         var grid = CreateGrid(builder);
         grid.ApplyDomainData([media]);
-        grid.Rows[0].IsSelected = true;
+        grid.ApplySelectionChange([], [grid.Rows[0]]);
 
         _ctx.Dispatcher.FireAllRunningTimers();
 

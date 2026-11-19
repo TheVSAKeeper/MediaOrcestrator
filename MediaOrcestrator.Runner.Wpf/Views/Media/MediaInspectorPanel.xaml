@@ -120,11 +120,12 @@
                                Style="{StaticResource TextBlock.Heading}"
                                TextWrapping="Wrap"
                                VerticalAlignment="Center"
-                               Tag="{Binding Inspector}">
+                               Tag="{Binding}">
                         <TextBlock.ContextMenu>
                             <ContextMenu>
                                 <MenuItem Header="Копировать"
-                                          Command="{Binding PlacementTarget.Tag.CopyTitleCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                          IsEnabled="{Binding PlacementTarget.Tag.Grid.IsSelectionCurrent, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                          Command="{Binding PlacementTarget.Tag.Inspector.CopyTitleCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                             </ContextMenu>
                         </TextBlock.ContextMenu>
                     </TextBlock>
@@ -194,6 +195,7 @@
                 <ScrollViewer Grid.Row="1"
                               Padding="14,0,14,14"
                               HorizontalScrollBarVisibility="Disabled"
+                              IsEnabled="{Binding Grid.IsSelectionCurrent}"
                               Visibility="{Binding Grid.IsSelectionVisible, Converter={StaticResource BoolToVisibility}}">
                     <StackPanel>
                         

@@ -17,7 +17,8 @@ public sealed class MediaContextMenuBuilder : IDisposable
         _logger = logger;
     }
 
-    public ObservableCollection<MediaMenuItemViewModel> Build(MediaSelection selection, MediaActionContext ctx, bool includeAsync = true)
+    public ObservableCollection<MediaMenuItemViewModel> Build(
+        MediaSelection selection, MediaActionContext ctx, bool includeAsync = true, Func<bool>? canExecute = null)
     {
         var token = CancellationToken.None;
 
@@ -71,7 +72,7 @@ public sealed class MediaContextMenuBuilder : IDisposable
 
             foreach (var spec in specs)
             {
-                items.Add(MediaMenuItemViewModel.FromSpec(spec, _logger));
+                items.Add(MediaMenuItemViewModel.FromSpec(spec, _logger, canExecute));
                 addedAnything = true;
             }
 
@@ -93,7 +94,7 @@ public sealed class MediaContextMenuBuilder : IDisposable
 
         if (asyncSlots.Count > 0)
         {
-            _ = LoadAsyncSlotsAsync(items, asyncSlots, selection, ctx, token);
+            _ = LoadAsyncSlotsAsync(items, asyncSlots, selection, ctx, token, canExecute);
         }
 
         return items;
@@ -111,7 +112,8 @@ public sealed class MediaContextMenuBuilder : IDisposable
         IReadOnlyList<AsyncSlot> slots,
         MediaSelection selection,
         MediaActionContext ctx,
-        CancellationToken token)
+        CancellationToken token,
+        Func<bool>? canExecute)
     {
         foreach (var slot in slots)
         {
@@ -129,7 +131,7 @@ public sealed class MediaContextMenuBuilder : IDisposable
                     return;
                 }
 
-                Dispatch(() => ReplacePlaceholder(items, slot, asyncItems));
+                Dispatch(() => ReplacePlaceholder(items, slot, asyncItems, canExecute));
             }
             catch (OperationCanceledException)
             {
@@ -161,7 +163,8 @@ public sealed class MediaContextMenuBuilder : IDisposable
     private void ReplacePlaceholder(
         ObservableCollection<MediaMenuItemViewModel> items,
         AsyncSlot slot,
-        IReadOnlyList<MenuItemSpec> asyncSpecs)
+        IReadOnlyList<MenuItemSpec> asyncSpecs,
+        Func<bool>? canExecute)
     {
         var idx = items.IndexOf(slot.Placeholder);
 
@@ -184,7 +187,7 @@ public sealed class MediaContextMenuBuilder : IDisposable
 
         foreach (var spec in asyncSpecs)
         {
-            items.Insert(idx, MediaMenuItemViewModel.FromSpec(spec, _logger));
+            items.Insert(idx, MediaMenuItemViewModel.FromSpec(spec, _logger, canExecute));
             idx++;
         }
     }

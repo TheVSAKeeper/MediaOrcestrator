@@ -3,6 +3,7 @@ using MediaOrcestrator.Runner.Wpf.ViewModels;
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -25,6 +26,7 @@ public partial class MediaGridView : UserControl, IView<MediaGridViewModel>
     private readonly DispatcherTimer _columnWidthTimer;
 
     private MediaGridViewModel? _vm;
+    private bool _applyingSelection;
 
     public MediaGridView()
     {
@@ -72,6 +74,7 @@ public partial class MediaGridView : UserControl, IView<MediaGridViewModel>
         {
             _vm.ColumnsChanged -= OnColumnsChanged;
             _vm.AutoFitColumnsRequested -= OnAutoFitColumnsRequested;
+            _vm.SelectionRequested -= OnSelectionRequested;
             _vm.PropertyChanged -= OnVmPropertyChanged;
         }
 
@@ -81,8 +84,52 @@ public partial class MediaGridView : UserControl, IView<MediaGridViewModel>
         {
             _vm.ColumnsChanged += OnColumnsChanged;
             _vm.AutoFitColumnsRequested += OnAutoFitColumnsRequested;
+            _vm.SelectionRequested += OnSelectionRequested;
             _vm.PropertyChanged += OnVmPropertyChanged;
             RebuildColumns(_vm);
+            ApplyRequestedSelection();
+        }
+    }
+
+    private void OnItemsSourceUpdated(object sender, DataTransferEventArgs e)
+    {
+        if (ReferenceEquals(e.TargetObject, MediaGrid) && e.Property == ItemsControl.ItemsSourceProperty)
+        {
+            ApplyRequestedSelection();
+        }
+    }
+
+    private void OnSelectionRequested(object? sender, EventArgs e) => ApplyRequestedSelection();
+
+    private void ApplyRequestedSelection()
+    {
+        if (_vm is null || !ReferenceEquals(MediaGrid.ItemsSource, _vm.RowsView)
+            || MediaGrid.SelectedItems.OfType<MediaRowViewModel>().SequenceEqual(_vm.SelectedRows))
+        {
+            return;
+        }
+
+        _applyingSelection = true;
+        try
+        {
+            MediaGrid.UnselectAll();
+            foreach (var row in _vm.SelectedRows)
+            {
+                MediaGrid.SelectedItems.Add(row);
+            }
+        }
+        finally
+        {
+            _applyingSelection = false;
+        }
+    }
+
+    private void OnGridSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_applyingSelection && _vm is not null && ReferenceEquals(e.OriginalSource, MediaGrid)
+            && ReferenceEquals(MediaGrid.ItemsSource, _vm.RowsView))
+        {
+            _vm.ApplySelectionChange(e.RemovedItems.OfType<MediaRowViewModel>(), e.AddedItems.OfType<MediaRowViewModel>());
         }
     }
 
@@ -222,14 +269,14 @@ public partial class MediaGridView : UserControl, IView<MediaGridViewModel>
 
     private void OnDataGridDoubleClick(object sender, MouseButtonEventArgs e)
     {
-        if (_vm is null || MediaGrid.SelectedItem is not MediaRowViewModel row)
+        if (_vm is null || e.ChangedButton != MouseButton.Left || Keyboard.Modifiers != ModifierKeys.None)
         {
             return;
         }
 
         var hit = VisualTreeHelper.HitTest(MediaGrid, e.GetPosition(MediaGrid));
 
-        if (hit?.VisualHit is null || FindAncestor<DataGridRow>(hit.VisualHit) is null)
+        if (FindAncestor<DataGridRow>(hit?.VisualHit)?.Item is not MediaRowViewModel row)
         {
             return;
         }
@@ -244,17 +291,18 @@ public partial class MediaGridView : UserControl, IView<MediaGridViewModel>
             return;
         }
 
-        var position = Mouse.GetPosition(MediaGrid);
-        var hit = VisualTreeHelper.HitTest(MediaGrid, position);
+        var target = e.CursorLeft < 0 && e.CursorTop < 0
+            ? e.OriginalSource as DependencyObject
+            : VisualTreeHelper.HitTest(MediaGrid, Mouse.GetPosition(MediaGrid))?.VisualHit;
 
-        if (hit?.VisualHit is null)
+        if (target is null)
         {
             e.Handled = true;
             return;
         }
 
-        var cell = FindAncestor<DataGridCell>(hit.VisualHit);
-        var row = FindAncestor<DataGridRow>(hit.VisualHit);
+        var cell = FindAncestor<DataGridCell>(target);
+        var row = FindAncestor<DataGridRow>(target);
         var triggerRow = row?.Item as MediaRowViewModel;
 
         Source? specificSource = null;

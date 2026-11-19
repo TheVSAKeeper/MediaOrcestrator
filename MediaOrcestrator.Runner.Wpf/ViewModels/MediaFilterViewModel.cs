@@ -72,7 +72,7 @@ public sealed partial class MediaFilterViewModel : ObservableObject
 
     public event EventHandler? FiltersChanged;
 
-    public event EventHandler? ColumnsAffected;
+    public event EventHandler<bool>? ColumnsAffected;
 
     internal void SetSearchImmediateForAutomation(string searchText)
     {
@@ -203,7 +203,7 @@ public sealed partial class MediaFilterViewModel : ObservableObject
 
         if (SourceFilters.Contains(option))
         {
-            ColumnsAffected?.Invoke(this, EventArgs.Empty);
+            ColumnsAffected?.Invoke(this, true);
         }
         else
         {
@@ -222,7 +222,7 @@ public sealed partial class MediaFilterViewModel : ObservableObject
 
         RecomputeActiveRelationSources();
 
-        ColumnsAffected?.Invoke(this, EventArgs.Empty);
+        ColumnsAffected?.Invoke(this, true);
         PersistFilters();
     }
 
@@ -233,7 +233,7 @@ public sealed partial class MediaFilterViewModel : ObservableObject
             return;
         }
 
-        ColumnsAffected?.Invoke(this, EventArgs.Empty);
+        ColumnsAffected?.Invoke(this, false);
         PersistFilters();
     }
 

@@ -12,32 +12,26 @@ public sealed partial class MediaGridViewModel
 {
     public void BuildContextMenu(MediaRowViewModel? triggerRow, Source? specificSource)
     {
-        if (triggerRow is not null && !triggerRow.IsSelected)
+        if (triggerRow is not null && !RowsView.Contains(triggerRow))
         {
-            foreach (var row in Rows)
-            {
-                row.IsSelected = false;
-            }
-
-            triggerRow.IsSelected = true;
+            ContextMenuItems = [];
+            OnPropertyChanged(nameof(ContextMenuItems));
+            return;
         }
 
-        var selected = Rows.Where(r => r.IsSelected).Select(r => r.Media).ToList();
-
-        if (selected.Count == 0 && triggerRow is not null)
+        if (triggerRow is not null && !_selectionOrder.Contains(triggerRow))
         {
-            selected.Add(triggerRow.Media);
+            RequestSelection([triggerRow]);
+            ScheduleSelectionUpdate();
         }
 
-        ContextMenuItems = BuildMenu(selected, specificSource, includeAsync: true);
+        ContextMenuItems = BuildMenu(GetSelectedMedias(), specificSource, includeAsync: true);
         OnPropertyChanged(nameof(ContextMenuItems));
     }
 
     private void BuildPanelActions()
     {
-        var selected = Rows.Where(r => r.IsSelected).Select(r => r.Media).ToList();
-
-        PanelActionItems = BuildMenu(selected, null, includeAsync: false);
+        PanelActionItems = BuildMenu(GetSelectedMedias(), null, includeAsync: false);
 
         var primary = PanelActionItems
             .Where(i => !i.IsSeparator && (i.HasChildren || i.Command is not null) && i.Icon != PackIconLucideKind.Trash2)
@@ -141,7 +135,8 @@ public sealed partial class MediaGridViewModel
 
         var ctx = _actionContextFactory.Create(_actionUi);
 
-        return _contextMenuBuilder.Build(selection, ctx, includeAsync);
+        var revision = _selectionRevision;
+        return _contextMenuBuilder.Build(selection, ctx, includeAsync, () => revision == _selectionRevision);
     }
 
     internal IReadOnlyList<Media> OrderBySelection(IReadOnlyList<Media> selected)
@@ -166,16 +161,18 @@ public sealed partial class MediaGridViewModel
     [RelayCommand]
     private void OpenInspector(MediaRowViewModel? row)
     {
-        if (row is null)
+        if (row is null || !Rows.Contains(row))
         {
             return;
         }
 
-        foreach (var other in Rows)
+        if (!RowsView.Contains(row))
         {
-            other.IsSelected = ReferenceEquals(other, row);
+            _revealedRow = row;
+            RefreshFilteredRows();
         }
 
+        RequestSelection([row]);
         RequestExpandInspector?.Invoke(this, EventArgs.Empty);
         UpdateSelectionState();
     }
@@ -183,12 +180,46 @@ public sealed partial class MediaGridViewModel
     [RelayCommand]
     private void ClearSelection()
     {
-        foreach (var row in Rows)
+        RequestSelection([]);
+        if (_revealedRow is not null)
         {
-            row.IsSelected = false;
+            _revealedRow = null;
+            RefreshFilteredRows();
+        }
+        UpdateSelectionState();
+    }
+
+    private void RequestSelection(IEnumerable<MediaRowViewModel> rows)
+    {
+        _selectionOrder.Clear();
+        _selectionOrder.AddRange(rows);
+        NotifySelectionChanged();
+        SelectionRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void NotifySelectionChanged()
+    {
+        _selectionRevision++;
+        if (IsSelectionCurrent)
+        {
+            IsSelectionCurrent = false;
+            NotifyCommandsChanged(PanelActionItems);
         }
 
-        UpdateSelectionState();
+        NotifyCommandsChanged(ContextMenuItems);
+        SelectedCount = _selectionOrder.Count;
+    }
+
+    private static void NotifyCommandsChanged(IEnumerable<MediaMenuItemViewModel> items)
+    {
+        foreach (var item in items)
+        {
+            (item.Command as IRelayCommand)?.NotifyCanExecuteChanged();
+            if (item.Children is { } children)
+            {
+                NotifyCommandsChanged(children);
+            }
+        }
     }
 
     [RelayCommand]
@@ -208,29 +239,31 @@ public sealed partial class MediaGridViewModel
 
     private void OpenOperation(OperationsTab tab)
     {
-        var selected = Rows.Where(r => r.IsSelected).Select(r => r.Media).ToList();
+        var selected = _selectionOrder.Select(row => row.Media).ToList();
 
         if (selected.Count == 0)
         {
             return;
         }
 
-        _actionContextFactory.Create(_actionUi).Navigation.OpenOperations(tab, OrderBySelection(selected));
+        _actionContextFactory.Create(_actionUi).Navigation.OpenOperations(tab, selected);
     }
 
-    [RelayCommand]
-    private void ToggleAllRowsSelection(bool value)
+    private List<Media> GetSelectedMedias()
     {
-        foreach (var row in Rows)
+        if (_selectionOrder.Count <= 1)
         {
-            row.IsSelected = value;
+            return _selectionOrder.Select(row => row.Media).ToList();
         }
+
+        var selected = _selectionOrder.ToHashSet();
+        return Rows.Where(selected.Contains).Select(row => row.Media).ToList();
     }
 
     private void UpdateSelectionState()
     {
-        var selected = Rows.Where(r => r.IsSelected).ToList();
-        SelectedCount = selected.Count;
+        _selectionDebounceTimer.Stop();
+        var selected = _selectionOrder;
 
         if (selected.Count == 1)
         {
@@ -256,6 +289,7 @@ public sealed partial class MediaGridViewModel
 
         OnPropertyChanged(nameof(IsInspectorOpen));
         BuildPanelActions();
+        IsSelectionCurrent = true;
     }
 
     private void BuildMultiAggregates(IReadOnlyList<MediaRowViewModel> selected)

@@ -57,7 +57,8 @@
             CornerRadius="{DynamicResource Radius.L}">
         <Grid>
             <DataGrid x:Name="MediaGrid"
-                      ItemsSource="{Binding RowsView}"
+                      ItemsSource="{Binding RowsView, NotifyOnTargetUpdated=True}"
+                      TargetUpdated="OnItemsSourceUpdated"
                       RowHeight="{Binding RowHeight}"
                       MinRowHeight="{Binding RowMinHeight}"
                       AutoGenerateColumns="False"
@@ -68,6 +69,7 @@
                       HeadersVisibility="Column"
                       SelectionMode="Extended"
                       SelectionUnit="FullRow"
+                      SelectionChanged="OnGridSelectionChanged"
                       GridLinesVisibility="Horizontal"
                       IsReadOnly="True"
                       ScrollViewer.HorizontalScrollBarVisibility="Auto"
@@ -146,8 +148,6 @@
                 <DataGrid.RowStyle>
                     <Style TargetType="DataGridRow"
                            BasedOn="{StaticResource {x:Type DataGridRow}}">
-                        <Setter Property="IsSelected"
-                                Value="{Binding IsSelected, Mode=TwoWay}" />
                         <Setter Property="Template">
                             <Setter.Value>
                                 <ControlTemplate TargetType="DataGridRow">

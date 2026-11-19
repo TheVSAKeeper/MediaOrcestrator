@@ -1,16 +1,12 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
-using MahApps.Metro.IconPacks;
+﻿using MahApps.Metro.IconPacks;
 using MediaOrcestrator.Domain;
 using MediaOrcestrator.Modules;
 using System.Windows.Media;
 
 namespace MediaOrcestrator.Runner.Wpf.ViewModels;
 
-public sealed partial class MediaRowViewModel : ObservableObject
+public sealed class MediaRowViewModel
 {
-    [ObservableProperty]
-    private bool _isSelected;
-
     public MediaRowViewModel(Media media, IReadOnlyList<Source> columnSources, IReadOnlyList<MetadataColumnInfo> metadataColumns, MediaSeriesEntry series)
     {
         Media = media;

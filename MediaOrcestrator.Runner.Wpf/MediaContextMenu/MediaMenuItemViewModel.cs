@@ -40,14 +40,19 @@ public sealed class MediaMenuItemViewModel
         IsEnabled = false,
     };
 
-    public static MediaMenuItemViewModel FromSpec(MenuItemSpec spec, ILogger? logger = null)
+    public static MediaMenuItemViewModel FromSpec(MenuItemSpec spec, ILogger? logger = null, Func<bool>? canExecute = null)
     {
         ICommand? command = null;
 
         if (spec.Execute is { } execute && spec.Enabled)
         {
-            command = new AsyncRelayCommand(async () =>
+            async Task Execute()
             {
+                if (canExecute?.Invoke() == false)
+                {
+                    return;
+                }
+
                 try
                 {
                     await execute();
@@ -59,14 +64,16 @@ public sealed class MediaMenuItemViewModel
                 {
                     logger?.LogError(ex, "Ошибка выполнения пункта меню '{Text}'", spec.Text);
                 }
-            });
+            }
+
+            command = canExecute is null ? new AsyncRelayCommand(Execute) : new AsyncRelayCommand(Execute, canExecute);
         }
 
         ObservableCollection<MediaMenuItemViewModel>? children = null;
 
         if (spec.Children is { Count: > 0 })
         {
-            children = new(spec.Children.Select(c => FromSpec(c, logger)));
+            children = new(spec.Children.Select(c => FromSpec(c, logger, canExecute)));
         }
 
         return new()

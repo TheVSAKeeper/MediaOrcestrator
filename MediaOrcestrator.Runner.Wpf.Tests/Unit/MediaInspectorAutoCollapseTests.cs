@@ -53,11 +53,11 @@ public sealed class MediaInspectorAutoCollapseTests
         _vm.UpdateViewportWidth(900);
         var collapsedBeforeSelect = _vm.IsInspectorCollapsed;
 
-        _vm.Grid.Rows[0].IsSelected = true;
+        _vm.Grid.ApplySelectionChange([], [_vm.Grid.Rows[0]]);
         _ctx.Dispatcher.FireAllRunningTimers();
         var expandedOnSelection = _vm.IsInspectorCollapsed;
 
-        _vm.Grid.Rows[0].IsSelected = false;
+        _vm.Grid.ApplySelectionChange([_vm.Grid.Rows[0]], []);
         _ctx.Dispatcher.FireAllRunningTimers();
         var collapsedAfterDeselect = _vm.IsInspectorCollapsed;
 

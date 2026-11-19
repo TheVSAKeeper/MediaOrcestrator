@@ -52,6 +52,8 @@ public sealed partial class MediaGridViewModel : ObservableObject
     private readonly Dictionary<string, double> _columnWidths = new(StringComparer.Ordinal);
     private readonly List<MediaRowViewModel> _selectionOrder = [];
 
+    private MediaRowViewModel? _revealedRow;
+    private int _selectionRevision;
     private bool _suppressPrefPersist;
 
     public MediaGridViewModel(
@@ -81,7 +83,7 @@ public sealed partial class MediaGridViewModel : ObservableObject
         RowsView = CollectionViewSource.GetDefaultView(Rows);
         RowsView.Filter = OnFilterRow;
 
-        _selectionDebounceTimer = dispatcher.CreateTimer(SelectionDebounce, OnSelectionDebounceTick);
+        _selectionDebounceTimer = dispatcher.CreateTimer(SelectionDebounce, UpdateSelectionState);
 
         _filter.FiltersChanged += OnFilterFiltersChanged;
         _filter.ColumnsAffected += OnFilterColumnsAffected;
@@ -96,6 +98,9 @@ public sealed partial class MediaGridViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(SelectedSummaryText))]
     [NotifyPropertyChangedFor(nameof(PanelTitle))]
     private int _selectedCount;
+
+    [ObservableProperty]
+    private bool _isSelectionCurrent = true;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsInspectorOpen))]
@@ -139,6 +144,10 @@ public sealed partial class MediaGridViewModel : ObservableObject
     public event EventHandler? AutoFitColumnsRequested;
 
     public event EventHandler? RequestExpandInspector;
+
+    internal event EventHandler? SelectionRequested;
+
+    internal IReadOnlyList<MediaRowViewModel> SelectedRows => _selectionOrder;
 
     public RangeObservableCollection<MediaRowViewModel> Rows { get; }
 
@@ -220,7 +229,8 @@ public sealed partial class MediaGridViewModel : ObservableObject
     public void ClearOnLoadError()
     {
         _allMedias.Clear();
-        DetachRowEvents();
+        _revealedRow = null;
+        RequestSelection([]);
         Rows.ReplaceAll([]);
         ColumnSources.ReplaceAll([]);
         MetadataColumns.ReplaceAll([]);
@@ -236,11 +246,9 @@ public sealed partial class MediaGridViewModel : ObservableObject
 
     internal void RefreshViewForAutomation()
     {
-        RowsView.Refresh();
+        RefreshFilteredRows();
         OnPropertyChanged(nameof(TotalCount));
-        OnPropertyChanged(nameof(VisibleCount));
         OnPropertyChanged(nameof(IsDatabaseEmpty));
-        OnPropertyChanged(nameof(ShowEmptyState));
     }
 
     public static string MetadataColumnKey(string columnId) => MetadataColumnKeyPrefix + columnId;
@@ -249,14 +257,16 @@ public sealed partial class MediaGridViewModel : ObservableObject
 
     public MediaRebuildBreakdown ApplyDomainData(List<Media> medias)
     {
+        _revealedRow = null;
         _allMedias.Clear();
         _allMedias.AddRange(medias);
 
         return RebuildColumnsAndRows();
     }
 
-    public MediaRebuildBreakdown RebuildColumnsAndRows()
+    private MediaRebuildBreakdown RebuildColumnsAndRows(bool preserveSelection = false)
     {
+        var previousSelection = preserveSelection ? _selectionOrder.ToArray() : [];
         var swCols = Stopwatch.StartNew();
 
         var activeSourceIds = _filter.ActiveSourceIds();
@@ -275,8 +285,6 @@ public sealed partial class MediaGridViewModel : ObservableObject
         swCols.Stop();
 
         var swRows = Stopwatch.StartNew();
-        DetachRowEvents();
-
         var seriesEntries = MediaSeriesParser.Assign(_allMedias);
         var newRows = new List<MediaRowViewModel>(_allMedias.Count);
 
@@ -285,8 +293,15 @@ public sealed partial class MediaGridViewModel : ObservableObject
             newRows.Add(new(_allMedias[i], columns, metaColumns, seriesEntries[i]));
         }
 
+        var replacements = previousSelection.Length > 0 || _revealedRow is not null
+            ? Rows.Zip(newRows).ToDictionary(pair => pair.First, pair => pair.Second)
+            : null;
+        RequestSelection([]);
+        if (_revealedRow is not null)
+        {
+            _revealedRow = replacements?.GetValueOrDefault(_revealedRow);
+        }
         Rows.ReplaceAll(newRows);
-        AttachRowEvents();
 
         if (IsGrouped)
         {
@@ -305,6 +320,15 @@ public sealed partial class MediaGridViewModel : ObservableObject
         OnPropertyChanged(nameof(IsDatabaseEmpty));
         OnPropertyChanged(nameof(ShowEmptyState));
         swView.Stop();
+
+        if (replacements is not null && previousSelection.Length > 0)
+        {
+            var visibleRows = RowsView.Cast<MediaRowViewModel>().ToHashSet();
+            RequestSelection(previousSelection
+                .Where(replacements.ContainsKey)
+                .Select(row => replacements[row])
+                .Where(visibleRows.Contains));
+        }
 
         UpdateSelectionState();
 
@@ -375,9 +399,8 @@ public sealed partial class MediaGridViewModel : ObservableObject
     private void OnFilterFiltersChanged(object? sender, EventArgs e)
     {
         var sw = Stopwatch.StartNew();
-        RowsView.Refresh();
-        OnPropertyChanged(nameof(VisibleCount));
-        OnPropertyChanged(nameof(ShowEmptyState));
+        _revealedRow = null;
+        RefreshFilteredRows();
         sw.Stop();
 
         PublishMetric?.Invoke(
@@ -386,9 +409,13 @@ public sealed partial class MediaGridViewModel : ObservableObject
         ], sw.ElapsedMilliseconds);
     }
 
-    private void OnFilterColumnsAffected(object? sender, EventArgs e)
+    private void OnFilterColumnsAffected(object? sender, bool rowFilterChanged)
     {
-        var b = RebuildColumnsAndRows();
+        if (rowFilterChanged)
+        {
+            _revealedRow = null;
+        }
+        var b = RebuildColumnsAndRows(preserveSelection: true);
         var vmMs = b.ColumnsMs + b.RowsMs + b.ViewMs;
 
         PublishMetric?.Invoke(
@@ -399,53 +426,45 @@ public sealed partial class MediaGridViewModel : ObservableObject
         ], vmMs);
     }
 
-    private void OnSelectionDebounceTick()
-    {
-        _selectionDebounceTimer.Stop();
-        UpdateSelectionState();
-    }
-
-    private bool OnFilterRow(object? value) => value is MediaRowViewModel row && _filter.Matches(row);
+    private bool OnFilterRow(object? value) => value is MediaRowViewModel row
+        && (ReferenceEquals(row, _revealedRow) || _filter.Matches(row));
 
     private static string FormatMs(long ms) => $"{ms} мс";
 
-    private void DetachRowEvents()
+    private void RefreshFilteredRows()
     {
-        foreach (var row in Rows)
-        {
-            row.PropertyChanged -= OnRowPropertyChanged;
-        }
+        RowsView.Refresh();
+        OnPropertyChanged(nameof(VisibleCount));
+        OnPropertyChanged(nameof(ShowEmptyState));
 
-        _selectionOrder.Clear();
+        if (_selectionOrder.Count > 0)
+        {
+            var visible = RowsView.Cast<MediaRowViewModel>().ToHashSet();
+            if (_selectionOrder.RemoveAll(row => !visible.Contains(row)) > 0)
+            {
+                NotifySelectionChanged();
+                ScheduleSelectionUpdate();
+            }
+        }
     }
 
-    private void AttachRowEvents()
+    internal void ApplySelectionChange(IEnumerable<MediaRowViewModel> removed, IEnumerable<MediaRowViewModel> added)
     {
-        foreach (var row in Rows)
-        {
-            row.PropertyChanged += OnRowPropertyChanged;
-        }
-    }
-
-    private void OnRowPropertyChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName != nameof(MediaRowViewModel.IsSelected) || sender is not MediaRowViewModel row)
+        var removedRows = removed.ToHashSet();
+        var removedAny = removedRows.Count > 0 && _selectionOrder.RemoveAll(removedRows.Contains) > 0;
+        var countAfterRemoval = _selectionOrder.Count;
+        _selectionOrder.AddRange(added.Except(_selectionOrder));
+        if (!removedAny && _selectionOrder.Count == countAfterRemoval)
         {
             return;
         }
 
-        if (row.IsSelected)
-        {
-            if (!_selectionOrder.Contains(row))
-            {
-                _selectionOrder.Add(row);
-            }
-        }
-        else
-        {
-            _selectionOrder.Remove(row);
-        }
+        NotifySelectionChanged();
+        ScheduleSelectionUpdate();
+    }
 
+    private void ScheduleSelectionUpdate()
+    {
         _selectionDebounceTimer.Stop();
         _selectionDebounceTimer.Start();
     }

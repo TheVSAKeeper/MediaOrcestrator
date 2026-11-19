@@ -34,6 +34,7 @@ public sealed class NavigationService : INavigationService
         }
 
         grid.OpenInspectorCommand.Execute(row);
+        _shell.Value.NavigateByKey("media");
     }
 
     public void OpenSourcesGraph(SourceSyncRelation? highlight = null)

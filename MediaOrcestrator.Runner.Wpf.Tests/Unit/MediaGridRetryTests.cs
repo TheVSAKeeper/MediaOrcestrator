@@ -48,7 +48,7 @@ public sealed class MediaGridRetryTests
             new Media { Id = "m1", Title = "Первое" },
             new Media { Id = "m2", Title = "Второе" },
         ]);
-        _vm.Grid.Rows[0].IsSelected = true;
+        _vm.Grid.ApplySelectionChange([], [_vm.Grid.Rows[0]]);
         _ctx.Dispatcher.FireAllRunningTimers();
 
         Assert.That(_vm.Grid.TotalCount, Is.EqualTo(2));
