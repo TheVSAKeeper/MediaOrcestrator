@@ -74,7 +74,7 @@ public sealed class AppUpdateManager(
             logger.LogInformation("Доступно обновление: {Version}", tagVersion);
             return _cachedUpdate;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
             logger.LogWarning(ex, "Не удалось проверить обновления приложения");
             LastCheckError = "Проверка сорвалась, подробности в логе";

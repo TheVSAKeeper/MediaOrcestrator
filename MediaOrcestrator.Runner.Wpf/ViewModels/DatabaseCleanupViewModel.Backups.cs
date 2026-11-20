@@ -175,7 +175,7 @@ public sealed partial class DatabaseCleanupViewModel
     }
 
     [RelayCommand]
-    private void ShowBackupInExplorer(BackupItemViewModel? backup)
+    private async Task ShowBackupInExplorerAsync(BackupItemViewModel? backup)
     {
         if (backup is null)
         {
@@ -187,7 +187,15 @@ public sealed partial class DatabaseCleanupViewModel
         if (!File.Exists(filePath))
         {
             _dialogs.Warning("Файл не найден", "Бэкап уже отсутствует на диске. Список будет обновлён.");
-            _ = ReloadBackupsListAsync();
+            try
+            {
+                await ReloadBackupsListAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Не удалось обновить список резервных копий после исчезновения {FileName}", backup.FileName);
+                StatusText = "Не удалось обновить список резервных копий";
+            }
             return;
         }
 

@@ -238,7 +238,7 @@ public sealed class BatchRenameService(Orcestrator orcestrator, ActionHolder act
                     subtask.Fail(result.ErrorMessage ?? "ошибка");
                 }
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (perMediaCts.IsCancellationRequested)
             {
                 subtask.MarkCancelled();
 

@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 using KeepShell.Services.Platform;
 using MediaOrcestrator.Domain;
 using MediaOrcestrator.Modules;
+using Microsoft.Extensions.Logging;
 using System.IO;
 using System.Text;
 
@@ -40,6 +41,7 @@ public sealed partial class ChronologyViewModel
         }
         catch (Exception exception)
         {
+            _logger.LogWarning(exception, "Не удалось загрузить плейлисты источника {SourceId}", owner.Id);
             _dialogs.Error("Не удалось загрузить плейлисты", exception.Message);
         }
         finally
@@ -76,6 +78,7 @@ public sealed partial class ChronologyViewModel
         }
         catch (Exception exception)
         {
+            _logger.LogError(exception, "Не удалось сохранить плейлист M3U: {Path}", path);
             _dialogs.Error("Не удалось сохранить", exception.Message);
         }
     }
@@ -180,6 +183,7 @@ public sealed partial class ChronologyViewModel
         }
         catch (Exception exception)
         {
+            _logger.LogError(exception, "Не удалось обновить плейлист источника {SourceId}", owner.Id);
             _dialogs.Error("Не удалось обновить плейлист", exception.Message);
         }
     }

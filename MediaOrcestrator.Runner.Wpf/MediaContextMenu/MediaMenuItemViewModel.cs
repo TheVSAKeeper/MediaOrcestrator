@@ -57,7 +57,7 @@ public sealed class MediaMenuItemViewModel
                 {
                     await execute();
                 }
-                catch (OperationCanceledException)
+                catch (OperationCanceledException ex) when (ex.CancellationToken.IsCancellationRequested)
                 {
                 }
                 catch (Exception ex)

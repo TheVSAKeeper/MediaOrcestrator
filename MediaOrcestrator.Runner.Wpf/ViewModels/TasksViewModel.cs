@@ -19,6 +19,7 @@ public sealed partial class TasksViewModel : ObservableObject
     private readonly IDialogService _dialogs;
     private readonly ISettingsStore _settings;
     private readonly IUiDispatcher _dispatcher;
+    private readonly IClipboardService _clipboard;
     private readonly Dictionary<Guid, ActionRowViewModel> _activeRows = [];
     private readonly Dictionary<Guid, ActionRowViewModel> _completedRows = [];
     private bool _suppressPersist;
@@ -58,12 +59,14 @@ public sealed partial class TasksViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(HasNoVisibleItems))]
     private bool _isCompletedExpanded;
 
-    public TasksViewModel(ActionHolder actionHolder, IDialogService dialogs, ISettingsStore settings, IUiDispatcher dispatcher)
+    public TasksViewModel(ActionHolder actionHolder, IDialogService dialogs, ISettingsStore settings,
+        IUiDispatcher dispatcher, IClipboardService clipboard)
     {
         _actionHolder = actionHolder;
         _dialogs = dialogs;
         _settings = settings;
         _dispatcher = dispatcher;
+        _clipboard = clipboard;
         _actionHolder.Changed += OnActionsChanged;
         Active = [];
         Completed = [];
@@ -136,7 +139,7 @@ public sealed partial class TasksViewModel : ObservableObject
     [RelayCommand]
     private async Task ShowDebugDump()
     {
-        await _dialogs.ShowAsync(new TasksDebugViewModel(_actionHolder));
+        await _dialogs.ShowAsync(new TasksDebugViewModel(_actionHolder, _clipboard));
     }
 
     partial void OnIsCompletedExpandedChanged(bool value)

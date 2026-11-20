@@ -32,6 +32,34 @@ file sealed class ParallelSyncExecutorTests
         Assert.That(executed, Has.Count.EqualTo(expectedRuns));
     }
 
+    [Test]
+    public async Task Выполнение_ТаймаутШагаБезЗапросаОтмены_СообщаетОбОшибкеИПродолжаетОчередь()
+    {
+        var from = CreateSource("sender");
+        var to = CreateSource("receiver");
+        var relation = CreateRelation(from, to);
+        var first = new SyncIntent { Media = new() { Id = "first" }, From = from, To = to, Relation = relation };
+        var next = new SyncIntent { Media = new() { Id = "next" }, From = from, To = to, Relation = relation };
+        var timeout = new TaskCanceledException("Истекло время ожидания площадки.");
+        var errors = new List<(SyncIntent, Exception)>();
+        var executed = new List<SyncIntent>();
+        var executor = new ParallelSyncExecutor([first, next], [relation]);
+
+        await executor.ExecuteAsync(intent =>
+        {
+            executed.Add(intent);
+            return intent == first
+                ? Task.FromException<SyncRunOutcome>(timeout)
+                : Task.FromResult(SyncRunOutcome.Transferred);
+        }, CancellationToken.None, (intent, error) => errors.Add((intent, error)));
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(executed, Is.EqualTo(new[] { first, next }));
+            Assert.That(errors, Is.EqualTo(new[] { (first, (Exception)timeout) }));
+        }
+    }
+
     private static Source CreateSource(string id)
     {
         return new() { Id = id, TypeId = id, Settings = [] };

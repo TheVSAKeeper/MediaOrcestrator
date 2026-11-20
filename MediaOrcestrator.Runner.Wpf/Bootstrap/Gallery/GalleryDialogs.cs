@@ -73,7 +73,8 @@ internal static class GalleryDialogs
                 break;
 
             case TasksDebug:
-                _ = modals.ShowAsync(new TasksDebugViewModel(services.GetRequiredService<ActionHolder>()));
+                _ = modals.ShowAsync(new TasksDebugViewModel(services.GetRequiredService<ActionHolder>(),
+                    services.GetRequiredService<IClipboardService>()));
                 break;
 
             case Docs:

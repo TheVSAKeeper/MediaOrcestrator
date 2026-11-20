@@ -40,7 +40,7 @@ public sealed class ChildProcessSampler(
         {
             await _loopTask.WaitAsync(cancellationToken);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (_stopCts.IsCancellationRequested || cancellationToken.IsCancellationRequested)
         {
         }
     }
@@ -63,7 +63,7 @@ public sealed class ChildProcessSampler(
                 SampleOnce();
             }
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
         }
     }

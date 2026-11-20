@@ -167,22 +167,8 @@ public sealed partial class CommentsViewModel
             return;
         }
 
-        var source = _orcestrator.GetSources().FirstOrDefault(s => s.Id == editor.SourceId);
-
-        if (source?.Type is not ISupportsCommentMutations)
-        {
-            throw new InvalidOperationException("Источник не поддерживает создание комментариев.");
-        }
-
-        var media = _orcestrator.GetMedias()
-            .FirstOrDefault(m => m.Sources.Any(l => l.SourceId == editor.SourceId && l.ExternalId == editor.ExternalMediaId));
-
-        var link = media?.Sources.FirstOrDefault(l => l.SourceId == editor.SourceId && l.ExternalId == editor.ExternalMediaId);
-
-        if (media is null || link is null)
-        {
-            throw new InvalidOperationException("Медиа не найдено локально.");
-        }
+        var (source, media, link) = ResolveCommentTarget(editor.SourceId, editor.ExternalMediaId,
+            "Отправка комментария", requireCreate: true);
 
         using var cts = new CancellationTokenSource();
         var action = _actionHolder.Register(
@@ -199,13 +185,14 @@ public sealed partial class CommentsViewModel
             action.Finish();
             InvalidateSnapshotCache();
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
         {
             action.MarkCancelled("Отменено");
             throw;
         }
         catch (Exception ex)
         {
+            _logger.LogError(ex, "Не удалось отправить комментарий к {MediaId} в источник {SourceId}", media.Id, source.Id);
             action.Fail("Ошибка: " + ex.Message, ex);
             throw;
         }
@@ -312,19 +299,6 @@ public sealed partial class CommentsViewModel
 
     private async Task RunMutationAsync(CommentItemViewModel item, CommentMutationKind kind, Func<Source, MediaSourceLink, CancellationToken, Task> body)
     {
-        var source = _orcestrator.GetSources().FirstOrDefault(s => s.Id == item.Record.SourceId)
-                     ?? throw new InvalidOperationException("Источник не найден.");
-
-        var media = _orcestrator.GetMedias()
-            .FirstOrDefault(m => m.Sources.Any(l => l.SourceId == item.Record.SourceId && l.ExternalId == item.Record.ExternalMediaId));
-
-        var link = media?.Sources.FirstOrDefault(l => l.SourceId == item.Record.SourceId && l.ExternalId == item.Record.ExternalMediaId);
-
-        if (media is null || link is null)
-        {
-            throw new InvalidOperationException("Медиа не найдено локально.");
-        }
-
         var label = kind switch
         {
             CommentMutationKind.Edit => "Изменение комментария",
@@ -334,6 +308,7 @@ public sealed partial class CommentsViewModel
             CommentMutationKind.Unlike => "Снятие лайка",
             _ => "Комментарий",
         };
+        var (source, media, link) = ResolveCommentTarget(item.Record.SourceId, item.Record.ExternalMediaId, label);
 
         using var cts = new CancellationTokenSource();
         var action = _actionHolder.Register(
@@ -351,13 +326,15 @@ public sealed partial class CommentsViewModel
             action.Finish();
             InvalidateSnapshotCache();
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
         {
             action.MarkCancelled("Отменено");
             throw;
         }
         catch (Exception ex)
         {
+            _logger.LogError(ex, "Операция {Operation} для комментария {CommentId} источника {SourceId} завершилась ошибкой",
+                label, item.Record.ExternalCommentId, source.Id);
             action.Fail("Ошибка: " + ex.Message, ex);
             throw;
         }
@@ -365,6 +342,40 @@ public sealed partial class CommentsViewModel
         if (kind is CommentMutationKind.Delete or CommentMutationKind.Restore)
         {
             ScheduleApplyFilters();
+        }
+    }
+
+    private (Source Source, Media Media, MediaSourceLink Link) ResolveCommentTarget(string sourceId, string externalMediaId,
+        string operation, bool requireCreate = false)
+    {
+        try
+        {
+            var source = _orcestrator.GetSources().FirstOrDefault(s => s.Id == sourceId);
+            if (requireCreate && source?.Type is not ISupportsCommentMutations)
+            {
+                throw new InvalidOperationException("Источник не поддерживает создание комментариев.");
+            }
+            if (source is null)
+            {
+                throw new InvalidOperationException("Источник не найден.");
+            }
+
+            foreach (var media in _orcestrator.GetMedias())
+            {
+                var link = media.Sources.FirstOrDefault(l => l.SourceId == sourceId && l.ExternalId == externalMediaId);
+                if (link is not null)
+                {
+                    return (source, media, link);
+                }
+            }
+
+            throw new InvalidOperationException("Медиа не найдено локально.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Не удалось подготовить операцию {Operation} для видео {ExternalMediaId} источника {SourceId}",
+                operation, externalMediaId, sourceId);
+            throw;
         }
     }
 

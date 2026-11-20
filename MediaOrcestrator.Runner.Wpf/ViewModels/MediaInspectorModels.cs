@@ -2,6 +2,7 @@
 using MahApps.Metro.IconPacks;
 using MediaOrcestrator.Domain;
 using MediaOrcestrator.Modules;
+using Microsoft.Extensions.Logging;
 using System.Text;
 using System.Windows.Media;
 
@@ -50,7 +51,7 @@ internal static class MediaInspectorDetailsFormatter
             sourceTitle);
     }
 
-    public static Uri? TryGetExternalUri(Source? source, MediaSourceLink link, Media media)
+    public static Uri? TryGetExternalUri(Source? source, MediaSourceLink link, Media media, ILogger logger)
     {
         if (source?.Type is null || string.IsNullOrEmpty(link.ExternalId))
         {
@@ -62,8 +63,9 @@ internal static class MediaInspectorDetailsFormatter
             var linkMetadata = media.Metadata?.ForSource(source.Id);
             return source.Type.GetExternalUri(link.ExternalId, source.Settings, linkMetadata);
         }
-        catch
+        catch (Exception ex)
         {
+            logger.LogWarning(ex, "Не удалось получить ссылку на медиа {MediaId} из источника {SourceId}", media.Id, source.Id);
             return null;
         }
     }

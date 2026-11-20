@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 using KeepShell.Services.Platform;
 using MediaOrcestrator.Domain;
 using MediaOrcestrator.Modules;
+using Microsoft.Extensions.Logging;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 
@@ -23,6 +24,7 @@ public sealed partial class ChronologyViewModel : ObservableObject, IPageHeader
     private readonly ISettingsStore _settings;
     private readonly IFilePicker _filePicker;
     private readonly IClipboardService _clipboard;
+    private readonly ILogger<ChronologyViewModel> _logger;
 
     private ChronologyPlan? _plan;
     private bool _suppressRecount;
@@ -89,7 +91,8 @@ public sealed partial class ChronologyViewModel : ObservableObject, IPageHeader
         IDialogService dialogs,
         ISettingsStore settings,
         IFilePicker filePicker,
-        IClipboardService clipboard)
+        IClipboardService clipboard,
+        ILogger<ChronologyViewModel> logger)
     {
         _orcestrator = orcestrator;
         _publisher = publisher;
@@ -97,6 +100,7 @@ public sealed partial class ChronologyViewModel : ObservableObject, IPageHeader
         _settings = settings;
         _filePicker = filePicker;
         _clipboard = clipboard;
+        _logger = logger;
 
         _isPlaylistExpanded = settings.GetBool(PlaylistExpandedKey);
 
@@ -192,12 +196,13 @@ public sealed partial class ChronologyViewModel : ObservableObject, IPageHeader
             RecountSelected();
             StatusText = $"Видео в ленте: {Items.Count}";
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             StatusText = "Отменено";
         }
         catch (Exception exception)
         {
+            _logger.LogError(exception, "Не удалось построить хронологию для источников {SourceIds}", ids);
             _dialogs.Error("Не удалось построить ленту", exception.Message);
             StatusText = null;
         }

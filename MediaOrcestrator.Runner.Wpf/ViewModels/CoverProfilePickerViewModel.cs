@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 using KeepShell.Services.Platform;
 using MediaOrcestrator.Domain;
 using MediaOrcestrator.Runner.Wpf.Services;
+using Microsoft.Extensions.Logging;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Windows.Media;
@@ -16,6 +17,7 @@ public sealed partial class CoverProfilePickerViewModel : ObservableObject
     private readonly IDialogService _dialogs;
     private readonly IFilePicker _filePicker;
     private readonly ICoverTemplateEditorWindowService _editorWindow;
+    private readonly ILogger _logger;
 
     private bool _suppressSelection;
     private int _previewGeneration;
@@ -42,13 +44,15 @@ public sealed partial class CoverProfilePickerViewModel : ObservableObject
         CoverTemplateStore store,
         IDialogService dialogs,
         IFilePicker filePicker,
-        ICoverTemplateEditorWindowService editorWindow)
+        ICoverTemplateEditorWindowService editorWindow,
+        ILogger logger)
     {
         _generator = generator;
         _store = store;
         _dialogs = dialogs;
         _filePicker = filePicker;
         _editorWindow = editorWindow;
+        _logger = logger;
 
         _store.Changed += OnStoreChanged;
         ReloadProfiles();
@@ -170,7 +174,7 @@ public sealed partial class CoverProfilePickerViewModel : ObservableObject
             PreviewImage = image;
             PreviewHint = null;
         }
-        catch
+        catch (Exception ex)
         {
             if (generation != _previewGeneration)
             {
@@ -178,6 +182,7 @@ public sealed partial class CoverProfilePickerViewModel : ObservableObject
             }
 
             PreviewImage = null;
+            _logger.LogWarning(ex, "Не удалось отрисовать превью профиля обложки {Profile}", SelectedProfileName);
             PreviewHint = "Не удалось отрисовать превью";
         }
     }

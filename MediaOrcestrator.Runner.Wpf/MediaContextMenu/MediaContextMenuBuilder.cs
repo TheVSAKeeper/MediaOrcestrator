@@ -133,7 +133,7 @@ public sealed class MediaContextMenuBuilder : IDisposable
 
                 Dispatch(() => ReplacePlaceholder(items, slot, asyncItems, canExecute));
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (token.IsCancellationRequested)
             {
                 return;
             }

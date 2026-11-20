@@ -2,6 +2,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
+using Serilog;
 
 namespace MediaOrcestrator.Runner.Wpf.Views;
 
@@ -48,9 +49,10 @@ public static class ReplyEditorTemplateWarmer
                 presenter.Arrange(new(presenter.DesiredSize));
                 presenter.UpdateLayout();
             }
-            catch
+            catch (Exception ex)
             {
                 _prewarmed = false;
+                Log.Warning(ex, "Не удалось подготовить шаблон редактора ответа");
             }
         }));
     }

@@ -67,6 +67,7 @@ public sealed partial class AppUpdateDialogViewModel : ObservableObject, IDialog
     {
         _downloadCts?.Dispose();
         _downloadCts = new();
+        var token = _downloadCts.Token;
 
         IsDownloading = true;
         ErrorMessage = null;
@@ -82,14 +83,14 @@ public sealed partial class AppUpdateDialogViewModel : ObservableObject, IDialog
         try
         {
             var zipPath = await Task.Run(() =>
-                _updateManager.DownloadUpdateAsync(Update, progress, _downloadCts.Token));
+                _updateManager.DownloadUpdateAsync(Update, progress, token));
 
             StatusText = "Обновление скачано. Запуск Updater...";
             _logger.LogInformation("Обновление {Version} готово к установке: {Path}", Update.Version, zipPath);
 
             _updateManager.ApplyUpdate(zipPath);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
             _logger.LogInformation("Скачивание обновления {Version} отменено пользователем", Update.Version);
             StatusText = "Отменено";

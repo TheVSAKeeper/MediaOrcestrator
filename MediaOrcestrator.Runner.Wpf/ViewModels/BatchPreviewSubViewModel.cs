@@ -114,7 +114,7 @@ public sealed partial class BatchPreviewSubViewModel : ObservableObject
         _logger = logger;
         _filePicker = filePicker;
 
-        TemplatePicker = new(coverGenerator, coverTemplateStore, dialogs, filePicker, editorWindow);
+        TemplatePicker = new(coverGenerator, coverTemplateStore, dialogs, filePicker, editorWindow, logger);
         TemplatePicker.TemplateChanged += OnTemplateChanged;
         TemplatePicker.PropertyChanged += OnTemplatePickerPropertyChanged;
         Rows.CollectionChanged += (_, _) => OnPropertyChanged(nameof(IsResultEmpty));
@@ -309,7 +309,7 @@ public sealed partial class BatchPreviewSubViewModel : ObservableObject
         }
     }
 
-    private static ImageSource? TryLoadImage(string? path)
+    private ImageSource? TryLoadImage(string? path)
     {
         if (string.IsNullOrEmpty(path) || !File.Exists(path))
         {
@@ -328,8 +328,9 @@ public sealed partial class BatchPreviewSubViewModel : ObservableObject
             bitmap.Freeze();
             return bitmap;
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogWarning(ex, "Не удалось загрузить выбранное изображение превью {Path}", path);
             return null;
         }
     }

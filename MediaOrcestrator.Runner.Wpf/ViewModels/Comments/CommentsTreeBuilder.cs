@@ -2,13 +2,15 @@
 using MediaOrcestrator.Domain;
 using MediaOrcestrator.Domain.Comments;
 using MediaOrcestrator.Modules;
+using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 
 namespace MediaOrcestrator.Runner.Wpf.ViewModels.Comments;
 
 internal sealed class CommentsTreeBuilder(
     Orcestrator orcestrator,
-    IUiDispatcher dispatcher)
+    IUiDispatcher dispatcher,
+    ILogger logger)
 {
     private const int VisibleRepliesPerRoot = 2;
     private const int BranchToggleThreshold = 3;
@@ -39,6 +41,7 @@ internal sealed class CommentsTreeBuilder(
             snapshot.MediaExternalLinkCache,
             expandedBranches,
             callbacks,
+            logger,
             search);
 
         return layout == CommentsLayoutMode.Grouped
@@ -315,8 +318,10 @@ internal sealed class CommentsTreeBuilder(
             {
                 return src.Type.GetExternalUri(key.ExternalMediaId, src.Settings) is not null;
             }
-            catch
+            catch (Exception ex)
             {
+                ctx.Logger.LogWarning(ex, "Не удалось получить ссылку на видео {ExternalMediaId} для комментариев источника {SourceId}",
+                    key.ExternalMediaId, key.SourceId);
                 return false;
             }
         });
@@ -401,6 +406,7 @@ internal sealed class CommentsTreeBuilder(
         ConcurrentDictionary<(string SourceId, string ExternalMediaId), bool> MediaExternalLinkCache,
         IReadOnlySet<string> ExpandedBranches,
         CommentsTreeCallbacks Callbacks,
+        ILogger Logger,
         string Search);
 }
 

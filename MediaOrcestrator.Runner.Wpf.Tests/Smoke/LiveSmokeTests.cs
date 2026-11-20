@@ -12,6 +12,7 @@ using MediaOrcestrator.Runner.Wpf.ViewModels;
 using MediaOrcestrator.Runner.Wpf.Views;
 using MediaOrcestrator.Runner.Wpf.Views.Dialogs;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using System.ComponentModel;
 using System.IO;
 using System.Windows;
@@ -267,7 +268,8 @@ public sealed partial class LiveSmokeTests
             _services.GetRequiredService<IUiDispatcher>(),
             null,
             "Тестовый профиль",
-            "Хроники хранителя. Серия 01");
+            "Хроники хранителя. Серия 01",
+            _services.GetRequiredService<ILogger<CoverTemplateEditorViewModel>>());
 
         var editorWindow = new CoverTemplateEditorWindow
         {

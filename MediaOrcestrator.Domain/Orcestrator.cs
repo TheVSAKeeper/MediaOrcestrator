@@ -370,7 +370,7 @@ public class Orcestrator(
                         perSource?.Report("Готово");
                         action.Finish("Готово");
                     }
-                    catch (OperationCanceledException)
+                    catch (OperationCanceledException) when (ctx.IsCancellationRequested)
                     {
                         perSource?.Report("Отменено");
                         action.MarkCancelled();
@@ -396,7 +396,7 @@ public class Orcestrator(
                 logger.LogInformation("Синхронизация успешно завершена.");
                 progress?.Report("Синхронизация завершена");
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (parentCts.IsCancellationRequested)
             {
                 syncCancelled = true;
                 throw;
@@ -534,7 +534,7 @@ public class Orcestrator(
             action.Finish($"Готово: {plan.Items.Count} видео");
             return plan;
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
         {
             action.MarkCancelled();
             throw;
@@ -1359,7 +1359,7 @@ public class Orcestrator(
             downloadAction.Fail(error.Message, error);
             throw error;
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (downloadCts.IsCancellationRequested)
         {
             downloadAction.Subtitle = string.Empty;
             downloadAction.MarkCancelled();
@@ -1423,7 +1423,7 @@ public class Orcestrator(
             uploadAction.Fail(error.Message, error);
             throw error;
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (uploadCts.IsCancellationRequested)
         {
             uploadAction.Subtitle = string.Empty;
             uploadAction.MarkCancelled();

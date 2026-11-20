@@ -182,7 +182,7 @@ public sealed partial class MaintenanceViewModel : ObservableObject
                     item.IsSelected = false;
                     item.SizeText = MeasureItem(item);
                 }
-                catch (OperationCanceledException)
+                catch (OperationCanceledException) when (token.IsCancellationRequested)
                 {
                     item.State = MaintenanceItemState.Idle;
                     item.ResultText = null;
@@ -202,7 +202,7 @@ public sealed partial class MaintenanceViewModel : ObservableObject
             StatusText = "Готово";
             running.Finish($"Очищено: {processed}");
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
             StatusText = "Отменено";
             running.MarkCancelled("Отменено пользователем");

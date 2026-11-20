@@ -124,7 +124,7 @@ public sealed partial class WinFormsImportDialogViewModel
         {
             await _processDetector.WaitForCloseAsync(canonicalSource, databasePath, ProcessPollInterval, cts.Token);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
         {
             return;
         }
@@ -236,7 +236,7 @@ public sealed partial class WinFormsImportDialogViewModel
             _lifetime.Shutdown();
             RequestClose?.Invoke(this, true);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
             _logger.LogInformation("Перенос из WinForms отменён пользователем");
             ProgressStatusText = "Перенос отменён.";

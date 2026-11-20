@@ -79,7 +79,7 @@ public sealed partial class BatchRenameSubViewModel
 
             SchedulePreview();
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
             StatusText = "Отменено пользователем";
             AppendJournal(OperationJournalLevel.Warning, "── Прервано пользователем ──");

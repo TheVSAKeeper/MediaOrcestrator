@@ -69,7 +69,7 @@ public sealed partial class ResolveConflictsSubViewModel
                         $"✓ «{Truncate(group.Title, 50)}» – объединено медиа: {group.ActiveRows.Count}");
                     success++;
                 }
-                catch (OperationCanceledException)
+                catch (OperationCanceledException) when (token.IsCancellationRequested)
                 {
                     throw;
                 }
@@ -110,7 +110,7 @@ public sealed partial class ResolveConflictsSubViewModel
                 running.Fail($"Объединено {success}, ошибок {failed}");
             }
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
             StatusText = "Отменено пользователем";
             AppendJournal(OperationJournalLevel.Warning, "── Прервано пользователем ──");

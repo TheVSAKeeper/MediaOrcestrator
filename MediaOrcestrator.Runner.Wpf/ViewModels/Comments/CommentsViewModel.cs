@@ -151,7 +151,7 @@ public sealed partial class CommentsViewModel : ObservableObject, ICommentItemHo
         _shellLauncher = shellLauncher;
         _dispatcher = dispatcher;
         _renderProbe = renderProbe;
-        _treeBuilder = new(orcestrator, dispatcher);
+        _treeBuilder = new(orcestrator, dispatcher, logger);
         _sourceFetcher = new(orcestrator, commentsService, actionHolder, dialogs, logger, shellLauncher, dispatcher);
 
         _isFiltersExpanded = _settingsStore.GetBool(FiltersExpandedKey, fallback: true);

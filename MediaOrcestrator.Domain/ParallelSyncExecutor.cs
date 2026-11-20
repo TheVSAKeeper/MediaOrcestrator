@@ -47,7 +47,7 @@ public sealed class ParallelSyncExecutor
                             EnqueueNextIntents(intent);
                         }
                     }
-                    catch (OperationCanceledException)
+                    catch (OperationCanceledException) when (ct.IsCancellationRequested)
                     {
                         throw;
                     }

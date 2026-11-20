@@ -1,9 +1,11 @@
 ﻿using MediaOrcestrator.Domain;
 using MediaOrcestrator.Runner.Wpf.Bootstrap;
+using Microsoft.Extensions.Logging;
 
 namespace MediaOrcestrator.Runner.Wpf.Mcp;
 
-public sealed class MediaOrcestratorAutomation(ActionHolder actions, Orcestrator orcestrator, Paths paths)
+public sealed class MediaOrcestratorAutomation(ActionHolder actions, Orcestrator orcestrator, Paths paths,
+    ILogger<MediaOrcestratorAutomation> logger)
 {
     private const int CompletedTake = 10;
 
@@ -40,6 +42,7 @@ public sealed class MediaOrcestratorAutomation(ActionHolder actions, Orcestrator
         }
         catch (Exception exception)
         {
+            logger.LogWarning(exception, "Не удалось прочитать список источников для MCP");
             return [new SourceStateDto(string.Empty, $"Список источников не прочитан: {exception.Message}", string.Empty, true, null)];
         }
     }

@@ -1,27 +1,32 @@
 ﻿using MediaOrcestrator.Modules;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using System.Reflection;
 
 namespace MediaOrcestrator.Domain;
 
 public static class PluginLoader
 {
-    public static void Configure(IServiceCollection services, string pluginPath)
+    public static void Configure(IServiceCollection services, string pluginPath, ILogger? logger = null)
     {
         if (!Directory.Exists(pluginPath))
         {
             return;
         }
 
-        var assemblies = LoadAssemblies(pluginPath);
+        var assemblies = LoadAssemblies(pluginPath, logger);
         var assembliesWithModule = new HashSet<Assembly>();
+        var typesByAssembly = new Dictionary<Assembly, Type[]>();
 
         foreach (var assembly in assemblies)
         {
-            var moduleTypes = SafeGetTypes(assembly)
-                .Where(IsConcreteImplementationOf<IPluginModule>);
+            if (!typesByAssembly.TryGetValue(assembly, out var types))
+            {
+                types = SafeGetTypes(assembly, logger);
+                typesByAssembly.Add(assembly, types);
+            }
 
-            foreach (var moduleType in moduleTypes)
+            foreach (var moduleType in types.Where(IsConcreteImplementationOf<IPluginModule>))
             {
                 if (Activator.CreateInstance(moduleType) is not IPluginModule module)
                 {
@@ -40,7 +45,7 @@ public static class PluginLoader
                 continue;
             }
 
-            foreach (var type in SafeGetTypes(assembly).Where(IsConcreteImplementationOf<ISourceType>))
+            foreach (var type in typesByAssembly[assembly].Where(IsConcreteImplementationOf<ISourceType>))
             {
                 services.AddSingleton(typeof(ISourceType), type);
             }
@@ -52,7 +57,7 @@ public static class PluginLoader
         return type is { IsClass: true, IsAbstract: false } && typeof(T).IsAssignableFrom(type);
     }
 
-    private static IEnumerable<Type> SafeGetTypes(Assembly assembly)
+    private static Type[] SafeGetTypes(Assembly assembly, ILogger? logger)
     {
         try
         {
@@ -60,12 +65,20 @@ public static class PluginLoader
         }
         catch (ReflectionTypeLoadException ex)
         {
-            Console.WriteLine($"Ошибка загрузки типов из {assembly.FullName}: {ex.Message}");
-            return ex.Types.Where(t => t is not null)!;
+            if (logger is null)
+            {
+                Console.WriteLine($"Ошибка загрузки типов из {assembly.FullName}: {ex.Message}");
+            }
+            else
+            {
+                logger.LogWarning(ex, "Не удалось загрузить все типы из {Assembly}: {LoaderErrors}",
+                    assembly.FullName, ex.LoaderExceptions.Where(error => error is not null).Select(error => error!.Message).Distinct().ToArray());
+            }
+            return ex.Types.OfType<Type>().ToArray();
         }
     }
 
-    private static List<Assembly> LoadAssemblies(string directoryPath)
+    private static List<Assembly> LoadAssemblies(string directoryPath, ILogger? logger)
     {
         var loadedByName = AppDomain.CurrentDomain
             .GetAssemblies()
@@ -96,9 +109,20 @@ public static class PluginLoader
                     loadedByName[assemblyName] = assembly;
                 }
             }
+            catch (BadImageFormatException ex) when (logger is not null)
+            {
+                logger.LogDebug(ex, "Файл {Path} не удалось прочитать как сборку .NET", dll);
+            }
             catch (Exception ex)
             {
-                Console.WriteLine($"Не удалось загрузить {dll}: {ex.Message}");
+                if (logger is null)
+                {
+                    Console.WriteLine($"Не удалось загрузить {dll}: {ex.Message}");
+                }
+                else
+                {
+                    logger.LogWarning(ex, "Не удалось загрузить сборку {Path}", dll);
+                }
             }
         }
 

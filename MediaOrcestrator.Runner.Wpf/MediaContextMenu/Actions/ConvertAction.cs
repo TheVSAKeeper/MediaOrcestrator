@@ -170,10 +170,11 @@ internal sealed class ConvertAction : IAsyncMediaMenuAction
                     converted++;
                     running.ProgressPlus();
                 }
-                catch (OperationCanceledException)
+                catch (OperationCanceledException) when (itemCts.IsCancellationRequested)
                 {
                     itemAction.Subtitle = string.Empty;
                     itemAction.MarkCancelled();
+                    await cts.CancelAsync();
                     throw;
                 }
                 catch (Exception ex)
@@ -188,7 +189,7 @@ internal sealed class ConvertAction : IAsyncMediaMenuAction
 
             ShowErrors("Конвертировано", "Конвертация завершена с ошибками", converted, total, errors, ctx);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
         {
             ctx.Logger.LogInformation("Конвертация отменена пользователем");
         }

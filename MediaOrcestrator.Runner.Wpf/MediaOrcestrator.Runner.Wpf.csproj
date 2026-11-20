@@ -26,10 +26,10 @@
     <!-- Общий WPF-каркас – локальные NuGet-пакеты из ./packages (см. nuget.config). Source-generator
          авторегистрации View↔ViewModel едет ВНУТРИ пакета KeepShell как analyzer и применяется
          транзитивно – отдельная ссылка не нужна. Разворот: ViewLocator.InstallIntoApplication(). -->
-    <PackageReference Include="KeepShell" Version="0.1.273" />
-    <PackageReference Include="KeepShell.Themes.Tarkov" Version="0.1.273" />
-    <PackageReference Include="KeepShell.Automation" Version="0.1.273" />
-    <PackageReference Include="KeepShell.Mcp" Version="0.1.273" />
+    <PackageReference Include="KeepShell" Version="0.1.285" />
+    <PackageReference Include="KeepShell.Themes.Tarkov" Version="0.1.285" />
+    <PackageReference Include="KeepShell.Automation" Version="0.1.285" />
+    <PackageReference Include="KeepShell.Mcp" Version="0.1.285" />
   </ItemGroup>
 
   <ItemGroup>

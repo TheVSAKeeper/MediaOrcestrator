@@ -97,6 +97,7 @@ public sealed partial class ToolsViewModel : ObservableObject
         StatusMessage = $"Обновление 0/{pending.Count}";
 
         var bulkCts = CancellationTokenSource.CreateLinkedTokenSource(token);
+        var bulkToken = bulkCts.Token;
         var bulkAction = _actionHolder.Register(
             $"Обновление инструментов ({pending.Count})",
             "Старт…",
@@ -110,9 +111,10 @@ public sealed partial class ToolsViewModel : ObservableObject
             {
                 foreach (var current in pending)
                 {
-                    token.ThrowIfCancellationRequested();
+                    bulkToken.ThrowIfCancellationRequested();
 
-                    using var childCts = CancellationTokenSource.CreateLinkedTokenSource(token);
+                    using var childCts = CancellationTokenSource.CreateLinkedTokenSource(bulkToken);
+                    var childToken = childCts.Token;
                     var childAction = _actionHolder.Register(
                         $"Обновление {current.Name}",
                         "Загрузка…",
@@ -135,12 +137,13 @@ public sealed partial class ToolsViewModel : ObservableObject
 
                     try
                     {
-                        await Task.Run(() => _toolManager.UpdateToolAsync(current.Name, progress, childCts.Token), childCts.Token);
+                        await Task.Run(() => _toolManager.UpdateToolAsync(current.Name, progress, childToken), childToken);
                         childAction.Finish("Готово");
                     }
-                    catch (OperationCanceledException)
+                    catch (OperationCanceledException) when (childToken.IsCancellationRequested)
                     {
                         childAction.MarkCancelled("Отменено");
+                        bulkCts.Cancel();
                         throw;
                     }
                     catch (Exception ex)
@@ -159,12 +162,12 @@ public sealed partial class ToolsViewModel : ObservableObject
                 }
             }
 
-            var statuses = await Task.Run(() => _toolManager.CheckForUpdatesAsync(token), token);
+            var statuses = await Task.Run(() => _toolManager.CheckForUpdatesAsync(bulkToken), bulkToken);
             Apply(statuses);
             StatusMessage = $"Готово: обновлено {done}";
             bulkAction.Finish($"Обновлено {done}");
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (bulkToken.IsCancellationRequested)
         {
             StatusMessage = $"Обновление отменено ({done}/{pending.Count})";
             bulkAction.MarkCancelled($"Отменено: {done}/{pending.Count}");
@@ -198,6 +201,7 @@ public sealed partial class ToolsViewModel : ObservableObject
         StatusMessage = $"Обновление {item.Name}… 0 %";
 
         var actionCts = CancellationTokenSource.CreateLinkedTokenSource(token);
+        var actionToken = actionCts.Token;
         var action = _actionHolder.Register(
             $"Обновление {item.Name}",
             "Загрузка…",
@@ -217,14 +221,14 @@ public sealed partial class ToolsViewModel : ObservableObject
 
         try
         {
-            await Task.Run(() => _toolManager.UpdateToolAsync(item.Name, progress, token), token);
+            await Task.Run(() => _toolManager.UpdateToolAsync(item.Name, progress, actionToken), actionToken);
             StatusMessage = $"{item.Name}: обновлено";
             action.Finish("Готово");
 
             var statuses = await Task.Run(() => _toolManager.CheckForUpdatesAsync(token), token);
             Apply(statuses);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (actionToken.IsCancellationRequested || token.IsCancellationRequested)
         {
             StatusMessage = $"Обновление {item.Name} отменено";
             action.MarkCancelled("Отменено");
@@ -258,6 +262,7 @@ public sealed partial class ToolsViewModel : ObservableObject
         StatusMessage = "Проверка обновлений…";
 
         var actionCts = CancellationTokenSource.CreateLinkedTokenSource(token);
+        var actionToken = actionCts.Token;
         var action = _actionHolder.Register(
             "Проверка обновлений инструментов",
             "Запрос GitHub…",
@@ -267,13 +272,13 @@ public sealed partial class ToolsViewModel : ObservableObject
 
         try
         {
-            var statuses = await Task.Run(() => _toolManager.CheckForUpdatesAsync(actionCts.Token), actionCts.Token);
-            actionCts.Token.ThrowIfCancellationRequested();
+            var statuses = await Task.Run(() => _toolManager.CheckForUpdatesAsync(actionToken), actionToken);
+            actionToken.ThrowIfCancellationRequested();
             Apply(statuses);
             StatusMessage = $"Проверено: {DateTime.Now:HH:mm:ss}";
             action.Finish($"Проверено: {statuses.Count}");
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (actionToken.IsCancellationRequested)
         {
             StatusMessage = "Проверка отменена";
             action.MarkCancelled("Отменено");

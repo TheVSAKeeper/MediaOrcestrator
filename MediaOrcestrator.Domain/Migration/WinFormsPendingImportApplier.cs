@@ -52,6 +52,7 @@ public static class WinFormsPendingImportApplier
             || !File.Exists(Path.Combine(manifest.StagingDirectory, "MyData.db"))
             || !File.Exists(Path.Combine(manifest.StagingDirectory, "settings.toml")))
         {
+            logger?.LogWarning("Не найдены подготовленные файлы отложенного импорта {OperationId}", manifest?.OperationId);
             var outcome = new WinFormsPendingImportOutcome(
                 WinFormsPendingImportOutcomeStatus.Failed,
                 "Подготовленные файлы импорта не найдены. Текущие данные не изменены.",
@@ -113,6 +114,7 @@ public static class WinFormsPendingImportApplier
             try
             {
                 RollbackFromBackup(manifest, backupDir);
+                logger?.LogInformation("Данные восстановлены после сбоя импорта из {BackupDir}", backupDir);
             }
             catch (Exception rollbackEx)
             {

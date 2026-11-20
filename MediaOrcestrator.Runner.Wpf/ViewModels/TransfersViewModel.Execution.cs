@@ -84,7 +84,7 @@ public sealed partial class TransfersViewModel
 
             StatusText = skipped ? "Пропущено" : "Завершено";
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
         {
             cancelled = true;
             StatusText = "Остановлено";
@@ -234,7 +234,7 @@ public sealed partial class TransfersViewModel
             StatusText = skippedSteps > 0 ? $"Завершено (пропущено: {skippedSteps})" : "Завершено";
             AppendJournal(TransferJournalLevel.Success, "Прогон завершён.");
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
         {
             cancelled = true;
             StatusText = stoppedByError ? "Остановлено после ошибки" : "Остановлено";

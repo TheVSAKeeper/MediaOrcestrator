@@ -108,7 +108,7 @@ public sealed partial class MediaInspectorViewModel(
                 StatusIcon = StatusIcons.Resolve(status.Id),
                 StatusText = status.Text,
                 StatusBrush = MakeBrush(status.IconColor),
-                OpenUri = MediaInspectorDetailsFormatter.TryGetExternalUri(source, link, media),
+                OpenUri = MediaInspectorDetailsFormatter.TryGetExternalUri(source, link, media, _logger),
             };
         }));
 

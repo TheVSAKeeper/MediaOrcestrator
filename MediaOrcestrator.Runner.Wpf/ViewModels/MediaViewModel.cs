@@ -177,7 +177,7 @@ public sealed partial class MediaViewModel : ObservableObject, IMediaActionUi, I
             breakdown = await Task.Run(LoadFromDomainAsync, cts.Token);
             action.Finish($"Загружено: {_allMedias.Count}");
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
         {
             action.MarkCancelled("Отменено");
         }

@@ -211,7 +211,7 @@ public sealed partial class DatabaseCleanupViewModel : ObservableObject
                     item.IsSelected = false;
                     item.SizeText = FormatCount(_maintenance.CountCollection(item.Key));
                 }
-                catch (OperationCanceledException)
+                catch (OperationCanceledException) when (token.IsCancellationRequested)
                 {
                     item.State = MaintenanceItemState.Idle;
                     item.ResultText = null;
@@ -233,7 +233,7 @@ public sealed partial class DatabaseCleanupViewModel : ObservableObject
             DatabaseSizeText = FormatBytes(_maintenance.MeasureDatabaseFile());
             await ReloadBackupsListAsync();
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
             StatusText = "Отменено";
             running.MarkCancelled("Отменено пользователем");

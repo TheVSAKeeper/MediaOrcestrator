@@ -27,26 +27,6 @@ internal static class StartupImportCoordinator
         }
     }
 
-    public static void LogPendingOutcome(WinFormsPendingImportOutcome? outcome)
-    {
-        if (outcome is null)
-        {
-            return;
-        }
-
-        if (outcome.Status == WinFormsPendingImportOutcomeStatus.Applied)
-        {
-            Log.Information("Применён отложенный импорт из WinForms. Бэкап: {BackupDirectory}", outcome.BackupDirectory);
-            return;
-        }
-
-        Log.Warning(
-            "Отложенный импорт из WinForms завершился со статусом {Status}: {Message} (бэкап: {BackupDirectory})",
-            outcome.Status,
-            outcome.ErrorMessage ?? outcome.Message,
-            outcome.BackupDirectory);
-    }
-
     public static void HandlePostStartupOutcomeOrPrompt(
         IServiceProvider services,
         WinFormsPendingImportOutcome? outcome,

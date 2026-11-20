@@ -2,6 +2,7 @@
 using MediaOrcestrator.Domain;
 using MediaOrcestrator.Runner.Wpf.ViewModels;
 using MediaOrcestrator.Runner.Wpf.Views.Dialogs;
+using Microsoft.Extensions.Logging;
 using System.ComponentModel;
 using System.Windows;
 
@@ -14,6 +15,7 @@ public sealed class CoverTemplateEditorWindowService : ICoverTemplateEditorWindo
     private readonly IDialogService _dialogs;
     private readonly IFilePicker _filePicker;
     private readonly IUiDispatcher _dispatcher;
+    private readonly ILogger<CoverTemplateEditorViewModel> _logger;
 
     private CoverTemplateEditorWindow? _window;
     private CoverTemplateEditorViewModel? _activeViewModel;
@@ -26,13 +28,15 @@ public sealed class CoverTemplateEditorWindowService : ICoverTemplateEditorWindo
         CoverTemplateStore store,
         IDialogService dialogs,
         IFilePicker filePicker,
-        IUiDispatcher dispatcher)
+        IUiDispatcher dispatcher,
+        ILogger<CoverTemplateEditorViewModel> logger)
     {
         _generator = generator;
         _store = store;
         _dialogs = dialogs;
         _filePicker = filePicker;
         _dispatcher = dispatcher;
+        _logger = logger;
     }
 
     public bool IsActiveCaller(CoverProfilePickerViewModel picker) => ReferenceEquals(_activeCaller, picker);
@@ -75,7 +79,8 @@ public sealed class CoverTemplateEditorWindowService : ICoverTemplateEditorWindo
             _dispatcher,
             initial,
             profileName,
-            sampleTitle);
+            sampleTitle,
+            _logger);
         viewModel.CloseRequested += OnEditorCloseRequested;
 
         _activeViewModel = viewModel;

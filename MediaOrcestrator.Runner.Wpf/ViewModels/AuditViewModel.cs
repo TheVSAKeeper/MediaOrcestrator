@@ -188,7 +188,7 @@ public sealed partial class AuditViewModel : ObservableObject, IPageHeader, IPag
             await _orcestrator.GetStorageFullInfo(isFull, null, onlyNew, progress, sourceProgress, cancellationToken);
             succeeded = true;
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             BulkProgressMessage = "Отменено";
             IsBulkCancelled = true;
@@ -244,7 +244,7 @@ public sealed partial class AuditViewModel : ObservableObject, IPageHeader, IPag
             await _orcestrator.GetStorageFullInfo(isFull, card.Source, onlyNew, progress, null, cancellationToken);
             succeeded = true;
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             card.ReportCancelled("Отменено");
             _logger.LogInformation("Синхронизация {Source} отменена пользователем.", card.Source.TitleFull);

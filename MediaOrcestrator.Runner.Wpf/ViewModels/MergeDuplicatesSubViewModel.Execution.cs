@@ -74,7 +74,7 @@ public sealed partial class MergeDuplicatesSubViewModel
                         $"✓ «{Truncate(row.TargetTitle, 50)}» – объединено медиа: {row.MediaCount}");
                     success++;
                 }
-                catch (OperationCanceledException)
+                catch (OperationCanceledException) when (token.IsCancellationRequested)
                 {
                     throw;
                 }
@@ -116,7 +116,7 @@ public sealed partial class MergeDuplicatesSubViewModel
                 running.Fail($"Объединено {success}, ошибок {failed}");
             }
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
             StatusText = "Отменено пользователем";
             AppendJournal(OperationJournalLevel.Warning, "── Прервано пользователем ──");

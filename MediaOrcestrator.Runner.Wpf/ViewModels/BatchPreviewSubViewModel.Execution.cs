@@ -95,7 +95,7 @@ public sealed partial class BatchPreviewSubViewModel
                 running.Fail($"Применено {success}, ошибок {failed}");
             }
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
             StatusText = "Отменено пользователем";
             AppendJournal(OperationJournalLevel.Warning, "── Прервано пользователем ──");

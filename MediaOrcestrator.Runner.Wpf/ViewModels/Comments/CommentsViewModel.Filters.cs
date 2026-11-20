@@ -151,7 +151,17 @@ public sealed partial class CommentsViewModel
         _settings.SelectedSourceIds = Sources.Where(s => s.IsChecked).Select(s => s.SourceId).ToList();
 
         var snapshot = _settings;
-        _ = Task.Run(() => snapshot.Save(_settingsStore));
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                snapshot.Save(_settingsStore);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Не удалось сохранить настройки комментариев");
+            }
+        });
     }
 
     internal long SnapshotCacheHits => _snapshotCache.Hits;
@@ -215,7 +225,7 @@ public sealed partial class CommentsViewModel
                 vmMs,
                 build.Result.Rows.Count);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
         }
         catch (Exception ex)

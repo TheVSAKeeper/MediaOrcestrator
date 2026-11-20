@@ -68,7 +68,7 @@ internal static class StartupPreloader
                 var ioTasks = ioSteps
                     .Select(step => Task.Run(async () =>
                     {
-                        if (!await RunStepAsync(actionHolder, action, step, cts.Token))
+                        if (!await RunStepAsync(actionHolder, action, step, cts))
                         {
                             Interlocked.Increment(ref failed);
                         }
@@ -77,7 +77,7 @@ internal static class StartupPreloader
 
                 foreach (var step in dbSteps)
                 {
-                    if (!await RunStepAsync(actionHolder, action, step, cts.Token))
+                    if (!await RunStepAsync(actionHolder, action, step, cts))
                     {
                         failed++;
                     }
@@ -91,7 +91,7 @@ internal static class StartupPreloader
                 action.Finish(finalStatus);
                 Log.Information("Фоновая предзагрузка данных завершена (ошибок шагов: {Failed})", failed);
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (cts.IsCancellationRequested)
             {
                 action.MarkCancelled("Отменено");
             }
@@ -113,9 +113,9 @@ internal static class StartupPreloader
         ActionHolder actionHolder,
         ActionHolder.RunningAction parent,
         PreloadStep step,
-        CancellationToken token)
+        CancellationTokenSource parentCancellation)
     {
-        var stepCts = CancellationTokenSource.CreateLinkedTokenSource(token);
+        var stepCts = CancellationTokenSource.CreateLinkedTokenSource(parentCancellation.Token);
         var child = actionHolder.Register(
             step.Status,
             "Выполняется…",
@@ -132,9 +132,10 @@ internal static class StartupPreloader
             child.Finish("Готово");
             return true;
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (stepCts.IsCancellationRequested)
         {
             child.MarkCancelled("Отменено");
+            await parentCancellation.CancelAsync();
             throw;
         }
         catch (Exception ex)
@@ -189,6 +190,9 @@ internal static class StartupPreloader
                 () => new ReplyEditorView(),
                 DispatcherPriority.Background);
         }
+        catch (OperationCanceledException) when (dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished)
+        {
+        }
         catch (Exception ex)
         {
             Log.Warning(ex, "Прогрев ReplyEditorView не удался");
@@ -222,7 +226,7 @@ internal static class StartupPreloader
             Log.Information("Доступно обновление приложения: {Version}", update.Version);
             return $"Доступно обновление приложения: {update.Version}";
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
             throw;
         }

@@ -86,7 +86,7 @@ public sealed partial class AppUpdateViewModel : ObservableObject
             SetPendingUpdate(update);
             CheckStatus = $"Доступна версия {update.Version}";
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
             CheckStatus = null;
         }

@@ -28,10 +28,11 @@ internal static class ServiceRegistration
         Paths paths,
         string settingsPath,
         WpfLogSink logSink,
-        KeepShellLoggingOptions loggingOptions)
+        KeepShellLoggingOptions loggingOptions,
+        ILogger? pluginLogger = null)
     {
         services.AddSingleton<ISettingsStore>(_ => new SettingsStore(settingsPath));
-        RegisterCoreServices(services, paths, logSink, loggingOptions);
+        RegisterCoreServices(services, paths, logSink, loggingOptions, pluginLogger);
     }
 
     public static void AddMediaOrcestrator(
@@ -66,7 +67,8 @@ internal static class ServiceRegistration
         IServiceCollection services,
         Paths paths,
         WpfLogSink logSink,
-        KeepShellLoggingOptions loggingOptions)
+        KeepShellLoggingOptions loggingOptions,
+        ILogger? pluginLogger = null)
     {
         services.AddSingleton(paths);
         services.AddSingleton(logSink);
@@ -166,7 +168,7 @@ internal static class ServiceRegistration
                 sp.GetRequiredService<ILogger<AppUpdateManager>>());
         });
 
-        PluginLoader.Configure(services, paths.PluginPath);
+        PluginLoader.Configure(services, paths.PluginPath, pluginLogger);
 
         var fullDbPath = Path.GetFullPath(paths.DatabasePath);
         var dataDirectory = Path.GetDirectoryName(fullDbPath)!;

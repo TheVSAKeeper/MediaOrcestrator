@@ -1,6 +1,7 @@
 ﻿using KeepShell.Services.Platform;
 using MediaOrcestrator.Domain;
 using MediaOrcestrator.Modules;
+using Microsoft.Extensions.Logging;
 using System.Text;
 
 namespace MediaOrcestrator.Runner.Wpf.MediaContextMenu.Actions;
@@ -83,6 +84,7 @@ internal sealed class CopyDetailsAction(IClipboardService clipboard) : IMediaMen
         }
         catch (Exception ex)
         {
+            ctx.LoggerFactory.CreateLogger<CopyDetailsAction>().LogError(ex, "Не удалось скопировать детали медиа {MediaId}", media.Id);
             ctx.Dialogs.Error("Ошибка", $"Ошибка при копировании: {ex.Message}");
         }
 

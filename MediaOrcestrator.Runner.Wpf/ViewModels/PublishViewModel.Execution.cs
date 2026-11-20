@@ -83,7 +83,7 @@ public sealed partial class PublishViewModel
 
             ResetForm();
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
             pubAction.MarkCancelled("Публикация отменена");
             _logger.LogInformation("Публикация «{Title}» отменена пользователем", title);
@@ -176,10 +176,11 @@ public sealed partial class PublishViewModel
             SetStatus($"Цепочка завершена ({chain.Count} шаг(ов)).", false);
             running.Finish();
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (chainToken.IsCancellationRequested)
         {
             running.MarkCancelled();
-            throw;
+            cancellationToken.ThrowIfCancellationRequested();
+            SetStatus("Цепочка отменена.", false);
         }
         catch (Exception exception) when (failedIntent is not null)
         {
@@ -259,7 +260,7 @@ public sealed partial class PublishViewModel
             {
                 sidecar = await Task.Run(() => PublishSuggestionHelper.TryReadSidecarDescription(videoPath, _logger), cts.Token);
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (cts.IsCancellationRequested)
             {
                 return;
             }
@@ -334,7 +335,7 @@ public sealed partial class PublishViewModel
                 _mediasCache.AddRange(medias);
                 _isMediasCacheValid = true;
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (token.IsCancellationRequested)
             {
                 return;
             }

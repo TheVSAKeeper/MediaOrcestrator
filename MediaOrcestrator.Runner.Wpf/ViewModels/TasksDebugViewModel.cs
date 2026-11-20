@@ -1,5 +1,6 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using KeepShell.Services.Platform;
 using MediaOrcestrator.Domain;
 using System.Text;
 
@@ -8,6 +9,7 @@ namespace MediaOrcestrator.Runner.Wpf.ViewModels;
 public sealed partial class TasksDebugViewModel : ObservableObject, IDialogViewModel
 {
     private readonly ActionHolder _actionHolder;
+    private readonly IClipboardService _clipboard;
 
     [ObservableProperty]
     private string _dump = string.Empty;
@@ -15,9 +17,10 @@ public sealed partial class TasksDebugViewModel : ObservableObject, IDialogViewM
     [ObservableProperty]
     private string _summary = string.Empty;
 
-    public TasksDebugViewModel(ActionHolder actionHolder)
+    public TasksDebugViewModel(ActionHolder actionHolder, IClipboardService clipboard)
     {
         _actionHolder = actionHolder;
+        _clipboard = clipboard;
         Refresh();
     }
 
@@ -64,6 +67,9 @@ public sealed partial class TasksDebugViewModel : ObservableObject, IDialogViewM
 
         Dump = sb.ToString();
     }
+
+    [RelayCommand]
+    private void CopyDump() => _clipboard.TrySetText(Dump);
 
     [RelayCommand]
     private void Close()

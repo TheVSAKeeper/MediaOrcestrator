@@ -1,6 +1,7 @@
 ﻿using CommunityToolkit.Mvvm.Input;
 using MediaOrcestrator.Domain;
 using MediaOrcestrator.Runner.Wpf.Services;
+using Microsoft.Extensions.Logging;
 using System.ComponentModel;
 
 namespace MediaOrcestrator.Runner.Wpf.ViewModels;
@@ -225,6 +226,7 @@ public sealed partial class CoverTemplateEditorViewModel
 
             PreviewImage = null;
             SizeWarning = null;
+            _logger.LogWarning(ex, "Не удалось отрисовать превью обложки из {Path}", template.TemplatePath);
             PreviewError = "Не удалось отрисовать превью: " + ex.Message;
         }
     }

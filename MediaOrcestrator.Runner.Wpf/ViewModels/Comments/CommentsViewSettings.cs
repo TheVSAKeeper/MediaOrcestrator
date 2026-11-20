@@ -2,6 +2,7 @@
 using System.Globalization;
 using System.IO;
 using System.Text.Json;
+using Serilog;
 
 namespace MediaOrcestrator.Runner.Wpf.ViewModels.Comments;
 
@@ -266,12 +267,14 @@ public sealed class CommentsViewSettings
 
                 File.Move(path, backup);
             }
-            catch
+            catch (Exception ex)
             {
+                Log.Warning(ex, "Не удалось перенести прежний файл настроек комментариев в резервную копию");
             }
         }
-        catch
+        catch (Exception ex)
         {
+            Log.Warning(ex, "Не удалось прочитать или перенести прежние настройки комментариев");
         }
     }
 

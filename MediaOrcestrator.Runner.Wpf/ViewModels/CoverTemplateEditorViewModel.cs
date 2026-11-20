@@ -2,6 +2,7 @@
 using CommunityToolkit.Mvvm.Input;
 using KeepShell.Services.Platform;
 using MediaOrcestrator.Domain;
+using Microsoft.Extensions.Logging;
 using MediaOrcestrator.Runner.Wpf.Services;
 using System.Collections.ObjectModel;
 using System.IO;
@@ -18,6 +19,7 @@ public sealed partial class CoverTemplateEditorViewModel : ObservableObject
     private readonly IDialogService _dialogs;
     private readonly IFilePicker _filePicker;
     private readonly IUiTimer _previewTimer;
+    private readonly ILogger<CoverTemplateEditorViewModel> _logger;
 
     private bool _suppressPreview;
     private int _previewGeneration;
@@ -93,12 +95,14 @@ public sealed partial class CoverTemplateEditorViewModel : ObservableObject
         IUiDispatcher dispatcher,
         CoverTemplate? initial,
         string? profileName,
-        string? sampleTitle)
+        string? sampleTitle,
+        ILogger<CoverTemplateEditorViewModel> logger)
     {
         _generator = generator;
         _store = store;
         _dialogs = dialogs;
         _filePicker = filePicker;
+        _logger = logger;
 
         _previewTimer = dispatcher.CreateTimer(TimeSpan.FromMilliseconds(60), OnPreviewTimerTick);
 

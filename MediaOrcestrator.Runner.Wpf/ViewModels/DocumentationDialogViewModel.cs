@@ -1,6 +1,7 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using KeepShell.Services.Platform;
+using Serilog;
 using System.Collections.ObjectModel;
 using System.IO;
 
@@ -16,6 +17,9 @@ public sealed partial class DocumentationDialogViewModel : ObservableObject, IDi
 
     [ObservableProperty]
     private string _content = string.Empty;
+
+    [ObservableProperty]
+    private string? _openError;
 
     public DocumentationDialogViewModel(
         string title,
@@ -51,22 +55,32 @@ public sealed partial class DocumentationDialogViewModel : ObservableObject, IDi
     [RelayCommand]
     private void OpenInDefaultApp()
     {
-        if (Selected is null || !File.Exists(Selected.Path))
+        if (Selected is not { } doc)
         {
             return;
         }
 
-        _shellLauncher.Open(Selected.Path);
+        OpenError = null;
+        if (!File.Exists(doc.Path))
+        {
+            Log.Warning("Файл руководства {Document} больше недоступен", doc.Name);
+            OpenError = "Файл руководства больше недоступен.";
+        }
+        else if (!_shellLauncher.Open(doc.Path))
+        {
+            OpenError = "Не удалось открыть руководство во внешнем редакторе.";
+        }
     }
 
     public void OpenExternalLink(Uri uri)
     {
-        _shellLauncher.Open(uri.ToString());
+        OpenError = _shellLauncher.Open(uri.ToString()) ? null : "Не удалось открыть ссылку.";
     }
 
     partial void OnSelectedChanged(DocFileEntry? value)
     {
-        if (value is null || !File.Exists(value.Path))
+        OpenError = null;
+        if (value is null)
         {
             Content = string.Empty;
             return;
@@ -78,7 +92,8 @@ public sealed partial class DocumentationDialogViewModel : ObservableObject, IDi
         }
         catch (Exception ex)
         {
-            Content = $"Не удалось прочитать файл руководства:\n{ex.Message}";
+            Log.Warning(ex, "Не удалось прочитать файл руководства {Document}", value.Name);
+            Content = "Не удалось прочитать файл руководства. Подробности в журнале.";
         }
     }
 }

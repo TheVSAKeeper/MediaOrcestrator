@@ -34,6 +34,7 @@ public partial class App : Application
     private SingleInstanceGuard? _singleInstanceGuard;
     private GlobalExceptionHandlers? _exceptionHandlers;
     private StartupSplash? _splash;
+    private WpfBindingJournal? _bindingJournal;
     private IDisposable? _systemThemeWatch;
     private CancellationTokenSource? _ipcCts;
     private string? _startupCommand;
@@ -92,8 +93,17 @@ public partial class App : Application
         {
             var startupWatch = Stopwatch.StartNew();
             var baseDir = AppContext.BaseDirectory;
+            var loggingOptions = BuildLoggingOptions(Path.Combine(baseDir, "logs"));
+            var configuration = new LoggerConfiguration();
+            ConfigureSerilog(configuration, loggingOptions);
+            Log.Logger = configuration.CreateLogger();
+            _bindingJournal = new(Log.ForContext<WpfBindingJournal>());
+
+            using var startupLogs = LoggerFactory.Create(builder => builder.SetMinimumLevel(LogLevel.Trace).AddSerilog(Log.Logger));
+            var importLogger = startupLogs.CreateLogger(typeof(WinFormsPendingImportApplier).FullName!);
+            var pluginLogger = startupLogs.CreateLogger(typeof(PluginLoader).FullName!);
             var hadLegacySettingsTxt = File.Exists(Path.Combine(baseDir, TomlSettingsFile.LegacyFileName));
-            var appliedImportOutcome = WinFormsPendingImportApplier.ApplyIfPending(baseDir);
+            var appliedImportOutcome = WinFormsPendingImportApplier.ApplyIfPending(baseDir, importLogger);
             if (appliedImportOutcome?.Status == WinFormsPendingImportOutcomeStatus.RollbackFailed)
             {
                 StyledMessageBox.Show(
@@ -109,15 +119,12 @@ public partial class App : Application
             var paths = PathsLoader.Load();
             var settingsPath = Path.Combine(baseDir, TomlSettingsFile.PrimaryFileName);
 
-            var loggingOptions = BuildLoggingOptions(Path.Combine(baseDir, "logs"));
-
             _host = Host.CreateDefaultBuilder()
-                .UseSerilog((_, _, configuration) => ConfigureSerilog(configuration, loggingOptions))
-                .ConfigureServices(services => ServiceRegistration.AddMediaOrcestrator(services, paths, settingsPath, _logSink, loggingOptions))
+                .UseSerilog(Log.Logger)
+                .ConfigureServices(services => ServiceRegistration.AddMediaOrcestrator(services, paths, settingsPath, _logSink, loggingOptions, pluginLogger))
                 .Build();
 
             Log.Information("MediaOrcestrator.Runner.Wpf запускается...");
-            StartupImportCoordinator.LogPendingOutcome(appliedImportOutcome);
             var updaterCheck = UpdaterLogChecker.Check();
 
             var restoreLogger = _host.Services.GetRequiredService<ILogger<DatabaseBackupService>>();
@@ -203,7 +210,7 @@ public partial class App : Application
                 ShowUpdaterErrorWarning(updaterCheck);
             }
 
-            var importOutcome = WinFormsPendingImportApplier.TryReadAndConsumeResult(baseDir) ?? appliedImportOutcome;
+            var importOutcome = WinFormsPendingImportApplier.TryReadAndConsumeResult(baseDir, importLogger) ?? appliedImportOutcome;
             StartupImportCoordinator.HandlePostStartupOutcomeOrPrompt(
                 _host.Services,
                 importOutcome,
@@ -308,8 +315,9 @@ public partial class App : Application
                 _ipcCts?.Dispose();
                 _ipcCts = null;
             }
-            catch
+            catch (Exception ex)
             {
+                Log.Warning(ex, "Не удалось остановить обработчик команд от другого экземпляра");
             }
 
             if (_host is not null)
@@ -341,6 +349,7 @@ public partial class App : Application
             _singleInstanceGuard?.Dispose();
             _singleInstanceGuard = null;
 
+            _bindingJournal?.Dispose();
             await Log.CloseAndFlushAsync();
             base.OnExit(e);
         }

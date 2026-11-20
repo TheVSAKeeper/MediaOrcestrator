@@ -162,7 +162,7 @@ internal sealed class CommentsSourceFetcher(
             action.ProgressPlus();
             action.Finish();
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
         {
             action.MarkCancelled("Отменено");
         }

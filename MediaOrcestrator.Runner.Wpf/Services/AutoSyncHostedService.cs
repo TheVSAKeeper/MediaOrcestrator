@@ -38,8 +38,9 @@ internal sealed class AutoSyncHostedService(
         {
             await _cts.CancelAsync();
         }
-        catch
+        catch (Exception ex)
         {
+            logger.LogWarning(ex, "Не удалось отменить цикл досинка");
         }
 
         var completed = await Task.WhenAny(_loop, Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken));
@@ -69,9 +70,14 @@ internal sealed class AutoSyncHostedService(
                 await _delayAsync(startupDelay, token);
             }
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
             logger.LogInformation("Цикл досинка остановлен до первой итерации");
+            return;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Не удалось дождаться запуска досинка");
             return;
         }
 
@@ -84,7 +90,7 @@ internal sealed class AutoSyncHostedService(
                     logger.LogInformation("Получение новых данных из всех хранилищ...");
                     await orcestrator.GetStorageFullInfo(false, null, true, cancellationToken: token);
                 }
-                catch (OperationCanceledException)
+                catch (OperationCanceledException) when (token.IsCancellationRequested)
                 {
                     break;
                 }
@@ -104,8 +110,13 @@ internal sealed class AutoSyncHostedService(
             {
                 await _delayAsync(Period, token);
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (token.IsCancellationRequested)
             {
+                break;
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Сбой ожидания следующего запуска досинка");
                 break;
             }
         }

@@ -65,7 +65,7 @@ internal static class MergeRunner
             await Task.Run(() => ctx.MergeService.Apply(preview, true), cts.Token);
             action.Finish($"Объединено: {ordered.Count}");
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
         {
             action.MarkCancelled("Отменено");
         }

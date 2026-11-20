@@ -68,7 +68,7 @@ public sealed partial class PublishViewModel : ObservableObject, IPageStatus, IP
         _tempManager = tempManager;
         AuthenticationRecovery = new(navigation);
 
-        TemplatePicker = new(coverGenerator, coverTemplateStore, dialogs, filePicker, editorWindow);
+        TemplatePicker = new(coverGenerator, coverTemplateStore, dialogs, filePicker, editorWindow, logger);
         TemplatePicker.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName is nameof(CoverProfilePickerViewModel.HasTemplate) or nameof(CoverProfilePickerViewModel.SelectedTemplate))

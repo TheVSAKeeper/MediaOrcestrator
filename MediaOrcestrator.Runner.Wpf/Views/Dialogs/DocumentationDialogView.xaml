@@ -18,6 +18,7 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <StackPanel Grid.Row="0"
@@ -64,7 +65,11 @@
                                       Background="Transparent" />
         </Border>
 
-        <Grid Grid.Row="3"
+        <TextBlock Grid.Row="3" Text="{Binding OpenError}" TextWrapping="Wrap"
+                   Foreground="{DynamicResource State.ErrorText}" AutomationProperties.LiveSetting="Polite"
+                   Visibility="{Binding OpenError, Converter={StaticResource NullToVisibility}}" />
+
+        <Grid Grid.Row="4"
               Margin="0,16,0,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />

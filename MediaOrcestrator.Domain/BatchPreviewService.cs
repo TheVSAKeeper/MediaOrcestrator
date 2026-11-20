@@ -156,7 +156,7 @@ public sealed class BatchPreviewService(
                     var stats = await ProcessMediaAsync(request.Media, request.Targets, i, context, subtask, perMediaCts.Token);
                     FinishSubtask(subtask, stats);
                 }
-                catch (OperationCanceledException)
+                catch (OperationCanceledException) when (perMediaCts.IsCancellationRequested)
                 {
                     subtask.MarkCancelled();
 
@@ -460,6 +460,10 @@ public sealed class BatchPreviewService(
             var message = uploadResult.Message ?? uploadResult.Status.Text;
             logger.LogWarning("Превью не обновлено: '{Title}' → {Source}: {Message}", media.Title, target.TitleFull, message);
             return new(media, target, false, message);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {

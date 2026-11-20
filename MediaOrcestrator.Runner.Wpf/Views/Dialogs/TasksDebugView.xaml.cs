@@ -24,16 +24,4 @@ public partial class TasksDebugView : UserControl, IView<TasksDebugViewModel>
     {
         DumpBox.Focus();
     }
-
-    private void OnCopyClick(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            DumpBox.SelectAll();
-            DumpBox.Copy();
-        }
-        catch
-        {
-        }
-    }
 }
