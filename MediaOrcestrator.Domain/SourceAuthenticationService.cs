@@ -1,13 +1,18 @@
 ﻿using MediaOrcestrator.Modules;
 using Microsoft.Extensions.Logging;
+using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 
 namespace MediaOrcestrator.Domain;
 
-public sealed class SourceAuthenticationService(Orcestrator orcestrator, ILogger<SourceAuthenticationService> logger)
+public sealed partial class SourceAuthenticationService(Orcestrator orcestrator, ILogger<SourceAuthenticationService> logger)
 {
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> _sourceLocks = new(StringComparer.Ordinal);
+
+    private SemaphoreSlim GetSourceLock(string sourceId) => _sourceLocks.GetOrAdd(sourceId, _ => new(1, 1));
+
     public SourceAuthenticationState ReadState(Source source)
     {
         var local = Inspect(source);
@@ -109,6 +114,60 @@ public sealed class SourceAuthenticationService(Orcestrator orcestrator, ILogger
 
     public async Task<SourceAuthenticationCheck> CheckAsync(Source source, CancellationToken cancellationToken)
     {
+        var gate = GetSourceLock(source.Id);
+        await gate.WaitAsync(cancellationToken);
+        try
+        {
+            return await CheckCoreAsync(source, cancellationToken);
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    public async Task<SourceAuthenticationState> CheckAndRecordAsync(Source source, CancellationToken cancellationToken)
+    {
+        var gate = GetSourceLock(source.Id);
+        await gate.WaitAsync(cancellationToken);
+        try
+        {
+            var result = await CheckCoreAsync(source, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            return RecordCheck(source, result);
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    public async Task<SourceAuthenticationState?> RecordOperationRejectionAsync(Source source,
+        SourceOperationAuthenticationException failure)
+    {
+        var gate = GetSourceLock(source.Id);
+        await gate.WaitAsync();
+        try
+        {
+            var state = ReadState(source);
+            if (state.Revision != failure.Revision || state.CheckedAt > failure.ObservedAt)
+            {
+                return null;
+            }
+
+            var methods = (state.LastCheck ?? state.Local).Methods?.Select(method => method.Id == failure.MethodId
+                ? method with { Status = SourceAuthenticationStatus.Rejected } : method).ToArray();
+            return RecordCheck(source, new(SourceAuthenticationStatus.Rejected,
+                Detail: "Площадка отклонила вход во время операции.", Methods: methods), failure.ObservedAt);
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    private async Task<SourceAuthenticationCheck> CheckCoreAsync(Source source, CancellationToken cancellationToken)
+    {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(20));
 
@@ -119,6 +178,13 @@ public sealed class SourceAuthenticationService(Orcestrator orcestrator, ILogger
             {
                 var result = await probe.CheckAuthenticationAsync(settings, timeout.Token);
                 timeout.Token.ThrowIfCancellationRequested();
+                var failedMethods = result.Methods?.Where(method => method.Status == SourceAuthenticationStatus.CheckFailed)
+                    .Select(method => method.Id).ToArray() ?? [];
+                if (result.Status == SourceAuthenticationStatus.CheckFailed || failedMethods.Length > 0)
+                {
+                    logger.LogWarning("Проверка сессии источника {SourceId} ({Platform}) не завершена. Способы с ошибкой: {FailedMethods}",
+                        source.Id, source.TypeId, failedMethods);
+                }
                 return result;
             }
 
@@ -137,6 +203,7 @@ public sealed class SourceAuthenticationService(Orcestrator orcestrator, ILogger
         }
         catch (Exception) when (timeout.IsCancellationRequested)
         {
+            logger.LogWarning("Истекло время проверки сессии источника {SourceId} ({Platform})", source.Id, source.TypeId);
             return new(SourceAuthenticationStatus.CheckFailed, Detail: "Истекло время ожидания ответа площадки.");
         }
         catch (Exception ex)
@@ -148,6 +215,20 @@ public sealed class SourceAuthenticationService(Orcestrator orcestrator, ILogger
     }
 
     public async Task SaveSignInAsync(Source source, IAuthUI ui, string? methodId, CancellationToken cancellationToken)
+    {
+        var gate = GetSourceLock(source.Id);
+        await gate.WaitAsync(cancellationToken);
+        try
+        {
+            await SaveSignInCoreAsync(source, ui, methodId, cancellationToken);
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    private async Task SaveSignInCoreAsync(Source source, IAuthUI ui, string? methodId, CancellationToken cancellationToken)
     {
         if (source.Type is not IAuthenticatable auth)
         {

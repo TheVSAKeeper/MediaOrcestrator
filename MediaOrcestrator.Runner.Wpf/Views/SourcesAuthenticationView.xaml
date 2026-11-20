@@ -17,9 +17,9 @@
                 </Border.Style>
                 <DockPanel>
                     <icons:PackIconLucide Kind="{Binding Icon}" Width="12" Height="12" Margin="0,0,5,0"
-                                          Focusable="False"
+                                          Focusable="False" VerticalAlignment="Center"
                                           Foreground="{Binding (TextElement.Foreground), ElementName=BadgeSurface}" />
-                    <TextBlock Text="{Binding Text}" TextWrapping="Wrap" />
+                    <TextBlock x:Name="BadgeText" Text="{Binding Text}" TextWrapping="Wrap" VerticalAlignment="Center" />
                 </DockPanel>
             </Border>
             <DataTemplate.Triggers>
@@ -35,6 +35,13 @@
                 <DataTrigger Binding="{Binding Status}" Value="{x:Static modules:SourceAuthenticationStatus.SettingsRequired}">
                     <Setter TargetName="BadgeSurface" Property="Style" Value="{StaticResource Badge.Info}" />
                 </DataTrigger>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding Status}" Value="{x:Static modules:SourceAuthenticationStatus.Rejected}" />
+                        <Condition Binding="{Binding IsSummaryCompact, RelativeSource={RelativeSource AncestorType=views:SourcesAuthenticationView}}" Value="True" />
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="BadgeText" Property="Text" Value="Нужен вход" />
+                </MultiDataTrigger>
             </DataTemplate.Triggers>
         </DataTemplate>
 
@@ -132,15 +139,46 @@
             <Button Style="{StaticResource Button.Secondary}" Content="Проверить все"
                     Command="{Binding DataContext.RefreshAuthenticationCommand, RelativeSource={RelativeSource AncestorType=views:SourcesRelationsView}}"
                     ToolTip="Обновить список и проверить включённые источники." Margin="0,0,8,0" />
-            <Button Style="{StaticResource Button.Ghost}" ToolTip="Добавить источник"
-                    AutomationProperties.Name="Добавить источник"
-                    IsEnabled="{Binding CanOpenSourceSettings}"
-                    Command="{Binding DataContext.AddSourceCommand, RelativeSource={RelativeSource AncestorType=views:SourcesRelationsView}}">
-                <StackPanel Orientation="Horizontal">
-                    <icons:PackIconLucide Kind="Plus" Width="14" Height="14" Margin="0,0,5,0" />
-                    <TextBlock Text="Источник" />
-                </StackPanel>
-            </Button>
+            <Grid>
+                <Button ToolTip="Добавить источник" AutomationProperties.Name="Добавить источник"
+                        IsEnabled="{Binding CanOpenSourceSettings}"
+                        Command="{Binding DataContext.AddSourceCommand, RelativeSource={RelativeSource AncestorType=views:SourcesRelationsView}}">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource Button.Ghost}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsSigningIn}" Value="True">
+                                    <Setter Property="Visibility" Value="Hidden" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsReplacingAuthentication}" Value="True">
+                                    <Setter Property="Visibility" Value="Hidden" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                    <StackPanel Orientation="Horizontal">
+                        <icons:PackIconLucide Kind="Plus" Width="14" Height="14" Margin="0,0,5,0" VerticalAlignment="Center" />
+                        <TextBlock Text="Источник" />
+                    </StackPanel>
+                </Button>
+                <Button Style="{StaticResource Button.Ghost}" Command="{Binding CancelSignInCommand}"
+                        ToolTip="{Binding ProgressText}" AutomationProperties.HelpText="{Binding ProgressText, TargetNullValue=''}"
+                        AutomationProperties.Name="Отменить вход"
+                        Visibility="{Binding IsSigningIn, Converter={StaticResource BoolToVisibilityHidden}}">
+                    <StackPanel Orientation="Horizontal">
+                        <controls:SpinningLoader Width="14" Height="14" Margin="0,0,6,0" VerticalAlignment="Center" />
+                        <TextBlock Text="Отменить вход" />
+                    </StackPanel>
+                </Button>
+                <Button Style="{StaticResource Button.Ghost}" Command="{Binding CopyAuthenticationCancelCommand}"
+                        ToolTip="Ждём завершения операций с данными входа."
+                        AutomationProperties.Name="Отменить копирование авторизации"
+                        Visibility="{Binding IsReplacingAuthentication, Converter={StaticResource BoolToVisibilityHidden}}">
+                    <StackPanel Orientation="Horizontal">
+                        <controls:SpinningLoader Width="14" Height="14" Margin="0,0,6,0" VerticalAlignment="Center" />
+                        <TextBlock Text="Отменить" />
+                    </StackPanel>
+                </Button>
+            </Grid>
         </WrapPanel>
 
         <StackPanel Grid.Row="1" Margin="0,0,0,8">
@@ -150,7 +188,7 @@
                               IsChecked="{Binding AttentionOnly, Mode=TwoWay}" Margin="8,0,0,0" VerticalAlignment="Top"
                               AutomationProperties.Name="Только источники, требующие внимания">
                     <StackPanel Orientation="Horizontal">
-                        <icons:PackIconLucide Kind="SlidersHorizontal" Width="14" Height="14" Margin="0,0,6,0" />
+                        <icons:PackIconLucide Kind="SlidersHorizontal" Width="14" Height="14" Margin="0,0,6,0" VerticalAlignment="Center" />
                         <TextBlock Text="Требуют внимания" />
                     </StackPanel>
                 </ToggleButton>
@@ -189,7 +227,7 @@
                     Visibility="{Binding HasQueue, Converter={StaticResource BoolToVisibility}}">
                 <StackPanel>
                     <DockPanel Margin="0,0,0,4">
-                        <controls:SpinningLoader Width="14" Height="14" Margin="0,0,8,0"
+                        <controls:SpinningLoader Width="14" Height="14" Margin="0,0,8,0" VerticalAlignment="Center"
                                                  Visibility="{Binding IsSigningIn, Converter={StaticResource BoolToVisibility}}" />
                         <TextBlock Text="{Binding QueueText}" FontWeight="SemiBold" TextWrapping="Wrap"
                                    AutomationProperties.LiveSetting="Polite" />
@@ -211,18 +249,6 @@
                     </WrapPanel>
                 </StackPanel>
             </Border>
-            <DockPanel Margin="0,0,0,8"
-                       Visibility="{Binding StandaloneProgressText, Converter={StaticResource NullToVisibility}}">
-                <controls:SpinningLoader Width="14" Height="14" Margin="0,0,8,0" />
-                <Button DockPanel.Dock="Right" Style="{StaticResource Button.Ghost}" Content="Отменить вход"
-                        Command="{Binding SignInCancelCommand}"
-                        Visibility="{Binding SignInCommand.IsRunning, Converter={StaticResource BoolToVisibility}}" />
-                <Button DockPanel.Dock="Right" Style="{StaticResource Button.Ghost}" Content="Отменить вход"
-                        Command="{Binding SignInWithMethodCancelCommand}"
-                        Visibility="{Binding SignInWithMethodCommand.IsRunning, Converter={StaticResource BoolToVisibility}}" />
-                <TextBlock Text="{Binding StandaloneProgressText}" TextWrapping="Wrap" VerticalAlignment="Center"
-                           AutomationProperties.LiveSetting="Polite" />
-            </DockPanel>
         </StackPanel>
 
         <keepshell:EmptyState Grid.Row="3" VerticalAlignment="Center" Icon="KeyRound" Heading="{Binding EmptyText}"
@@ -310,6 +336,17 @@
                                     </DockPanel>
                                 </Grid>
 
+                                <TextBlock Text="{Binding SignInError}" Foreground="{DynamicResource State.ErrorText}"
+                                           Margin="10,0,10,7" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite"
+                                           Visibility="{Binding SignInError, Converter={StaticResource NullToVisibility}}" />
+                                <DockPanel Margin="10,0,10,7"
+                                           Visibility="{Binding SignInNotice, Converter={StaticResource NullToVisibility}}">
+                                    <Button DockPanel.Dock="Right" Style="{StaticResource Button.Ghost}" Content="Закрыть"
+                                            AutomationProperties.Name="Закрыть сообщение о входе"
+                                            Command="{Binding DataContext.DismissNoticeCommand, RelativeSource={RelativeSource AncestorType=views:SourcesAuthenticationView}}"
+                                            CommandParameter="{Binding}" />
+                                    <TextBlock Text="{Binding SignInNotice}" VerticalAlignment="Center" TextWrapping="Wrap" />
+                                </DockPanel>
                                 <Border Style="{StaticResource Card.Inset}" Padding="10,5" Margin="10,0,10,8"
                                         Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVisibility}}">
                                     <StackPanel>
@@ -320,15 +357,6 @@
                                         <TextBlock Text="{Binding LastSuccessfulCheck, StringFormat='Последнее подтверждение {0:dd.MM HH:mm}'}"
                                                    Style="{StaticResource TextBlock.Subtle}"
                                                    Visibility="{Binding LastSuccessfulCheck, Converter={StaticResource NullToVisibility}}" />
-                                        <TextBlock Text="{Binding SignInError}" Foreground="{DynamicResource State.ErrorText}" TextWrapping="Wrap"
-                                                   Visibility="{Binding SignInError, Converter={StaticResource NullToVisibility}}" />
-                                        <DockPanel Visibility="{Binding SignInNotice, Converter={StaticResource NullToVisibility}}">
-                                            <Button DockPanel.Dock="Right" Style="{StaticResource Button.Ghost}" Content="Закрыть"
-                                                    AutomationProperties.Name="Закрыть сообщение о входе"
-                                                    Command="{Binding DataContext.DismissNoticeCommand, RelativeSource={RelativeSource AncestorType=views:SourcesAuthenticationView}}"
-                                                    CommandParameter="{Binding}" />
-                                            <TextBlock Text="{Binding SignInNotice}" VerticalAlignment="Center" TextWrapping="Wrap" />
-                                        </DockPanel>
                                         <ItemsControl ItemsSource="{Binding Methods}" Margin="0,4,0,0">
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate>
@@ -350,13 +378,22 @@
                                                                 <TextBlock Text="{Binding Method.Detail}" Style="{StaticResource TextBlock.Subtle}" TextWrapping="Wrap"
                                                                            Visibility="{Binding Method.Detail, Converter={StaticResource NullToVisibility}}" />
                                                             </StackPanel>
-                                                            <Button Grid.Column="2" Style="{StaticResource MethodAction}" VerticalAlignment="Center"
-                                                                    HorizontalAlignment="Right" AutomationProperties.Name="{Binding AccessibleAction}"
-                                                                    Visibility="{Binding ShowAction, Converter={StaticResource BoolToVisibility}}"
-                                                                    Command="{Binding DataContext.SignInWithMethodCommand, RelativeSource={RelativeSource AncestorType=views:SourcesAuthenticationView}}"
-                                                                    CommandParameter="{Binding}">
-                                                                <TextBlock Text="{Binding ActionText}" TextWrapping="Wrap" TextAlignment="Center" />
-                                                            </Button>
+                                                            <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                                                                <Button Style="{StaticResource MethodAction}"
+                                                                        HorizontalAlignment="Right" AutomationProperties.Name="{Binding AccessibleAction}"
+                                                                        Visibility="{Binding ShowAction, Converter={StaticResource BoolToVisibility}}"
+                                                                        Command="{Binding DataContext.SignInWithMethodCommand, RelativeSource={RelativeSource AncestorType=views:SourcesAuthenticationView}}"
+                                                                        CommandParameter="{Binding}">
+                                                                    <TextBlock Text="{Binding ActionText}" TextWrapping="Wrap" TextAlignment="Center" />
+                                                                </Button>
+                                                                <Button Style="{StaticResource Button.Ghost}" HorizontalAlignment="Right"
+                                                                        AutomationProperties.Name="{Binding SwitchAccountAccessibleName}"
+                                                                        Visibility="{Binding ShowAlternativeSwitch, Converter={StaticResource BoolToVisibility}}"
+                                                                        Command="{Binding DataContext.SwitchMethodAccountCommand, RelativeSource={RelativeSource AncestorType=views:SourcesAuthenticationView}}"
+                                                                        CommandParameter="{Binding}">
+                                                                    <TextBlock Text="Сменить аккаунт" TextWrapping="Wrap" TextAlignment="Center" />
+                                                                </Button>
+                                                            </StackPanel>
                                                         </Grid>
                                                     </Border>
                                                 </DataTemplate>
@@ -371,6 +408,18 @@
                                                     AutomationProperties.Name="{Binding DetailsSignInAccessibleName}"
                                                     Visibility="{Binding ShowDetailsSignIn, Converter={StaticResource BoolToVisibility}}"
                                                     Command="{Binding DataContext.SignInCommand, RelativeSource={RelativeSource AncestorType=views:SourcesAuthenticationView}}"
+                                                    CommandParameter="{Binding}" />
+                                            <Button Style="{StaticResource Button.Ghost}" Content="Сменить аккаунт"
+                                                    AutomationProperties.Name="{Binding SwitchAccountAccessibleName}"
+                                                    Visibility="{Binding ShowAlternativeSwitch, Converter={StaticResource BoolToVisibility}}"
+                                                    Command="{Binding DataContext.SwitchAccountCommand, RelativeSource={RelativeSource AncestorType=views:SourcesAuthenticationView}}"
+                                                    CommandParameter="{Binding}" />
+                                            <Button Style="{StaticResource Button.Ghost}" Content="Скопировать авторизацию"
+                                                    AutomationProperties.Name="{Binding CopyAccessibleName}"
+                                                    Visibility="{Binding HasCopyableAuthentication, Converter={StaticResource BoolToVisibility}}"
+                                                    ToolTipService.ShowOnDisabled="True"
+                                                    ToolTip="Копирует данные входа в другой источник той же площадки."
+                                                    Command="{Binding DataContext.CopyAuthenticationCommand, RelativeSource={RelativeSource AncestorType=views:SourcesAuthenticationView}}"
                                                     CommandParameter="{Binding}" />
                                             <Button Style="{StaticResource Button.Ghost}" Content="Настройки источника"
                                                     AutomationProperties.Name="{Binding SettingsAccessibleName}"

@@ -1,5 +1,6 @@
 ﻿using CliWrap;
 using CliWrap.Exceptions;
+using MediaOrcestrator.Modules;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
@@ -21,7 +22,8 @@ internal sealed record YtDlpVideoInfo(
     IReadOnlyList<string> Tags,
     YoutubeVideoKind Kind);
 
-internal sealed partial class YtDlp(string path, string ffmpegPath, string jsRuntime = "none", string? jsRuntimeDir = null, string cookiePath = "") : IYoutubeVideoInfoReader, IYoutubeChannelStreamsReader
+internal sealed partial class YtDlp(string path, string ffmpegPath, string jsRuntime = "none", string? jsRuntimeDir = null,
+    string cookiePath = "", SessionFileAccess? sessionFiles = null) : IYoutubeVideoInfoReader, IYoutubeChannelStreamsReader
 {
     public async Task<YtDlpVideoInfo?> DownloadAsync(
         string url,
@@ -70,7 +72,7 @@ internal sealed partial class YtDlp(string path, string ffmpegPath, string jsRun
             progress?.Report(new(partNumber > 0 ? partNumber : 1, percent));
         });
 
-        await ExecuteAsync(arguments, internalProgress, OutputCallback, cancellationToken: cancellationToken);
+        await ExecuteAsync(arguments, internalProgress, OutputCallback, reportCookieRejection: true, cancellationToken: cancellationToken);
 
         var infoJsonPath = Path.ChangeExtension(outputPath, ".info.json");
         if (!File.Exists(infoJsonPath))
@@ -323,9 +325,17 @@ internal sealed partial class YtDlp(string path, string ffmpegPath, string jsRun
         Action<string>? outputCallback = null,
         Stream? stdOutStream = null,
         StringBuilder? stdErrBuilder = null,
+        bool reportCookieRejection = false,
         CancellationToken cancellationToken = default)
     {
+        using var access = sessionFiles is null ? null : await sessionFiles.ReadAsync(cookiePath, cancellationToken);
         var argumentsList = arguments.ToList();
+        var cookieIndex = argumentsList.IndexOf("--cookies");
+        var hasCookies = cookieIndex >= 0 && File.Exists(cookiePath);
+        if (cookieIndex >= 0 && !hasCookies)
+        {
+            argumentsList.RemoveRange(cookieIndex, 2);
+        }
         var commandString = $"{path} {string.Join(" ", argumentsList.Select(a => a.Contains(' ') ? $"\"{a}\"" : a))}";
 
         var stdErrBuffer = stdErrBuilder ?? new StringBuilder();
@@ -339,7 +349,7 @@ internal sealed partial class YtDlp(string path, string ffmpegPath, string jsRun
         try
         {
             var command = Cli.Wrap(path)
-                .WithArguments(arguments)
+                .WithArguments(argumentsList)
                 .WithEnvironmentVariables(env =>
                 {
                     if (jsRuntimeDir is null)
@@ -357,6 +367,12 @@ internal sealed partial class YtDlp(string path, string ffmpegPath, string jsRun
         }
         catch (CommandExecutionException exception)
         {
+            if (reportCookieRejection && hasCookies && IsCookieRejection(stdErrBuffer.ToString()))
+            {
+                throw new SourceSessionRejectedException("YouTube отклонил сохранённые cookies. Войдите заново.",
+                    methodId: YoutubeChannel.CookiesMethod);
+            }
+
             var message = $"""
                            Ошибка выполнения yt-dlp.
 
@@ -370,4 +386,7 @@ internal sealed partial class YtDlp(string path, string ffmpegPath, string jsRun
             throw new InvalidOperationException(message, exception);
         }
     }
+
+    internal static bool IsCookieRejection(string standardError) => standardError.Contains(
+        "The provided YouTube account cookies are no longer valid", StringComparison.OrdinalIgnoreCase);
 }

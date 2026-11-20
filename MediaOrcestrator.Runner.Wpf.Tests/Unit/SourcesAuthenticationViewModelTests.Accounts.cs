@@ -4,6 +4,7 @@ using KeepShell.ViewModels;
 using MediaOrcestrator.Runner.Wpf.Tests.Doubles;
 using MediaOrcestrator.Runner.Wpf.Services;
 using MediaOrcestrator.Runner.Wpf.ViewModels;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Playwright;
 using NSubstitute;
@@ -13,6 +14,112 @@ namespace MediaOrcestrator.Runner.Wpf.Tests.Unit;
 
 public sealed partial class SourcesAuthenticationViewModelTests
 {
+    [TestCase(null)]
+    [TestCase("browser")]
+    public async Task СменаАккаунта_СессияОтклонена_СохраняетВыборМеждуПовторомИЧистымВходом(string? methodId)
+    {
+        var plugin = Substitute.For<ISourceType, ISourceAuthenticationProbe, ISourceAuthenticationMethods>();
+        plugin.Name.Returns("TestPlatform");
+        var probe = (ISourceAuthenticationProbe)plugin;
+        probe.CanSwitchAccount.Returns(true);
+        IReadOnlyList<SourceAuthenticationMethod>? methods = methodId is null ? null :
+            [new(methodId, "Браузер", "Вход", SourceAuthenticationStatus.Rejected)];
+        probe.CheckAuthenticationAsync(Arg.Any<Dictionary<string, string>>(), Arg.Any<CancellationToken>())
+            .Returns(new SourceAuthenticationCheck(SourceAuthenticationStatus.Rejected, Methods: methods));
+        using var context = new TestDomainContext([plugin]);
+        context.Orcestrator.AddSource("source", plugin.Name, []);
+        var replaceFlags = new List<bool>();
+        var vm = new SourcesAuthenticationViewModel(
+            new(context.Orcestrator, NullLogger<SourceAuthenticationService>.Instance),
+            (prompt, _, _) =>
+            {
+                replaceFlags.Add(prompt.ReplaceAccount);
+                return Substitute.For<IAuthUI>();
+            }, NullLogger<SourcesAuthenticationViewModel>.Instance, context.Dialogs);
+        vm.SetSources(context.Orcestrator.GetSources());
+        await vm.CheckAllCommand.ExecuteAsync(null);
+        var row = vm.VisibleRows.Single();
+
+        if (methodId is null)
+        {
+            Assert.That(vm.SwitchAccountCommand.CanExecute(row), Is.True);
+            await vm.SignInCommand.ExecuteAsync(row);
+            await vm.SwitchAccountCommand.ExecuteAsync(row);
+        }
+        else
+        {
+            Assert.That(vm.SwitchMethodAccountCommand.CanExecute(row.Methods.Single()), Is.True);
+            await vm.SignInWithMethodCommand.ExecuteAsync(row.Methods.Single());
+            await vm.SwitchMethodAccountCommand.ExecuteAsync(row.Methods.Single());
+        }
+
+        Assert.That(replaceFlags, Is.EqualTo(new[] { false, true }));
+    }
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task SignInAsync_ТаймаутИОтмена_РазличаетИсходы(bool dismissed)
+    {
+        var plugin = Substitute.For<ISourceType, IAuthenticatable>();
+        plugin.Name.Returns("TestPlatform");
+        ((IAuthenticatable)plugin).AuthenticateAsync(Arg.Any<Dictionary<string, string>>(), Arg.Any<IAuthUI>(), Arg.Any<CancellationToken>())
+            .Returns(_ => Task.FromException(dismissed ? new AuthenticationDismissedException(CancellationToken.None)
+                : new TaskCanceledException("Network timeout")));
+        using var context = new TestDomainContext([plugin]);
+        context.Orcestrator.AddSource("source", plugin.Name, []);
+        var logger = Substitute.For<ILogger<SourcesAuthenticationViewModel>>();
+        var vm = new SourcesAuthenticationViewModel(new(context.Orcestrator, NullLogger<SourceAuthenticationService>.Instance),
+            (_, _, _) => Substitute.For<IAuthUI>(), logger, context.Dialogs);
+        vm.SetSources(context.Orcestrator.GetSources());
+        var row = vm.VisibleRows.Single();
+
+        await vm.SignInCommand.ExecuteAsync(row);
+
+        Assert.That(row.SignInError, Does.Contain(dismissed ? "отменён" : "Истекло время"));
+        Assert.That(logger.ReceivedCalls().Count(call => call.GetMethodInfo().Name == nameof(ILogger.Log)), Is.EqualTo(dismissed ? 0 : 1));
+    }
+
+    [TestCase("Invalid cookie fields", "Network.setCookies: Invalid cookie fields")]
+    [TestCase("Executable doesn't exist", "Chromium не установлен")]
+    [TestCase("net::ERR_NAME_NOT_RESOLVED", "net::ERR_NAME_NOT_RESOLVED")]
+    public void LogFailure_СбойChromium_ПоказываетПричинуБезСекрета(string message, string expected)
+    {
+        var logger = Substitute.For<ILogger<WpfAuthUI>>();
+        WpfAuthUI.LogFailure(logger, new PlaywrightException(message + " secret-session-value"), "Открытие браузера");
+
+        var entry = logger.ReceivedCalls().Single(call => call.GetMethodInfo().Name == nameof(ILogger.Log)).GetArguments();
+        Assert.That(entry[2]!.ToString(), Does.Contain(expected).And.Not.Contain("secret-session-value"));
+        Assert.That(entry[3], Is.Null);
+    }
+
+    [Test]
+    public async Task CheckAsync_ОшибкаОдногоИзСпособов_ЗаписываетЕгоВЖурнал()
+    {
+        var probe = Substitute.For<ISourceType, ISourceAuthenticationProbe>();
+        var check = new SourceAuthenticationCheck(SourceAuthenticationStatus.Rejected, Methods:
+        [
+            new("browser", "Браузер", "", SourceAuthenticationStatus.Rejected),
+            new("oauth", "OAuth", "", SourceAuthenticationStatus.CheckFailed),
+        ]);
+        ((ISourceAuthenticationProbe)probe)
+            .CheckAuthenticationAsync(Arg.Any<Dictionary<string, string>>(), Arg.Any<CancellationToken>()).Returns(check);
+        var logger = Substitute.For<ILogger<SourceAuthenticationService>>();
+        var service = new SourceAuthenticationService(null!, logger);
+        var source = new Source { Id = "video", TypeId = "Площадка", Type = probe };
+
+        await service.CheckAsync(source, CancellationToken.None);
+
+        var call = logger.ReceivedCalls().Single(call => call.GetMethodInfo().Name == nameof(ILogger.Log));
+        var arguments = call.GetArguments();
+        var fields = (IReadOnlyList<KeyValuePair<string, object?>>)arguments[2]!;
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(arguments[0], Is.EqualTo(LogLevel.Warning));
+            Assert.That(fields.Single(field => field.Key == "SourceId").Value, Is.EqualTo("video"));
+            Assert.That(fields.Single(field => field.Key == "FailedMethods").Value, Is.EqualTo(new[] { "oauth" }));
+        }
+    }
+
     [Test]
     public async Task SaveCandidateAsync_ПлощадкаВидитГостя_СохраняетСтарыйФайл()
     {
@@ -163,7 +270,7 @@ public sealed partial class SourcesAuthenticationViewModelTests
 
         var vm = CreateViewModel(context);
         vm.SetSources(context.Orcestrator.GetSources());
-        vm.FocusSource(failure);
+        await vm.FocusSourceAsync(failure);
 
         var row = vm.VisibleRows.Single();
         using (Assert.EnterMultipleScope())

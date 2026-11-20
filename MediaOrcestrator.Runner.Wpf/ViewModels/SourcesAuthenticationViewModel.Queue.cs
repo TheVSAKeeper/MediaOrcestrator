@@ -145,7 +145,7 @@ public sealed partial class SourcesAuthenticationViewModel
         }
     }
 
-    private bool CanStartQueue() => _signingIn is null && !HasQueue && SignInCount > 0 && _editing.Count == 0;
+    private bool CanStartQueue() => CanOpenSourceSettings && !HasQueue && SignInCount > 0;
     private bool CanContinueQueue() => _signingIn is null && QueueCurrent is not null && !QueueCurrent.NeedsSettings && _editing.Count == 0;
     private bool CanSkipStep() => _signingIn is null && CurrentStep is { Saved: false };
     private bool CanCancelStep() => HasQueue && _signingIn is not null;

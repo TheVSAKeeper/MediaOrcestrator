@@ -18,6 +18,7 @@ public sealed partial class SourceAuthenticationRowViewModel(Source source, Sour
     public string PlatformText => IsDisabled ? $"{Platform} · выключен" : Platform;
     public string AccessibleName => $"{Title}, {PlatformText}, {AccountText}, {StatusBadge.Text}";
     public string CheckAccessibleName => $"Проверить сессию · {Title} ({Platform})";
+    public string CopyAccessibleName => $"Скопировать авторизацию из «{Title}»";
     public string SettingsAccessibleName => $"Настройки · {Title} ({Platform})";
     public string SignInAccessibleName => $"{PrimarySignInText} · {Title} ({Platform})";
     public string DetailsAccessibleName => $"{(IsExpanded ? "Свернуть детали" : "Раскрыть детали")} · {Title} ({Platform})";
@@ -42,6 +43,8 @@ public sealed partial class SourceAuthenticationRowViewModel(Source source, Sour
     }
 
     public bool CanSignIn => Source.Type is IAuthenticatable && !NeedsSettings;
+    public bool HasCopyableAuthentication => Source.Type is ISourceAuthenticationProbe
+        && State.Local.Status == SourceAuthenticationStatus.Saved;
     public bool NeedsSettings => State.Local.Status == SourceAuthenticationStatus.SettingsRequired
         || Check.Status == SourceAuthenticationStatus.SettingsRequired;
     public bool NeedsSignIn => CanSignIn && (DefaultMethodId is not null
@@ -79,8 +82,10 @@ public sealed partial class SourceAuthenticationRowViewModel(Source source, Sour
     public string PrimarySignInText => MethodsNeedingSignIn.FirstOrDefault(method => method.Method.Id == DefaultMethodId) is { } method
         ? $"{method.ActionText} · {method.Method.Title}"
         : SignInText;
-    public bool CanSwitchAccount => Check.Status == SourceAuthenticationStatus.Valid
-        && Source.Type is ISourceAuthenticationProbe { CanSwitchAccount: true };
+    internal bool SupportsSwitchAccount => Source.Type is ISourceAuthenticationProbe { CanSwitchAccount: true };
+    public bool CanSwitchAccount => Check.Status == SourceAuthenticationStatus.Valid && SupportsSwitchAccount;
+    public bool ShowAlternativeSwitch => ShowDetailsSignIn && Check.Status == SourceAuthenticationStatus.Rejected && SupportsSwitchAccount;
+    public string SwitchAccountAccessibleName => $"Сменить аккаунт · {Title} ({Platform})";
     public string DetailsSignInText => CanSwitchAccount ? "Сменить аккаунт"
         : Check.Status == SourceAuthenticationStatus.Valid ? "Обновить вход" : SignInText;
     public string DetailsSignInAccessibleName => $"{DetailsSignInText} · {Title} ({Platform})";
@@ -166,17 +171,20 @@ public sealed record AuthenticationMethodRow(SourceAuthenticationRowViewModel Ro
     public bool CanSignIn => Method.CanSignIn && !IsAwaiting;
     public bool ShowAction => CanSignIn && Method.Status is SourceAuthenticationStatus.Valid
         or SourceAuthenticationStatus.Missing or SourceAuthenticationStatus.Rejected;
-    public bool ChangesAccount => Method.Status == SourceAuthenticationStatus.Valid;
+    private bool SupportsSwitchAccount => Method.CanSwitchAccount ?? Row.SupportsSwitchAccount;
+    public bool ChangesAccount => Method.Status == SourceAuthenticationStatus.Valid && SupportsSwitchAccount;
+    public bool ShowAlternativeSwitch => CanSignIn && Method.Status == SourceAuthenticationStatus.Rejected && SupportsSwitchAccount;
     public string StatusText => IsAwaiting ? "Ожидает проверки" : SourceAuthenticationRowViewModel.Describe(Method.Status);
     public string ActionText => Method.Status switch
     {
-        SourceAuthenticationStatus.Valid => "Сменить аккаунт",
+        SourceAuthenticationStatus.Valid => ChangesAccount ? "Сменить аккаунт" : "Обновить вход",
         SourceAuthenticationStatus.Missing => "Войти",
         _ => "Войти заново",
     };
     public string AccessibleAction => $"{ActionText} · {Row.Title} ({Method.Title})";
+    public string SwitchAccountAccessibleName => $"Сменить аккаунт · {Row.Title} ({Method.Title})";
     public string? AccountText => SourceAuthenticationRowViewModel.FormatAccount(Method.Account, Method.Status);
-    public string CompactText => $"{Method.Title} · {(ChangesAccount ? "вход подтверждён" : StatusText)}";
+    public string CompactText => $"{Method.Title} · {(!IsAwaiting && Method.Status == SourceAuthenticationStatus.Valid ? "вход подтверждён" : StatusText)}";
     public AuthenticationBadge Badge => new(StatusText, IsAwaiting ? SourceAuthenticationStatus.None : Method.Status);
 }
 

@@ -18,7 +18,7 @@ public sealed class TelegramChannel(
     : ISourceType, IAuthenticatable, ISourceAuthenticationProbe, IToolConsumer
 {
     private readonly ConcurrentDictionary<string, CachedService> _serviceCache = new(StringComparer.OrdinalIgnoreCase);
-    private readonly SemaphoreSlim _cacheLock = new(1, 1);
+    private readonly SessionFileAccess _sessionFiles = new();
 
     public string Name => "Telegram";
 
@@ -91,7 +91,8 @@ public sealed class TelegramChannel(
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         logger.ListingMedia();
-        var service = await CreateServiceAsync(settings, cancellationToken);
+        using var lease = await AcquireServiceAsync(settings, cancellationToken);
+        var service = lease.Service;
         var peer = await service.ResolveChannelAsync(settings["channel"], cancellationToken);
 
         await foreach (var message in service.GetVideosAsync(peer, cancellationToken))
@@ -106,7 +107,8 @@ public sealed class TelegramChannel(
         CancellationToken cancellationToken = default)
     {
         logger.GettingMedia(externalId);
-        var service = await CreateServiceAsync(settings, cancellationToken);
+        using var lease = await AcquireServiceAsync(settings, cancellationToken);
+        var service = lease.Service;
         var peer = await service.ResolveChannelAsync(settings["channel"], cancellationToken);
         var messageId = int.Parse(externalId);
 
@@ -134,7 +136,8 @@ public sealed class TelegramChannel(
         IProgress<DownloadProgress>? progress, CancellationToken cancellationToken)
     {
         logger.StartingDownload(videoId);
-        var service = await CreateServiceAsync(settings, cancellationToken);
+        using var lease = await AcquireServiceAsync(settings, cancellationToken);
+        var service = lease.Service;
         var peer = await service.ResolveChannelAsync(settings["channel"], cancellationToken);
         var messageId = int.Parse(videoId);
 
@@ -212,7 +215,8 @@ public sealed class TelegramChannel(
 
         try
         {
-            var service = await CreateServiceAsync(settings, cancellationToken);
+            using var lease = await AcquireServiceAsync(settings, cancellationToken);
+            var service = lease.Service;
             var peer = await service.ResolveChannelAsync(settings["channel"], cancellationToken);
             var videoInfo = await ProbeVideoInfoAsync(filePath, cancellationToken);
             var uploadBytesPerSecond = SpeedLimitHelper.ParseUploadBytesPerSecond(settings);
@@ -255,7 +259,9 @@ public sealed class TelegramChannel(
     {
         logger.StartingUpdate(externalId);
 
-        var service = await CreateServiceAsync(settings, cancellationToken);
+        using var lease = await AcquireServiceAsync(settings, cancellationToken);
+
+        var service = lease.Service;
         var peer = await service.ResolveChannelAsync(settings["channel"], cancellationToken);
         var messageId = int.Parse(externalId);
 
@@ -295,7 +301,9 @@ public sealed class TelegramChannel(
     {
         logger.StartingDelete(externalId);
 
-        var service = await CreateServiceAsync(settings, cancellationToken);
+        using var lease = await AcquireServiceAsync(settings, cancellationToken);
+
+        var service = lease.Service;
         var peer = await service.ResolveChannelAsync(settings["channel"], cancellationToken);
         var messageId = int.Parse(externalId);
 
@@ -322,6 +330,33 @@ public sealed class TelegramChannel(
     public bool IsAuthenticated(Dictionary<string, string> settings)
     {
         return File.Exists(GetSessionPath(settings));
+    }
+
+    public IReadOnlyList<string> GetCopyableAuthenticationFiles(
+        Dictionary<string, string> sourceSettings, Dictionary<string, string> targetSettings)
+    {
+        var local = InspectAuthentication(sourceSettings);
+        return local.Check.Status == SourceAuthenticationStatus.Saved
+            && sourceSettings["api_id"] == targetSettings.GetValueOrDefault("api_id")
+            && sourceSettings["api_hash"] == targetSettings.GetValueOrDefault("api_hash")
+            && sourceSettings["phone_number"] == targetSettings.GetValueOrDefault("phone_number")
+            ? local.StateFiles
+            : [];
+    }
+
+    public Task ReadAuthenticationFilesAsync(Dictionary<string, string> settings,
+        Func<Task> read, CancellationToken cancellationToken) =>
+        WithIdleSessionAsync(GetSessionPath(settings), read, cancellationToken);
+
+    public Task ReplaceAuthenticationFilesAsync(Dictionary<string, string> settings,
+        Func<Task> replace, CancellationToken cancellationToken) =>
+        WithIdleSessionAsync(GetSessionPath(settings), replace, cancellationToken);
+
+    private async Task WithIdleSessionAsync(string sessionPath, Func<Task> access, CancellationToken cancellationToken)
+    {
+        using var writer = await _sessionFiles.WriteAsync(sessionPath, cancellationToken);
+        InvalidateCachedService(sessionPath);
+        await access();
     }
 
     public SourceAuthenticationLocalState InspectAuthentication(Dictionary<string, string> settings)
@@ -354,6 +389,7 @@ public sealed class TelegramChannel(
 
         try
         {
+            using (await _sessionFiles.ReadAsync(sessionPath, cancellationToken))
             await using (var input = new FileStream(sessionPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
             await using (var output = File.Create(checkPath))
             {
@@ -420,17 +456,12 @@ public sealed class TelegramChannel(
                 logger.AuthSucceeded(user.first_name, user.id);
             }
 
-            await _cacheLock.WaitAsync(ct);
-            try
+            await ReplaceAuthenticationFilesAsync(settings, () =>
             {
                 ct.ThrowIfCancellationRequested();
-                InvalidateCachedService(sessionPath);
                 File.Move(pendingPath, sessionPath, overwrite: true);
-            }
-            finally
-            {
-                _cacheLock.Release();
-            }
+                return Task.CompletedTask;
+            }, ct);
         }
         finally
         {
@@ -564,40 +595,37 @@ public sealed class TelegramChannel(
         }
     }
 
-    private async Task<TelegramService> CreateServiceAsync(
+    private async Task<ServiceLease> AcquireServiceAsync(
         Dictionary<string, string> settings,
         CancellationToken cancellationToken)
     {
         var sessionPath = GetSessionPath(settings);
-        if (!File.Exists(sessionPath))
-        {
-            throw new SourceSessionRejectedException("Для Telegram нужно войти.");
-        }
         var apiId = int.Parse(settings["api_id"]);
         var apiHash = settings["api_hash"];
         var phoneNumber = settings["phone_number"];
 
-        if (TryGetMatchingCached(sessionPath, apiId, apiHash, phoneNumber, out var cached))
+        while (true)
         {
-            return cached.Service;
-        }
-
-        await _cacheLock.WaitAsync(cancellationToken);
-
-        try
-        {
-            if (TryGetMatchingCached(sessionPath, apiId, apiHash, phoneNumber, out cached))
+            var reader = await _sessionFiles.ReadAsync(sessionPath, cancellationToken);
+            if (TryGetMatchingCached(sessionPath, apiId, apiHash, phoneNumber, out var cached))
             {
-                return cached.Service;
+                return new(cached.Service, reader);
+            }
+            reader.Dispose();
+
+            using var writer = await _sessionFiles.WriteAsync(sessionPath, cancellationToken);
+            if (TryGetMatchingCached(sessionPath, apiId, apiHash, phoneNumber, out _))
+            {
+                continue;
             }
 
-            if (_serviceCache.TryRemove(sessionPath, out var stale))
+            if (!File.Exists(sessionPath))
             {
-                stale.Service.Dispose();
+                throw new SourceSessionRejectedException("Для Telegram нужно войти.");
             }
 
+            InvalidateCachedService(sessionPath);
             var service = telegramServiceFactory.Create(apiId, apiHash, phoneNumber, sessionPath);
-
             try
             {
                 await service.ConnectAsync(cancellationToken);
@@ -609,11 +637,6 @@ public sealed class TelegramChannel(
             }
 
             _serviceCache[sessionPath] = new(service, apiId, apiHash, phoneNumber);
-            return service;
-        }
-        finally
-        {
-            _cacheLock.Release();
         }
     }
 
@@ -696,6 +719,11 @@ public sealed class TelegramChannel(
             logger.FfprobeFailed(filePath, ex);
             return new();
         }
+    }
+
+    private readonly record struct ServiceLease(TelegramService Service, IDisposable Access) : IDisposable
+    {
+        public void Dispose() => Access.Dispose();
     }
 
     private sealed record CachedService(TelegramService Service, int ApiId, string ApiHash, string PhoneNumber);

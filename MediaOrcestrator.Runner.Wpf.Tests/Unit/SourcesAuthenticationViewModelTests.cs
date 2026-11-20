@@ -236,11 +236,7 @@ public sealed partial class SourcesAuthenticationViewModelTests
         vm.SetSources([source]);
         var row = vm.VisibleRows.Single();
         var navigation = Substitute.For<INavigationService>();
-        navigation.OpenSourceAuthenticationAsync(failure).Returns(_ =>
-        {
-            vm.FocusSource(failure);
-            return Task.CompletedTask;
-        });
+        navigation.OpenSourceAuthenticationAsync(failure).Returns(_ => vm.FocusSourceAsync(failure));
         var recovery = new SourceAuthenticationRecoveryViewModel(navigation);
         recovery.Report(new HttpRequestException("Нет сети"));
         recovery.Report(failure);
@@ -296,7 +292,7 @@ public sealed partial class SourcesAuthenticationViewModelTests
         Assert.That(error.MethodId, Is.EqualTo("writer"));
         var vm = CreateViewModel(context);
         vm.SetSources(context.Orcestrator.GetSources());
-        vm.FocusSource(error);
+        await vm.FocusSourceAsync(error);
         Assert.That(vm.SelectedRow?.NeedsSignIn, Is.True);
         await vm.SignInCommand.ExecuteAsync(vm.SelectedRow);
 
@@ -389,7 +385,7 @@ public sealed partial class SourcesAuthenticationViewModelTests
     private static SourcesAuthenticationViewModel CreateViewModel(TestDomainContext context) =>
         new(new SourceAuthenticationService(context.Orcestrator, NullLogger<SourceAuthenticationService>.Instance),
             (_, _, _) => Substitute.For<IAuthUI>(),
-            NullLogger<SourcesAuthenticationViewModel>.Instance);
+            NullLogger<SourcesAuthenticationViewModel>.Instance, context.Dialogs);
 
     [Test]
     public async Task CheckAllAsync_СтарыйПлагинБезСессии_ПредлагаетВход()

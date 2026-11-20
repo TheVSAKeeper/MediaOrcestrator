@@ -179,7 +179,7 @@ public sealed partial class SourcesRelationsViewModel : ObservableObject, IPageH
             await Task.Run(LoadFromDomainAsync, cts.Token);
             action.Finish($"Источников: {Sources.Count}, связей: {Relations.Count}");
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
         {
             action.MarkCancelled("Отменено");
         }
@@ -346,7 +346,7 @@ public sealed partial class SourcesRelationsViewModel : ObservableObject, IPageH
     partial void OnViewModeChanged(SourcesRelationsViewMode value)
     {
         _settings.SetValue(ViewModeSettingKey, value.ToString());
-        UpdateAuthenticationActivity();
+        _ = UpdateAuthenticationActivityAsync();
         OnPropertyChanged(nameof(CanHandleEscape));
     }
 

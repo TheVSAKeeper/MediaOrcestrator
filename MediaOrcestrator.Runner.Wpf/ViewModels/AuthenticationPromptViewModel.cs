@@ -1,5 +1,7 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using MediaOrcestrator.Runner.Wpf.Services;
+using Microsoft.Extensions.Logging;
 
 namespace MediaOrcestrator.Runner.Wpf.ViewModels;
 
@@ -11,7 +13,10 @@ public sealed partial class AuthenticationPromptViewModel(
     string? sourceTitle = null,
     string? accountHint = null,
     bool waitsForBrowser = false,
-    bool showConfirm = true) : ObservableObject, IDialogViewModel
+    bool showConfirm = true,
+    string? pendingPrompt = null,
+    ILogger? logger = null,
+    CancellationToken cancellationToken = default) : ObservableObject, IDialogViewModel
 {
     public string Heading { get; } = sourceTitle ?? "Авторизация";
     public string? AccountHint { get; } = accountHint;
@@ -33,6 +38,7 @@ public sealed partial class AuthenticationPromptViewModel(
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ConfirmCommand))]
     [NotifyPropertyChangedFor(nameof(ShowProgress))]
+    [NotifyPropertyChangedFor(nameof(PromptText))]
     private bool _isReady = !waitsForBrowser;
 
     [ObservableProperty]
@@ -44,7 +50,7 @@ public sealed partial class AuthenticationPromptViewModel(
     private bool _isValidating;
 
     public bool ShowProgress => !IsReady || IsValidating;
-    public string PromptText => IsValidating ? "Проверяем сессию…" : Prompt;
+    public string PromptText => IsValidating ? "Проверяем сессию…" : !IsReady ? pendingPrompt ?? Prompt : Prompt;
 
     [RelayCommand(CanExecute = nameof(CanConfirm))]
     private async Task ConfirmAsync()
@@ -57,8 +63,16 @@ public sealed partial class AuthenticationPromptViewModel(
             {
                 ValidationMessage = await ValidateAsync();
             }
-            catch (Exception)
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
+                return;
+            }
+            catch (Exception ex)
+            {
+                if (logger is not null)
+                {
+                    WpfAuthUI.LogFailure(logger, ex, "Не удалось проверить новую сессию");
+                }
                 ValidationMessage = "Не удалось проверить новую сессию. Попробуйте ещё раз.";
             }
             finally

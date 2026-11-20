@@ -17,7 +17,7 @@ public sealed partial class SourcesRelationsViewModel
     internal void SetViewVisible(bool visible)
     {
         _viewVisible = visible;
-        UpdateAuthenticationActivity();
+        _ = UpdateAuthenticationActivityAsync();
     }
 
     internal async Task OpenAuthenticationAsync(SourceOperationAuthenticationException failure, string? originTitle, Action returnToOrigin)
@@ -30,7 +30,7 @@ public sealed partial class SourcesRelationsViewModel
 
         if (await LoadAuthenticationCatalogAsync())
         {
-            await _dispatcher.InvokeAsync(() => Authentication.FocusSource(failure));
+            await _dispatcher.InvokeAsync(() => Authentication.FocusSourceAsync(failure));
         }
     }
 
@@ -55,38 +55,67 @@ public sealed partial class SourcesRelationsViewModel
         try
         {
             var sources = await Task.Run(_orcestrator.GetSources);
-            await _dispatcher.InvokeAsync(() => Authentication.SetSources(sources));
-            return true;
+            return await _dispatcher.InvokeAsync(() =>
+            {
+                Authentication.IsCatalogLoading = false;
+                Authentication.SetSources(sources);
+                return true;
+            });
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Не удалось загрузить источники для проверки авторизации");
-            await _dispatcher.InvokeAsync(() => Authentication.CatalogError = "Не удалось загрузить источники. Обновите список.");
+            try
+            {
+                await _dispatcher.InvokeAsync(() =>
+                {
+                    Authentication.IsCatalogLoading = false;
+                    Authentication.CatalogError = "Не удалось загрузить источники. Обновите список.";
+                });
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (Exception dispatcherError)
+            {
+                _logger.LogError(dispatcherError, "Не удалось отобразить ошибку загрузки источников");
+            }
+
             return false;
-        }
-        finally
-        {
-            await _dispatcher.InvokeAsync(() => Authentication.IsCatalogLoading = false);
         }
     }
 
-    private async void UpdateAuthenticationActivity()
+    private async Task UpdateAuthenticationActivityAsync()
     {
-        if (!_viewVisible || !IsAuthenticationMode)
+        try
         {
-            Authentication.SetActive(false);
-            return;
-        }
-
-        if (await LoadAuthenticationCatalogAsync())
-        {
-            await _dispatcher.InvokeAsync(() =>
+            if (!_viewVisible || !IsAuthenticationMode)
             {
-                if (_viewVisible && IsAuthenticationMode)
+                Authentication.SetActive(false);
+                return;
+            }
+
+            if (await LoadAuthenticationCatalogAsync())
+            {
+                await _dispatcher.InvokeAsync(() =>
                 {
-                    Authentication.SetActive(true);
-                }
-            });
+                    if (_viewVisible && IsAuthenticationMode)
+                    {
+                        Authentication.SetActive(true);
+                    }
+                });
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Не удалось открыть вкладку авторизации");
         }
     }
 

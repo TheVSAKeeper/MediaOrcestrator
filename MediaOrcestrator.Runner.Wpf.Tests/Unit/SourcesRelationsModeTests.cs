@@ -37,7 +37,7 @@ public sealed class SourcesRelationsModeTests
             _ctx.Settings,
             _ctx.Dialogs,
             _ctx.Dispatcher,
-            new(null!, null!, NullLogger<SourcesAuthenticationViewModel>.Instance),
+            new(null!, null!, NullLogger<SourcesAuthenticationViewModel>.Instance, null!),
             NullLogger<SourcesRelationsViewModel>.Instance);
     }
 

@@ -4,11 +4,12 @@ using MediaOrcestrator.Runner.Wpf.ViewModels;
 using Microsoft.Extensions.Logging;
 using Microsoft.Playwright;
 using System.IO;
+using System.Text.RegularExpressions;
 using System.Windows;
 
 namespace MediaOrcestrator.Runner.Wpf.Services;
 
-public sealed class WpfAuthUI(IDialogService dialogs, ModalHostViewModel modal, ILogger<WpfAuthUI> logger) : IAuthUI
+public sealed partial class WpfAuthUI(IDialogService dialogs, ModalHostViewModel modal, ILogger<WpfAuthUI> logger) : IAuthUI
 {
     public IAuthUI CreateSession(SourceAuthenticationPromptContext context, CancellationToken cancellationToken, Action<string> showNotice) =>
         new AuthSession(this, context, cancellationToken, showNotice);
@@ -17,7 +18,7 @@ public sealed class WpfAuthUI(IDialogService dialogs, ModalHostViewModel modal, 
     {
         Application.Current.Dispatcher.Invoke(() =>
             dialogs.Info("Авторизация", prompt + "\n\nЗначение нужно ввести в поле настроек источника."));
-        return Task.FromResult<string?>(null);
+        throw new AuthenticationDismissedException(CancellationToken.None);
     }
 
     public Task<string?> OpenBrowserAsync(string url, string? existingStatePath = null) =>
@@ -63,7 +64,8 @@ public sealed class WpfAuthUI(IDialogService dialogs, ModalHostViewModel modal, 
         using var operation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var prompt = new AuthenticationPromptViewModel(
             "Завершите вход в браузере, затем нажмите «Проверить и сохранить».", "Проверить и сохранить",
-            sourceTitle: session.Heading, accountHint: session.AccountHint, waitsForBrowser: true);
+            sourceTitle: session.Heading, accountHint: session.AccountHint, waitsForBrowser: true,
+            pendingPrompt: "Открываем страницу входа в браузере…", logger: logger, cancellationToken: operation.Token);
         var closed = await OpenPromptAsync(prompt, operation.Token);
         using var cancel = operation.Token.Register(() => CloseOnUi(prompt, false));
 
@@ -77,55 +79,80 @@ public sealed class WpfAuthUI(IDialogService dialogs, ModalHostViewModel modal, 
 
         var observe = ObserveCloseAsync();
         var token = operation.Token;
+        var failureMessage = "Не удалось запустить браузер для входа.";
         try
         {
             token.ThrowIfCancellationRequested();
             using var playwright = await Playwright.CreateAsync();
             token.ThrowIfCancellationRequested();
             await using var browser = await LaunchBrowserAsync(playwright);
-            browser.Disconnected += (_, _) => CloseOnUi(prompt, false);
+            logger.LogDebug("Chromium запущен для входа в {SourceTitle} ({Platform})", session.SourceTitle, session.Platform);
             token.ThrowIfCancellationRequested();
 
+            failureMessage = "Не удалось открыть браузерную сессию. Попробуйте снова.";
             await using var context = await browser.NewContextAsync(CreateBrowserOptions(session.ReplaceAccount ? null : existingPath));
             var page = await context.NewPageAsync();
-            context.Page += (_, opened) => opened.Close += (_, _) => CancelWhenNoPages();
-            page.Close += (_, _) => CancelWhenNoPages();
-            void CancelWhenNoPages()
+            void BrowserDisconnected(object? sender, IBrowser disconnected) => CloseOnUi(prompt, false);
+            void PageOpened(object? sender, IPage opened) => opened.Close += PageClosed;
+            void PageClosed(object? sender, IPage closedPage)
             {
                 if (context.Pages.All(candidate => candidate.IsClosed))
                 {
                     CloseOnUi(prompt, false);
                 }
             }
-            await page.GotoAsync(url, new() { Timeout = 30_000, WaitUntil = WaitUntilState.DOMContentLoaded }).WaitAsync(token);
 
-            var committed = false;
-            await Application.Current.Dispatcher.InvokeAsync(() =>
+            browser.Disconnected += BrowserDisconnected;
+            context.Page += PageOpened;
+            page.Close += PageClosed;
+            try
             {
-                prompt.ValidateAsync = async () =>
+                failureMessage = "Не удалось открыть страницу входа. Проверьте подключение и попробуйте снова.";
+                await page.GotoAsync(url, new() { Timeout = 30_000, WaitUntil = WaitUntilState.DOMContentLoaded }).WaitAsync(token);
+                logger.LogDebug("Страница входа в {SourceTitle} ({Platform}) открыта", session.SourceTitle, session.Platform);
+
+                var committed = false;
+                await Application.Current.Dispatcher.InvokeAsync(() =>
                 {
-                    var error = await SaveCandidateAsync(context, outputPath, verify, token, () => !closed.IsCompleted);
-                    committed = error is null;
-                    return error;
-                };
-                prompt.IsReady = true;
-            });
-            var confirmed = await closed;
-            await observe;
-            if (prompt.ConfirmCommand.ExecutionTask is { } validation)
-            {
-                await validation;
-            }
+                    prompt.ValidateAsync = async () =>
+                    {
+                        var error = await SaveCandidateAsync(context, outputPath, verify, token, () => !closed.IsCompleted);
+                        committed = error is null;
+                        return error;
+                    };
+                    prompt.IsReady = true;
+                });
+                var confirmed = await closed;
+                await observe;
+                if (prompt.ConfirmCommand.ExecutionTask is { } validation)
+                {
+                    await validation;
+                }
 
-            if (!confirmed && !committed)
-            {
-                throw new OperationCanceledException(token);
+                if (!confirmed && !committed)
+                {
+                    throw new AuthenticationDismissedException(token);
+                }
+                return outputPath;
             }
-            return outputPath;
+            finally
+            {
+                browser.Disconnected -= BrowserDisconnected;
+                context.Page -= PageOpened;
+                foreach (var opened in context.Pages)
+                {
+                    opened.Close -= PageClosed;
+                }
+            }
         }
-        catch (PlaywrightException) when (closed.IsCompletedSuccessfully && !closed.Result || token.IsCancellationRequested)
+        catch (Exception ex) when (ex is PlaywrightException or OperationCanceledException
+            && (closed.IsCompletedSuccessfully && !closed.Result || token.IsCancellationRequested))
         {
-            throw new OperationCanceledException(token);
+            throw new AuthenticationDismissedException(token);
+        }
+        catch (Exception ex)
+        {
+            throw new AuthenticationBrowserException(failureMessage, ex);
         }
         finally
         {
@@ -175,7 +202,7 @@ public sealed class WpfAuthUI(IDialogService dialogs, ModalHostViewModel modal, 
         }
         catch (Exception ex)
         {
-            logger.LogWarning("Не удалось проверить и сохранить сессию браузера: {ErrorType}", ex.GetType().Name);
+            LogFailure(logger, ex, "Не удалось проверить и сохранить сессию браузера");
             return "Не удалось подтвердить новую сессию. Проверьте вход в браузере и попробуйте снова.";
         }
         finally
@@ -196,7 +223,7 @@ public sealed class WpfAuthUI(IDialogService dialogs, ModalHostViewModel modal, 
     {
         using var operation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var prompt = new AuthenticationPromptViewModel("Ожидаем завершения входа в браузере. Здесь его можно отменить.", "",
-            sourceTitle: session.Heading, accountHint: session.AccountHint, waitsForBrowser: true, showConfirm: false);
+            sourceTitle: session.Heading, accountHint: session.AccountHint, waitsForBrowser: true, showConfirm: false, logger: logger);
         var closed = await OpenPromptAsync(prompt, operation.Token);
         using var cancel = operation.Token.Register(() => CloseOnUi(prompt, false));
         try
@@ -210,6 +237,10 @@ public sealed class WpfAuthUI(IDialogService dialogs, ModalHostViewModel modal, 
 
             await signInTask;
             operation.Token.ThrowIfCancellationRequested();
+        }
+        catch (OperationCanceledException) when (operation.IsCancellationRequested || closed.IsCompletedSuccessfully && !closed.Result)
+        {
+            throw new AuthenticationDismissedException(operation.Token);
         }
         finally
         {
@@ -239,6 +270,31 @@ public sealed class WpfAuthUI(IDialogService dialogs, ModalHostViewModel modal, 
     internal static BrowserNewContextOptions CreateBrowserOptions(string? existingPath) =>
         new() { StorageStatePath = File.Exists(existingPath) ? existingPath : null };
 
+    internal static void LogFailure(ILogger logger, Exception exception, string operation)
+    {
+        var message = exception.Message;
+        var networkError = BrowserNetworkError().Match(message);
+        var reason = exception switch
+        {
+            TimeoutException or OperationCanceledException => "Истекло время ожидания",
+            PlaywrightException when message.Contains("Invalid cookie fields", StringComparison.OrdinalIgnoreCase) =>
+                "Network.setCookies: Invalid cookie fields",
+            PlaywrightException when message.Contains("Executable doesn't exist", StringComparison.OrdinalIgnoreCase) =>
+                "Chromium не установлен",
+            PlaywrightException when message.Contains("Host system is missing dependencies", StringComparison.OrdinalIgnoreCase) =>
+                "Не хватает системных зависимостей Chromium",
+            PlaywrightException when networkError.Success => networkError.Value,
+            UnauthorizedAccessException => "Отказано в доступе",
+            IOException => "Сбой чтения или записи",
+            _ => "Сбой операции",
+        };
+        logger.LogWarning("{Operation}. Причина: {Reason}. {ErrorType} (HRESULT {ErrorCode}). {StackTrace}",
+            operation, reason, exception.GetType().Name, exception.HResult, exception.StackTrace);
+    }
+
+    [GeneratedRegex(@"\bnet::ERR_[A-Z0-9_]{1,64}\b", RegexOptions.CultureInvariant)]
+    private static partial Regex BrowserNetworkError();
+
     private sealed class AuthSession(WpfAuthUI owner, SourceAuthenticationPromptContext session,
         CancellationToken cancellationToken, Action<string> showNotice) : IAuthUI
     {
@@ -247,12 +303,12 @@ public sealed class WpfAuthUI(IDialogService dialogs, ModalHostViewModel modal, 
         public async Task<string?> PromptInputAsync(string prompt, bool isPassword = false)
         {
             var input = new AuthenticationPromptViewModel(prompt, "Продолжить", hasInput: true, isPassword,
-                session.Heading, session.AccountHint);
+                session.Heading, session.AccountHint, cancellationToken: cancellationToken);
             var result = await owner.OpenPromptAsync(input, cancellationToken);
             using var cancel = cancellationToken.Register(() => CloseOnUi(input, false));
             if (!await result)
             {
-                throw new OperationCanceledException(cancellationToken);
+                throw new AuthenticationDismissedException(cancellationToken);
             }
 
             return input.Value;
@@ -288,3 +344,7 @@ internal sealed class AuthenticationPromptUnavailableException()
     : InvalidOperationException("Закройте открытое окно приложения и попробуйте снова.")
 {
 }
+
+internal sealed class AuthenticationBrowserException(string message, Exception cause) : InvalidOperationException(message, cause);
+
+internal sealed class AuthenticationDismissedException(CancellationToken cancellationToken) : OperationCanceledException(cancellationToken);

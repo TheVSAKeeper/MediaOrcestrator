@@ -595,10 +595,14 @@ internal sealed partial class YoutubeChannel(
         try
         {
             string? existingState = null;
-            if (!ui.ReplaceAccount && File.Exists(authStatePath))
+            if (!ui.ReplaceAccount)
             {
-                await WriteBrowserSeedAsync(authStatePath, seedPath, ct);
-                existingState = seedPath;
+                using var access = await _authenticationFiles.ReadAsync(authStatePath, ct);
+                if (File.Exists(authStatePath))
+                {
+                    await WriteBrowserSeedAsync(authStatePath, seedPath, ct);
+                    existingState = seedPath;
+                }
             }
 
             var result = await ui.OpenBrowserAsync(new BrowserAuthenticationRequest("https://studio.youtube.com/",
@@ -613,8 +617,11 @@ internal sealed partial class YoutubeChannel(
             }
 
             await ConvertPlaywrightToNetscapeAsync(tempJsonPath, tempCookiePath, ct);
-            ct.ThrowIfCancellationRequested();
-            File.Move(tempCookiePath, authStatePath, overwrite: true);
+            using (await _authenticationFiles.WriteAsync(authStatePath, ct))
+            {
+                ct.ThrowIfCancellationRequested();
+                File.Move(tempCookiePath, authStatePath, overwrite: true);
+            }
             logger.AuthSaved(authStatePath);
             await ui.ShowMessageAsync("Авторизация YouTube сохранена!");
         }
@@ -948,15 +955,24 @@ internal sealed partial class YoutubeChannel(
         Dictionary<string, string> settings,
         CancellationToken cancellationToken)
     {
-        while (true)
+        var access = await _authenticationFiles.ReadAsync(GetAuthStatePath(settings), cancellationToken);
+        try
         {
-            var entry = await GetOrCreateCachedAsync(settings, cancellationToken);
-            if (entry.TryAcquire())
+            while (true)
             {
-                return new(entry);
-            }
+                var entry = await GetOrCreateCachedAsync(settings, cancellationToken);
+                if (entry.TryAcquire())
+                {
+                    return new(entry, access);
+                }
 
-            await Task.Yield();
+                await Task.Yield();
+            }
+        }
+        catch
+        {
+            access.Dispose();
+            throw;
         }
     }
 
@@ -1059,22 +1075,23 @@ internal sealed partial class YoutubeChannel(
             ? Path.GetDirectoryName(denoPath)
             : null;
 
-        var cookiePath = GetAuthStatePath(settings);
-        if (!File.Exists(cookiePath))
-        {
-            cookiePath = "";
-        }
-
-        return new(ytDlpPath, ffmpegPath ?? "", jsRuntime, jsRuntimeDir, cookiePath);
+        return new(ytDlpPath, ffmpegPath ?? "", jsRuntime, jsRuntimeDir, GetAuthStatePath(settings), _authenticationFiles);
     }
 
-    private readonly struct ServiceLease(CachedEntry entry) : IDisposable
+    private readonly struct ServiceLease(CachedEntry entry, IDisposable access) : IDisposable
     {
         public YouTubeService Service => entry.Service;
 
         public void Dispose()
         {
-            entry.Release();
+            try
+            {
+                entry.Release();
+            }
+            finally
+            {
+                access.Dispose();
+            }
         }
     }
 

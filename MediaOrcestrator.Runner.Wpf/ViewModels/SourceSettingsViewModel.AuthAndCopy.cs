@@ -1,6 +1,7 @@
 ﻿using CommunityToolkit.Mvvm.Input;
 using MediaOrcestrator.Domain;
 using MediaOrcestrator.Modules;
+using MediaOrcestrator.Runner.Wpf.Services;
 using Microsoft.Extensions.Logging;
 using System.IO;
 
@@ -91,15 +92,18 @@ public sealed partial class SourceSettingsViewModel
             UpdateAuthStatus();
             action.Finish(IsAuthenticated ? "Авторизация сохранена" : "Авторизация не подтверждена");
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException ex) when (cts.IsCancellationRequested || ex is AuthenticationDismissedException)
         {
             action.MarkCancelled("Отменено");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Сбой авторизации в плагине {Plugin}", _plugin.Name);
-            action.Fail("Ошибка: " + ex.Message, ex);
-            _dialogs.Error("Авторизация", $"Не удалось завершить авторизацию: {ex.Message}");
+            WpfAuthUI.LogFailure(_logger, ex, $"Сбой авторизации в плагине {_plugin.Name}");
+            var message = ex is OperationCanceledException or TimeoutException
+                ? "Истекло время ожидания ответа. Попробуйте войти ещё раз."
+                : "Не удалось завершить авторизацию. Подробности в журнале.";
+            action.Fail(message);
+            _dialogs.Error("Авторизация", message);
         }
         finally
         {
@@ -130,10 +134,11 @@ public sealed partial class SourceSettingsViewModel
         {
             var currentSettings = BuildSettingsDictionary();
             var options = await _plugin.GetSettingOptionsAsync(field.Key, currentSettings);
+            cts.Token.ThrowIfCancellationRequested();
             field.ReplaceOptions(options);
             action.Finish($"Получено: {options.Count}");
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
         {
             action.MarkCancelled("Отменено");
         }

@@ -154,11 +154,11 @@ public sealed partial class SourcesAuthenticationViewModel
     private async Task CheckRowAsync(SourceAuthenticationRowViewModel row, CancellationToken token)
     {
         var source = row.Source;
-        var result = await authentication.CheckAsync(source, token);
+        var state = await authentication.CheckAndRecordAsync(source, token);
         token.ThrowIfCancellationRequested();
         if (_rows.Contains(row))
         {
-            SetResult(row, result);
+            row.Refresh(row.Source, state);
             if (row.AwaitingVerification)
             {
                 var step = CurrentStep is { Saved: true } current && current.SourceId == row.Source.Id ? current : null;
@@ -171,9 +171,6 @@ public sealed partial class SourcesAuthenticationViewModel
             NotifyResults();
         }
     }
-
-    private void SetResult(SourceAuthenticationRowViewModel row, SourceAuthenticationCheck result, DateTime? observedAt = null) =>
-        row.Refresh(row.Source, authentication.RecordCheck(row.Source, result, observedAt));
 
     private async Task WaitForCheckAsync(SourceAuthenticationRowViewModel row, CancellationToken cancellationToken)
     {

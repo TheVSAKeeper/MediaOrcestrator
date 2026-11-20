@@ -12,6 +12,7 @@ public sealed partial class SourcesAuthenticationViewModel(
     SourceAuthenticationService authentication,
     Func<SourceAuthenticationPromptContext, CancellationToken, Action<string>, IAuthUI> createAuthUi,
     ILogger<SourcesAuthenticationViewModel> logger,
+    IDialogService dialogs,
     ISettingsStore? settings = null) : ObservableObject
 {
     private const string AttentionPreference = "wpf.sources.auth.attention_only";
@@ -34,9 +35,8 @@ public sealed partial class SourcesAuthenticationViewModel(
     public ObservableCollection<SourceAuthenticationRowViewModel> VisibleRows { get; } = [];
     public bool HasSources => _rows.Count > 0;
     public bool IsChecking => _checks.Count > 0;
-    public bool CanOpenSourceSettings => _signingIn is null && _editing.Count == 0;
+    public bool CanOpenSourceSettings => _signingIn is null && !_copyingAuthentication && _editing.Count == 0;
     public bool IsSigningIn => _signingIn is not null;
-    public string? StandaloneProgressText => HasQueue ? null : ProgressText;
     public bool IsEmpty => VisibleRows.Count == 0;
     public bool CanCloseDetails => _expandedRow is not null;
     public IReadOnlyList<AuthenticationSummaryChip> Summary { get; } = SummaryOrder
@@ -159,7 +159,7 @@ public sealed partial class SourcesAuthenticationViewModel(
         navigate?.Invoke();
     }
 
-    internal void FocusSource(SourceOperationAuthenticationException failure)
+    internal async Task FocusSourceAsync(SourceOperationAuthenticationException failure)
     {
         if (FindRow(failure.SourceId) is not { } row)
         {
@@ -171,160 +171,22 @@ public sealed partial class SourcesAuthenticationViewModel(
         var sameRevision = !string.IsNullOrEmpty(failure.Revision) && row.State.Revision == failure.Revision;
         if (sameRevision && !row.IsAwaiting(failure.MethodId) && !(row.State.CheckedAt > failure.ObservedAt))
         {
-            var methods = row.Check.Methods?.Select(method => method.Id == failure.MethodId
-                ? method with { Status = SourceAuthenticationStatus.Rejected } : method).ToArray();
             CancelCheck(failure.SourceId);
-            SetResult(row, new(SourceAuthenticationStatus.Rejected, Detail: "Площадка отклонила вход во время операции.", Methods: methods),
-                failure.ObservedAt);
+            var state = await authentication.RecordOperationRejectionAsync(row.Source, failure);
+            if (_rows.Contains(row) && state is not null)
+            {
+                row.Refresh(row.Source, state);
+            }
         }
-        SelectedRow = row;
-        SetExpanded(row);
-        NotifyResults();
-    }
-
-    [RelayCommand(CanExecute = nameof(CanSignIn), IncludeCancelCommand = true)]
-    private Task SignInAsync(SourceAuthenticationRowViewModel? row, CancellationToken cancellationToken) =>
-        row is null ? Task.CompletedTask : SignInCoreAsync(row, row.DefaultMethodId, null, cancellationToken,
-            replaceAccount: row.CanSwitchAccount);
-
-    [RelayCommand(CanExecute = nameof(CanSignInWithMethod), IncludeCancelCommand = true)]
-    private Task SignInWithMethodAsync(AuthenticationMethodRow? method, CancellationToken cancellationToken) =>
-        method is null ? Task.CompletedTask : SignInCoreAsync(method.Row, method.Method.Id, null, cancellationToken, method.ChangesAccount);
-
-    [RelayCommand]
-    private static void DismissNotice(SourceAuthenticationRowViewModel? row)
-    {
-        if (row is not null)
-        {
-            row.SignInNotice = null;
-        }
-    }
-
-    private async Task SignInCoreAsync(SourceAuthenticationRowViewModel row, string? methodId, QueueStep? step,
-        CancellationToken cancellationToken, bool replaceAccount = false)
-    {
-        if (_signingIn is not null || !_rows.Contains(row))
+        if (FindRow(failure.SourceId) is not { } latest)
         {
             return;
         }
-
-        BeginInteraction(row);
-        var saved = false;
-        try
-        {
-            await WaitForCheckAsync(row, cancellationToken);
-            cancellationToken.ThrowIfCancellationRequested();
-            if (!_rows.Contains(row) || (step is not null && CurrentStep != step))
-            {
-                return;
-            }
-
-            var source = row.Source;
-            var local = authentication.Inspect(source);
-            if (local.Check.Status == SourceAuthenticationStatus.SettingsRequired
-                || methodId is not null && local.Check.Methods?.Any(method => method.Id == methodId && !method.CanSignIn) == true)
-            {
-                row.Refresh(row.Source, row.State with { Local = local.Check, LastCheck = null });
-                row.SignInError = local.Check.Detail;
-                return;
-            }
-
-            string? notice = null;
-            var context = new SourceAuthenticationPromptContext(row.Title, row.Platform, row.AccountFor(methodId), replaceAccount);
-            await authentication.SaveSignInAsync(source, createAuthUi(context, cancellationToken, message => notice = message),
-                methodId, cancellationToken);
-            saved = true;
-            if (!_rows.Contains(row))
-            {
-                return;
-            }
-
-            row.Refresh(source, authentication.ReadState(source));
-            row.SignInNotice = notice;
-            row.SetAwaiting(methodId, true);
-            if (step is not null)
-            {
-                step.Saved = true;
-                if (CurrentStep != step)
-                {
-                    step.Outcome = "данные сохранены, вход не подтверждён";
-                    return;
-                }
-            }
-
-            NotifyResults();
-            await VerifySignInAsync(row, cancellationToken);
-        }
-        catch (OperationCanceledException)
-        {
-            row.SignInError = saved ? "Данные сохранены. Проверку можно повторить." : "Вход отменён.";
-        }
-        catch (AuthenticationPromptUnavailableException ex)
-        {
-            row.SignInError = ex.Message;
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning("Вход в источник {SourceId} завершился ошибкой {ErrorType}", row.Source.Id, ex.GetType().Name);
-            row.SignInError = "Не удалось завершить вход. Проверьте настройки источника и попробуйте снова.";
-        }
-        finally
-        {
-            EndInteraction();
-        }
-    }
-
-    private async Task VerifySignInAsync(SourceAuthenticationRowViewModel row, CancellationToken token)
-    {
-        ProgressText = $"Проверка сохранённой сессии · {row.Title} ({row.Platform})";
-        row.IsChecking = true;
-        try
-        {
-            await CheckRowAsync(row, token);
-        }
-        catch (OperationCanceledException) when (token.IsCancellationRequested)
-        {
-            row.SignInError = "Данные сохранены. Проверку можно повторить.";
-        }
-        finally
-        {
-            row.IsChecking = false;
-            NotifyResults();
-        }
-    }
-
-    private void BeginInteraction(SourceAuthenticationRowViewModel row)
-    {
-        _signingIn = row;
-        SelectedRow = row;
-        SetExpanded(HasQueue ? null : row);
-        row.SignInError = null;
-        row.SignInNotice = null;
-        ProgressText = $"Вход · {row.Title} ({row.Platform})";
+        SelectedRow = latest;
+        SetExpanded(latest);
         NotifyResults();
     }
 
-    private void EndInteraction()
-    {
-        if (_signingIn is { SignInError: not null } row && row == QueueCurrent)
-        {
-            SetExpanded(row);
-        }
-
-        var rowWasReplaced = _signingIn is not null && !_rows.Contains(_signingIn);
-        _signingIn = null;
-        ProgressText = null;
-        NotifyResults();
-        if (rowWasReplaced)
-        {
-            ScheduleChecks();
-        }
-    }
-
-    private bool CanSignIn(SourceAuthenticationRowViewModel? row) =>
-        row is not null && _rows.Contains(row) && row.CanSignIn && _signingIn is null && !HasQueue && _editing.Count == 0;
-    private bool CanSignInWithMethod(AuthenticationMethodRow? method) =>
-        method is { CanSignIn: true } && !method.Row.IsAwaiting(method.Method.Id) && CanSignIn(method.Row);
     private SourceAuthenticationRowViewModel? FindRow(string sourceId) => _rows.Find(row => row.Source.Id == sourceId);
 
     partial void OnAttentionOnlyChanged(bool value)
@@ -349,7 +211,6 @@ public sealed partial class SourcesAuthenticationViewModel(
         AttentionOnly = false;
         StatusFilter = StatusFilter == chip.Status ? null : chip.Status;
     }
-    partial void OnProgressTextChanged(string? value) => OnPropertyChanged(nameof(StandaloneProgressText));
 
     private void NotifyResults()
     {
@@ -423,13 +284,15 @@ public sealed partial class SourcesAuthenticationViewModel(
         OnPropertyChanged(nameof(QueueSummary));
         OnPropertyChanged(nameof(QueueSummaryTitle));
         OnPropertyChanged(nameof(IsSigningIn));
-        OnPropertyChanged(nameof(StandaloneProgressText));
         OnPropertyChanged(nameof(CanContinueWithoutConfirmation));
         OnPropertyChanged(nameof(CanOpenSourceSettings));
         CheckCommand.NotifyCanExecuteChanged();
         CancelChecksCommand.NotifyCanExecuteChanged();
         SignInCommand.NotifyCanExecuteChanged();
         SignInWithMethodCommand.NotifyCanExecuteChanged();
+        SwitchAccountCommand.NotifyCanExecuteChanged();
+        SwitchMethodAccountCommand.NotifyCanExecuteChanged();
+        CopyAuthenticationCommand.NotifyCanExecuteChanged();
         StartQueueCommand.NotifyCanExecuteChanged();
         ContinueQueueCommand.NotifyCanExecuteChanged();
         SkipCommand.NotifyCanExecuteChanged();

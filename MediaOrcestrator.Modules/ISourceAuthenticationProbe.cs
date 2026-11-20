@@ -6,6 +6,18 @@ public interface ISourceAuthenticationProbe
 
     SourceAuthenticationLocalState? InspectAuthentication(Dictionary<string, string> settings) => null;
 
+    IReadOnlyList<string> GetCopyableAuthenticationFiles(
+        Dictionary<string, string> sourceSettings, Dictionary<string, string> targetSettings) =>
+        InspectAuthentication(targetSettings)?.Check.Status == SourceAuthenticationStatus.SettingsRequired
+            ? []
+            : InspectAuthentication(sourceSettings)?.StateFiles ?? [];
+
+    Task ReadAuthenticationFilesAsync(Dictionary<string, string> settings,
+        Func<Task> read, CancellationToken cancellationToken) => read();
+
+    Task ReplaceAuthenticationFilesAsync(Dictionary<string, string> settings,
+        Func<Task> replace, CancellationToken cancellationToken) => replace();
+
     Task<SourceAuthenticationCheck> CheckAuthenticationAsync(
         Dictionary<string, string> settings,
         CancellationToken cancellationToken);
@@ -50,7 +62,10 @@ public sealed record SourceAuthenticationMethod(
     SourceAuthenticationStatus Status,
     string? Account = null,
     string? Detail = null,
-    bool CanSignIn = true);
+    bool CanSignIn = true)
+{
+    public bool? CanSwitchAccount { get; init; }
+}
 
 public class SourceSessionRejectedException(
     string message,

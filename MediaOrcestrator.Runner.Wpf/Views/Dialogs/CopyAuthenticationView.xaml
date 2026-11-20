@@ -1,0 +1,27 @@
+﻿<UserControl x:Class="MediaOrcestrator.Runner.Wpf.Views.Dialogs.CopyAuthenticationView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Width="{DynamicResource Dialog.Width.Small}"
+             KeyboardNavigation.TabNavigation="Cycle"
+             FocusManager.FocusedElement="{Binding ElementName=TargetSelector}">
+    <StackPanel Margin="{DynamicResource Padding.Dialog}">
+        <TextBlock Text="Скопировать авторизацию" Style="{StaticResource TextBlock.Heading}" TextWrapping="Wrap" />
+        <TextBlock Text="{Binding OriginText}" Style="{StaticResource TextBlock.Subtle}"
+                   Margin="{DynamicResource Margin.StackItem}" TextWrapping="Wrap" />
+        <TextBlock Text="{Binding OriginWarning}" Foreground="{DynamicResource State.WarningText}" TextWrapping="Wrap"
+                   Margin="{DynamicResource Margin.StackItem}"
+                   Visibility="{Binding OriginWarning, Converter={StaticResource NullToVisibility}}" />
+        <Label x:Name="TargetLabel" Content="Куда скопировать" Target="{Binding ElementName=TargetSelector}" />
+        <ComboBox x:Name="TargetSelector" AutomationProperties.LabeledBy="{Binding ElementName=TargetLabel}"
+                  Margin="{DynamicResource Margin.StackItem}"
+                  ItemsSource="{Binding Targets}" SelectedItem="{Binding Target, Mode=TwoWay}" DisplayMemberPath="Title" />
+        <TextBlock Text="Совместимые данные входа получателя будут заменены."
+                   Foreground="{DynamicResource State.WarningText}" TextWrapping="Wrap"
+                   Margin="{DynamicResource Margin.StackItem}"
+                   Visibility="{Binding WillReplaceAuthorization, Converter={StaticResource BoolToVisibility}}" />
+        <WrapPanel HorizontalAlignment="Right" Margin="{DynamicResource Margin.StackItem}">
+            <Button Content="Отмена" Style="{StaticResource Button.Ghost}" Command="{Binding CancelCommand}" IsCancel="True" />
+            <Button Content="Скопировать" Style="{StaticResource Button.Primary}" Command="{Binding ConfirmCommand}" />
+        </WrapPanel>
+    </StackPanel>
+</UserControl>

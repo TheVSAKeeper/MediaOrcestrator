@@ -14,11 +14,52 @@ namespace MediaOrcestrator.Youtube;
 
 internal sealed partial class YoutubeChannel
 {
-    private const string CookiesMethod = "cookies";
+    internal const string CookiesMethod = "cookies";
     internal const string OAuthMethod = "oauth";
+
+    private readonly SessionFileAccess _authenticationFiles = new();
+
+    public bool CanSwitchAccount => true;
+
+    public async Task ReadAuthenticationFilesAsync(Dictionary<string, string> settings,
+        Func<Task> read, CancellationToken cancellationToken)
+    {
+        using var access = await _authenticationFiles.WriteAsync(GetAuthStatePath(settings), cancellationToken);
+        await read();
+    }
+
+    public async Task ReplaceAuthenticationFilesAsync(Dictionary<string, string> settings,
+        Func<Task> replace, CancellationToken cancellationToken)
+    {
+        using var access = await _authenticationFiles.WriteAsync(GetAuthStatePath(settings), cancellationToken);
+        await replace();
+        EvictOAuthService(GetTokenDir(settings));
+    }
+
+    private void EvictOAuthService(string tokenDir)
+    {
+        if (_serviceCache.TryRemove(tokenDir, out var previous))
+        {
+            previous.MarkEvicted();
+        }
+    }
 
     internal static bool IsOAuthRejection(Exception? exception) => exception is
         TokenResponseException { Error.Error: "invalid_grant" } or GoogleApiException { HttpStatusCode: HttpStatusCode.Unauthorized };
+
+    public IReadOnlyList<string> GetCopyableAuthenticationFiles(
+        Dictionary<string, string> sourceSettings, Dictionary<string, string> targetSettings)
+    {
+        var cookiePath = GetAuthStatePath(sourceSettings);
+        if (!IsOAuthConfigured(sourceSettings) || !IsOAuthConfigured(targetSettings)
+            || sourceSettings["client_id"] != targetSettings["client_id"]
+            || sourceSettings["client_secret"] != targetSettings["client_secret"])
+        {
+            return [cookiePath];
+        }
+
+        return InspectAuthentication(sourceSettings).StateFiles;
+    }
 
     public SourceAuthenticationLocalState InspectAuthentication(Dictionary<string, string> settings)
     {
@@ -45,6 +86,7 @@ internal sealed partial class YoutubeChannel
     public async Task<SourceAuthenticationCheck> CheckAuthenticationAsync(
         Dictionary<string, string> settings, CancellationToken cancellationToken)
     {
+        using var access = await _authenticationFiles.ReadAsync(GetAuthStatePath(settings), cancellationToken);
         var local = InspectAuthentication(settings);
         var methods = await Task.WhenAll(local.Check.Methods!.Select(async method =>
         {
@@ -60,7 +102,9 @@ internal sealed partial class YoutubeChannel
                     : await CheckOAuthAsync(settings, cancellationToken);
                 return method with { Status = check.Status, Account = check.Account, Detail = check.Detail };
             }
-            catch (Exception ex) when (ex is HttpRequestException or IOException or GoogleApiException or TokenResponseException)
+            catch (Exception ex) when (ex is HttpRequestException or IOException or GoogleApiException or TokenResponseException
+                or JsonException or Newtonsoft.Json.JsonException or CookieException
+                || ex is OperationCanceledException && !cancellationToken.IsCancellationRequested)
             {
                 return method with { Status = SourceAuthenticationStatus.CheckFailed, Detail = "Не удалось получить подтверждение. Повторите проверку." };
             }
@@ -101,13 +145,11 @@ internal sealed partial class YoutubeChannel
                 token => BuildCredentialAsync(settings["client_id"], settings["client_secret"], stagedDir, token,
                     new AccountChoosingReceiver()), cancellationToken);
             var tokenFile = Directory.GetFiles(stagedDir, "Google.Apis.Auth.OAuth2.Responses.*").Single();
+            using var access = await _authenticationFiles.WriteAsync(GetAuthStatePath(settings), cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             Directory.CreateDirectory(tokenDir);
             File.Move(tokenFile, Path.Combine(tokenDir, Path.GetFileName(tokenFile)), overwrite: true);
-            if (_serviceCache.TryRemove(tokenDir, out var previous))
-            {
-                previous.MarkEvicted();
-            }
+            EvictOAuthService(tokenDir);
         }
         finally
         {
@@ -202,6 +244,12 @@ internal sealed partial class YoutubeChannel
             return new(SourceAuthenticationStatus.Rejected, Detail: "YouTube запросил повторный вход в браузере.");
         }
 
+        if (response.Headers.Location is { IsAbsoluteUri: true, Host: "consent.youtube.com" or "consent.google.com" })
+        {
+            return new(SourceAuthenticationStatus.Rejected,
+                Detail: "YouTube просит подтвердить настройки конфиденциальности. Откройте YouTube в окне входа и завершите этот шаг.");
+        }
+
         if (!response.IsSuccessStatusCode)
         {
             return new(SourceAuthenticationStatus.CheckFailed, Detail: $"YouTube ответил HTTP {(int)response.StatusCode}.");
@@ -217,24 +265,27 @@ internal sealed partial class YoutubeChannel
         };
     }
 
-    private static async Task WriteBrowserSeedAsync(string cookiePath, string outputPath, CancellationToken cancellationToken)
+    internal static async Task WriteBrowserSeedAsync(string cookiePath, string outputPath, CancellationToken cancellationToken)
     {
         var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         var lines = await File.ReadAllLinesAsync(cookiePath, cancellationToken);
         var cookies = lines.Select(line =>
         {
             var httpOnly = line.StartsWith("#HttpOnly_", StringComparison.Ordinal);
-            return (HttpOnly: httpOnly, Fields: (httpOnly ? line[10..] : line).Split('\t'));
+            var fields = (httpOnly ? line[10..] : line).Split('\t');
+            var expires = fields.Length == 7 && long.TryParse(fields[4], CultureInfo.InvariantCulture, out var seconds)
+                ? (long?)seconds : null;
+            return (HttpOnly: httpOnly, Fields: fields, Expires: expires);
         })
-        .Where(cookie => cookie.Fields is [var domain, _, var path, _, var expiry, var name, _]
-            && domain.Length > 0 && !domain.StartsWith('#') && path.StartsWith('/') && name.Length > 0
-            && long.TryParse(expiry, CultureInfo.InvariantCulture, out var seconds) && (seconds <= 0 || seconds > now))
+        .Where(cookie => cookie.Fields is [var domain, _, var path, _, _, var name, _]
+            && Uri.CheckHostName(domain.TrimStart('.')) == UriHostNameType.Dns && path.StartsWith('/') && name.Length > 0
+            && cookie.Expires is { } seconds && (seconds <= 0 || seconds > now))
         .Select(cookie => new
         {
-            domain = cookie.Fields[0],
+            domain = BrowserCookieDomain(cookie.Fields[0], cookie.Fields[1], cookie.Fields[5]),
             path = cookie.Fields[2],
             secure = cookie.Fields[3] == "TRUE",
-            expires = cookie.Fields[4] == "0" ? -1 : long.Parse(cookie.Fields[4], CultureInfo.InvariantCulture),
+            expires = cookie.Expires > 0 ? cookie.Expires.GetValueOrDefault() : -1,
             name = cookie.Fields[5],
             value = cookie.Fields[6],
             httpOnly = cookie.HttpOnly,
@@ -242,6 +293,14 @@ internal sealed partial class YoutubeChannel
         });
         await using var output = File.Create(outputPath);
         await JsonSerializer.SerializeAsync(output, new { cookies, origins = Array.Empty<object>() }, cancellationToken: cancellationToken);
+    }
+
+    private static string BrowserCookieDomain(string domain, string includeSubdomains, string name)
+    {
+        var host = domain.TrimStart('.');
+        return includeSubdomains == "TRUE" && !name.StartsWith("__Host-", StringComparison.OrdinalIgnoreCase)
+            ? "." + host
+            : host;
     }
 
     [GeneratedRegex("\"LOGGED_IN\"\\s*:\\s*(true|false)", RegexOptions.NonBacktracking)]
